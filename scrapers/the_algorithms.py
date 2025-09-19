@@ -17,35 +17,103 @@ TEMP_CLONE_DIR.mkdir(parents=True, exist_ok=True)
 # Key: Simple language identifier (used for folder naming and file extension)
 # Value: List of full GitHub repository URLs
 TARGET_REPOS = {
-    "py": ["https://github.com/TheAlgorithms/Python"],
-    "java": ["https://github.com/TheAlgorithms/Java"],
-    "js": ["https://github.com/TheAlgorithms/Javascript"],
-    "cpp": ["https://github.com/TheAlgorithms/C-Plus-Plus"],
+    "py": [
+        "https://github.com/TheAlgorithms/Python",
+        "https://github.com/nryoung/algorithms",
+        "https://github.com/prakhar1989/Algorithms",
+        "https://github.com/laurentluce/python-algorithms",
+        "https://github.com/nbro/ands",
+        "https://github.com/keon/algorithms",
+        "https://github.com/vinta/fuck-coding-interviews"
+    ],
+    "java": [
+        "https://github.com/TheAlgorithms/Java",
+        "https://github.com/jpa99/Algorithms",
+        "https://github.com/phishman3579/java-algorithms-implementation",
+        "https://github.com/asmolich/algorithms",
+        "https://github.com/psjava/psjava",
+        "https://github.com/jeandersonbc/algorithms-and-ds",
+        "https://github.com/pedrovgs/Algorithms",
+        "https://github.com/Erdos-Graph-Framework/Erdos",
+        "https://github.com/deepak-malik/Data-Structures-In-Java",
+        "https://github.com/yusufcakal/algorithms",
+        "https://github.com/FarheenB/Data-Structures-and-Algorithms"
+    ],
+    "js": [
+        "https://github.com/TheAlgorithms/Javascript",
+        "https://github.com/jiayihu/pretty-algorithms",
+        "https://github.com/felipernb/algorithms.js",
+        "https://github.com/nzakas/computer-science-in-javascript",
+        "https://github.com/duereg/js-algorithms",
+        "https://github.com/mgechev/javascript-algorithms",
+        "https://github.com/trekhleb/javascript-algorithms",
+        "https://github.com/ManrajGrover/algorithms-js",
+        "https://github.com/amejiarosario/dsa.js",
+        "https://github.com/zonayedpca/AlgoDS.js"
+    ],
+    "cpp": [
+        "https://github.com/TheAlgorithms/C-Plus-Plus",
+        "https://github.com/xtaci/algorithms",
+        "https://github.com/PetarV-/Algorithms",
+        "https://github.com/faheel/Algos",
+        "https://github.com/sslotin/algo"
+    ],
     "rs": ["https://github.com/TheAlgorithms/Rust"],
-    "c": ["https://github.com/TheAlgorithms/C"],
-    "go": ["https://github.com/TheAlgorithms/Go"],
-    "cs": ["https://github.com/TheAlgorithms/C-Sharp"],
+    "c": [
+        "https://github.com/TheAlgorithms/C",
+        "https://github.com/fragglet/c-algorithms"
+    ],
+    "go": [
+        "https://github.com/TheAlgorithms/Go",
+        "https://github.com/arnauddri/algorithms",
+        "https://github.com/floyernick/Data-Structures-and-Algorithms"
+    ],
+    "cs": [
+        "https://github.com/TheAlgorithms/C-Sharp",
+        "https://github.com/shkolovy/classic-algorithms",
+        "https://github.com/aalhour/C-Sharp-Algorithms",
+        "https://github.com/justcoding121/Advanced-Algorithms"
+    ],
     "md": ["https://github.com/TheAlgorithms/Algorithms-Explanation"],
     "php": ["https://github.com/TheAlgorithms/PHP"],
     "ts": ["https://github.com/TheAlgorithms/TypeScript"],
     "dart": ["https://github.com/TheAlgorithms/Dart"],
     "kt": ["https://github.com/TheAlgorithms/Kotlin"],
-    "rb": ["https://github.com/TheAlgorithms/Ruby"],
-    "scala": ["https://github.com/TheAlgorithms/Scala"],
+    "rb": [
+        "https://github.com/TheAlgorithms/Ruby",
+        "https://github.com/kanwei/algorithms",
+        "https://github.com/sagivo/algorithms",
+        "https://github.com/kumar91gopi/Algorithms-and-Data-Structures-in-Ruby"
+    ],
+    "scala": [
+        "https://github.com/TheAlgorithms/Scala",
+        "https://github.com/vkostyukov/scalacaster"
+    ],
     "r": ["https://github.com/TheAlgorithms/R"],
-    "swift": ["https://github.com/TheAlgorithms/Swift"],
+    "swift": [
+        "https://github.com/TheAlgorithms/Swift",
+        "https://github.com/kingreza/Swift-Algorithms-Strings-",
+        "https://github.com/waynewbishop/SwiftStructures",
+        "https://github.com/hollance/swift-algorithm-club"
+    ],
     "jl": ["https://github.com/TheAlgorithms/Julia"],
     "hs": ["https://github.com/TheAlgorithms/Haskell"],
     "m": ["https://github.com/TheAlgorithms/MATLAB-Octave"],
     "sol": ["https://github.com/TheAlgorithms/Solidity"],
-    "lua": ["https://github.com/TheAlgorithms/Lua"],
+    "lua": [
+        "https://github.com/TheAlgorithms/Lua",
+        "https://github.com/EvandroLG/computer_science_in_lua"
+    ],
     "zig": ["https://github.com/TheAlgorithms/Zig"],
     "ex": ["https://github.com/TheAlgorithms/Elixir"],
     "ml": ["https://github.com/TheAlgorithms/OCaml"],
     "clj": ["https://github.com/TheAlgorithms/Clojure"],
     "nim": ["https://github.com/TheAlgorithms/Nim"],
-    "erl": ["https://github.com/TheAlgorithms/Erlang"],
-    "sh": ["https://github.com/TheAlgorithms/scripts"],
+    "erl": [
+        "https://github.com/TheAlgorithms/Erlang",
+        "https://github.com/aggelgian/erlang-algorithms"
+    ],
+    "sh": ["https://github.com/TheAlgorithms/scripts"]
 }
 
 
