@@ -1,0 +1,14 @@
+[project]
+name = "ergo-type"
+version = "0.1.0"
+description = "Genetic Algorithm for optimizing keyboard layouts"
+authors = [
+    { name="Cătălin Pleșu", email="you@example.com" }
+]
+readme = "README.md"
+requires-python = ">=3.11.0, <3.12"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
