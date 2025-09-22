@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional, Union
 class Key:
     def __init__(self):
         self.color: str = "#cccccc"
-        self.labels: List[str] = []
+        self.labels: List[Optional[str]] = [None] * 12
         self.textColor: List[Optional[str]] = [None] * 12
         self.textSize: List[Optional[float]] = [None] * 12
         self.default = {
@@ -16,6 +16,7 @@ class Key:
         }
         self.x: float = 0
         self.y: float = 0
+        self.z: float = 0
         self.width: float = 1
         self.height: float = 1
         self.x2: float = 0
@@ -34,6 +35,28 @@ class Key:
         self.sb: str = ""  # switch brand
         self.st: str = ""  # switch type
 
+    def get_labels(self) -> tuple:
+        """Return a tuple of (primary_label, shifted_label) or fewer."""
+        primary = self.labels[0]
+        shifted = self.labels[6]
+        result = tuple(filter(lambda x: x is not None, [primary, shifted]))
+        return result if result else (None,)
+
+    def set_labels(self, labels: Union[tuple, list]):
+        """Set primary and optionally shifted label."""
+        if not isinstance(labels, (tuple, list)):
+            raise ValueError("Labels must be a tuple or list.")
+        if len(labels) > 0:
+            self.labels[0] = labels[0]
+        if len(labels) > 1:
+            self.labels[6] = labels[1]
+        if len(labels) < 2:
+            self.labels[6] = None
+
+    def __repr__(self):
+        return f"Key(label={self.labels[0]}, shifted={self.labels[6]}, x={self.x}, y={self.y}, z={self.z})"
+
+
 # ----------------------------
 # Keyboard Metadata Class
 # ----------------------------
@@ -49,6 +72,7 @@ class KeyboardMetadata:
         self.switchMount: str = ""
         self.switchType: str = ""
 
+
 # ----------------------------
 # Keyboard Class
 # ----------------------------
@@ -56,6 +80,7 @@ class Keyboard:
     def __init__(self):
         self.meta: KeyboardMetadata = KeyboardMetadata()
         self.keys: List[Key] = []
+
 
 # ----------------------------
 # Serial Module
@@ -173,6 +198,8 @@ class Serial:
                             current.x += item["x"]
                         if "y" in item:
                             current.y += item["y"]
+                        if "z" in item: # To enable sculpting more intricate 3D keyboards
+                            current.z += item["z"]
                         if "w" in item:
                             current.width = current.width2 = item["w"]
                         if "h" in item:
@@ -213,6 +240,6 @@ class Serial:
 
     @staticmethod
     def parse(json_str: str) -> Keyboard:
-        import json5  
+        import json5
         data = json5.loads(json_str)
         return Serial.deserialize(data)
