@@ -21,6 +21,7 @@ dependencies = [
 	"kagglehub",
 	"json5",
 	"ptpython",
+	"svgwrite"
 ]
 
 [build-system]
