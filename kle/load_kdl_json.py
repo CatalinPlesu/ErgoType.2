@@ -1,0 +1,218 @@
+import json
+from typing import List, Dict, Any, Optional, Union
+
+# ----------------------------
+# Key Class
+# ----------------------------
+class Key:
+    def __init__(self):
+        self.color: str = "#cccccc"
+        self.labels: List[str] = []
+        self.textColor: List[Optional[str]] = [None] * 12
+        self.textSize: List[Optional[float]] = [None] * 12
+        self.default = {
+            "textColor": "#000000",
+            "textSize": 3
+        }
+        self.x: float = 0
+        self.y: float = 0
+        self.width: float = 1
+        self.height: float = 1
+        self.x2: float = 0
+        self.y2: float = 0
+        self.width2: float = 1
+        self.height2: float = 1
+        self.rotation_x: float = 0
+        self.rotation_y: float = 0
+        self.rotation_angle: float = 0
+        self.decal: bool = False
+        self.ghost: bool = False
+        self.stepped: bool = False
+        self.nub: bool = False
+        self.profile: str = ""
+        self.sm: str = ""  # switch mount
+        self.sb: str = ""  # switch brand
+        self.st: str = ""  # switch type
+
+# ----------------------------
+# Keyboard Metadata Class
+# ----------------------------
+class KeyboardMetadata:
+    def __init__(self):
+        self.author: str = ""
+        self.backcolor: str = "#eeeeee"
+        self.background: Optional[Dict[str, str]] = None
+        self.name: str = ""
+        self.notes: str = ""
+        self.radii: str = ""
+        self.switchBrand: str = ""
+        self.switchMount: str = ""
+        self.switchType: str = ""
+
+# ----------------------------
+# Keyboard Class
+# ----------------------------
+class Keyboard:
+    def __init__(self):
+        self.meta: KeyboardMetadata = KeyboardMetadata()
+        self.keys: List[Key] = []
+
+# ----------------------------
+# Serial Module
+# ----------------------------
+class Serial:
+    labelMap = [
+        # 0  1  2  3  4  5  6  7  8  9 10 11   // align flags
+        [ 0, 6, 2, 8, 9,11, 3, 5, 1, 4, 7,10], # 0 = no centering
+        [ 1, 7,-1,-1, 9,11, 4,-1,-1,-1,-1,10], # 1 = center x
+        [ 3,-1, 5,-1, 9,11,-1,-1, 4,-1,-1,10], # 2 = center y
+        [ 4,-1,-1,-1, 9,11,-1,-1,-1,-1,-1,10], # 3 = center x & y
+        [ 0, 6, 2, 8,10,-1, 3, 5, 1, 4, 7,-1], # 4 = center front (default)
+        [ 1, 7,-1,-1,10,-1, 4,-1,-1,-1,-1,-1], # 5 = center front & x
+        [ 3,-1, 5,-1,10,-1,-1,-1, 4,-1,-1,-1], # 6 = center front & y
+        [ 4,-1,-1,-1,10,-1,-1,-1,-1,-1,-1,-1], # 7 = center front & x & y
+    ]
+
+    @staticmethod
+    def copy(obj):
+        if not isinstance(obj, dict) and not isinstance(obj, list):
+            return obj
+        elif isinstance(obj, list):
+            return [Serial.copy(item) for item in obj]
+        elif isinstance(obj, dict):
+            return {k: Serial.copy(v) for k, v in obj.items()}
+        return obj
+
+    @staticmethod
+    def reorder_labels(labels, align):
+        ret = [None] * 12
+        for i in range(len(labels)):
+            pos = Serial.labelMap[align][i]
+            if pos != -1 and labels[i]:
+                ret[pos] = labels[i]
+        return ret
+
+    @staticmethod
+    def deserialize_error(msg, data=None):
+        error_msg = f"Error: {msg}"
+        if data:
+            error_msg += f":\n  {json.dumps(data)}"
+        raise ValueError(error_msg)
+
+    @staticmethod
+    def deserialize(rows: List[Any]) -> Keyboard:
+        if not isinstance(rows, list):
+            Serial.deserialize_error("expected an array of objects")
+
+        current = Key()
+        kbd = Keyboard()
+        align = 4
+
+        for r in range(len(rows)):
+            row = rows[r]
+            if isinstance(row, list):
+                for k in range(len(row)):
+                    item = row[k]
+                    if isinstance(item, str):
+                        new_key = Serial.copy(vars(current))
+
+                        # Convert back to Key object
+                        key_obj = Key()
+                        for attr, value in new_key.items():
+                            setattr(key_obj, attr, value)
+
+                        key_obj.width2 = key_obj.width2 or current.width
+                        key_obj.height2 = key_obj.height2 or current.height
+                        key_obj.labels = Serial.reorder_labels(item.split("\n"), align)
+                        key_obj.textSize = Serial.reorder_labels(key_obj.textSize, align)
+
+                        for i in range(12):
+                            if not key_obj.labels[i]:
+                                key_obj.textSize[i] = None
+                                key_obj.textColor[i] = None
+                            if key_obj.textSize[i] == key_obj.default["textSize"]:
+                                key_obj.textSize[i] = None
+                            if key_obj.textColor[i] == key_obj.default["textColor"]:
+                                key_obj.textColor[i] = None
+
+                        kbd.keys.append(key_obj)
+
+                        current.x += current.width
+                        current.width = current.height = 1
+                        current.x2 = current.y2 = current.width2 = current.height2 = 0
+                        current.nub = current.stepped = current.decal = False
+                    else:
+                        if k != 0 and ("r" in item or "rx" in item or "ry" in item):
+                            Serial.deserialize_error("rotation can only be specified on the first key in a row", item)
+                        if "r" in item:
+                            current.rotation_angle = item["r"]
+                        if "rx" in item:
+                            current.rotation_x = item["rx"]
+                        if "ry" in item:
+                            current.rotation_y = item["ry"]
+                        if "a" in item:
+                            align = item["a"]
+                        if "f" in item:
+                            current.default["textSize"] = item["f"]
+                            current.textSize = [None] * 12
+                        if "f2" in item:
+                            for i in range(1, 12):
+                                current.textSize[i] = item["f2"]
+                        if "fa" in item:
+                            current.textSize = item["fa"]
+                        if "p" in item:
+                            current.profile = item["p"]
+                        if "c" in item:
+                            current.color = item["c"]
+                        if "t" in item:
+                            split = item["t"].split("\n")
+                            if split[0]:
+                                current.default["textColor"] = split[0]
+                            current.textColor = Serial.reorder_labels(split, align)
+                        if "x" in item:
+                            current.x += item["x"]
+                        if "y" in item:
+                            current.y += item["y"]
+                        if "w" in item:
+                            current.width = current.width2 = item["w"]
+                        if "h" in item:
+                            current.height = current.height2 = item["h"]
+                        if "x2" in item:
+                            current.x2 = item["x2"]
+                        if "y2" in item:
+                            current.y2 = item["y2"]
+                        if "w2" in item:
+                            current.width2 = item["w2"]
+                        if "h2" in item:
+                            current.height2 = item["h2"]
+                        if "n" in item:
+                            current.nub = item["n"]
+                        if "l" in item:
+                            current.stepped = item["l"]
+                        if "d" in item:
+                            current.decal = item["d"]
+                        if "g" in item:
+                            current.ghost = item["g"]
+                        if "sm" in item:
+                            current.sm = item["sm"]
+                        if "sb" in item:
+                            current.sb = item["sb"]
+                        if "st" in item:
+                            current.st = item["st"]
+                current.y += 1
+                current.x = current.rotation_x
+            elif isinstance(row, dict):
+                if r != 0:
+                    Serial.deserialize_error("keyboard metadata must be the first element", row)
+                for prop in vars(kbd.meta):
+                    if prop in row:
+                        setattr(kbd.meta, prop, row[prop])
+            else:
+                Serial.deserialize_error("unexpected", row)
+        return kbd
+
+    @staticmethod
+    def parse(json_str: str) -> Keyboard:
+        import json5  
+        data = json5.loads(json_str)
+        return Serial.deserialize(data)

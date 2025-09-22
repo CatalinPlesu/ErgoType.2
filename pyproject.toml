@@ -19,6 +19,8 @@ dependencies = [
     "jupyterlab>=4.0.0",
     "ipykernel>=6.25.0",
 	"kagglehub",
+	"json5",
+	"ptpython",
 ]
 
 [build-system]
