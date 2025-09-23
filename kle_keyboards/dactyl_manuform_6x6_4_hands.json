@@ -1,0 +1,442 @@
+[
+  [
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "F1",
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "F2",
+    {
+      "finger": "RING",
+      "hand": "LEFT"
+    },
+    "F3",
+    {
+      "finger": "MIDDLE",
+      "hand": "LEFT"
+    },
+    "F4",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "F5",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "F6",
+    {
+      "x": 6,
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "F7",
+    {
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "F8",
+    {
+      "finger": "MIDDLE",
+      "hand": "RIGHT"
+    },
+    "F9",
+    {
+      "finger": "RING",
+      "hand": "RIGHT"
+    },
+    "F10",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "F11",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "F12"
+  ],
+  [
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "Esc",
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "!\n1",
+    {
+      "finger": "RING",
+      "hand": "LEFT"
+    },
+    "@\n2",
+    {
+      "finger": "MIDDLE",
+      "hand": "LEFT"
+    },
+    "#\n3",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "$\n4",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "%\n5",
+    {
+      "x": 6,
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "^\n6",
+    {
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "&\n7",
+    {
+      "finger": "MIDDLE",
+      "hand": "RIGHT"
+    },
+    "*\n8",
+    {
+      "finger": "RING",
+      "hand": "RIGHT"
+    },
+    "(\n9",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    ")\n0",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "Backspace"
+  ],
+  [
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "Tab",
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "Q",
+    {
+      "finger": "RING",
+      "hand": "LEFT"
+    },
+    "W",
+    {
+      "finger": "MIDDLE",
+      "hand": "LEFT"
+    },
+    "E",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "R",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "T",
+    {
+      "x": 6,
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "Y",
+    {
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "U",
+    {
+      "finger": "MIDDLE",
+      "hand": "RIGHT"
+    },
+    "I",
+    {
+      "finger": "RING",
+      "hand": "RIGHT"
+    },
+    "O",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "P",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "[\n]"
+  ],
+  [
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "Shift",
+    {
+      "finger": "PINKY",
+      "hand": "LEFT",
+      "homing": true
+    },
+    "A",
+    {
+      "finger": "RING",
+      "hand": "LEFT",
+      "homing": true
+    },
+    "S",
+    {
+      "finger": "MIDDLE",
+      "hand": "LEFT",
+      "homing": true
+    },
+    "D",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT",
+      "homing": true
+    },
+    "F",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "G",
+    {
+      "x": 6,
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "H",
+    {
+      "finger": "INDEX",
+      "hand": "RIGHT",
+      "homing": true
+    },
+    "J",
+    {
+      "finger": "MIDDLE",
+      "hand": "RIGHT",
+      "homing": true
+    },
+    "K",
+    {
+      "finger": "RING",
+      "hand": "RIGHT",
+      "homing": true
+    },
+    "L",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT",
+      "homing": true
+    },
+    ";\n'",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "'"
+  ],
+  [
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "Ctrl",
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "Z",
+    {
+      "finger": "RING",
+      "hand": "LEFT"
+    },
+    "X",
+    {
+      "finger": "MIDDLE",
+      "hand": "LEFT"
+    },
+    "C",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "V",
+    {
+      "finger": "INDEX",
+      "hand": "LEFT"
+    },
+    "B",
+    {
+      "x": 6,
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "N",
+    {
+      "finger": "INDEX",
+      "hand": "RIGHT"
+    },
+    "M",
+    {
+      "finger": "MIDDLE",
+      "hand": "RIGHT"
+    },
+    ",\n<",
+    {
+      "finger": "RING",
+      "hand": "RIGHT"
+    },
+    ".\n>",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "/\n?",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "\\\n|"
+  ],
+  [
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "",
+    {
+      "finger": "PINKY",
+      "hand": "LEFT"
+    },
+    "",
+    {
+      "finger": "RING",
+      "hand": "LEFT"
+    },
+    "[\n]",
+    {
+      "finger": "MIDDLE",
+      "hand": "LEFT"
+    },
+    "]\n}",
+    {
+      "x": 10,
+      "finger": "MIDDLE",
+      "hand": "RIGHT"
+    },
+    "+\n=",
+    {
+      "finger": "RING",
+      "hand": "RIGHT"
+    },
+    "=\n+",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    "",
+    {
+      "finger": "PINKY",
+      "hand": "RIGHT"
+    },
+    ""
+  ],
+  [
+    {
+      "x": 4,
+      "finger": "THUMB",
+      "hand": "LEFT"
+    },
+    "",
+    {
+      "finger": "THUMB",
+      "hand": "LEFT",
+      "homing": true
+    },
+    "Space",
+    {
+      "x": 6,
+      "finger": "THUMB",
+      "hand": "RIGHT",
+      "homing": true
+    },
+    "Enter",
+    {
+      "finger": "THUMB",
+      "hand": "RIGHT"
+    },
+    ""
+  ],
+  [
+    {
+      "x": 6,
+      "finger": "THUMB",
+      "hand": "LEFT"
+    },
+    "Shift",
+    {
+      "finger": "THUMB",
+      "hand": "LEFT"
+    },
+    "Home",
+    {
+      "x": 2,
+      "finger": "THUMB",
+      "hand": "RIGHT"
+    },
+    "Delete",
+    {
+      "finger": "THUMB",
+      "hand": "RIGHT"
+    },
+    "Shift"
+  ],
+  [
+    {
+      "x": 6,
+      "finger": "THUMB",
+      "hand": "LEFT"
+    },
+    "Ctrl",
+    {
+      "finger": "THUMB",
+      "hand": "LEFT"
+    },
+    "Win",
+    {
+      "x": 2,
+      "finger": "THUMB",
+      "hand": "RIGHT"
+    },
+    "Alt",
+    {
+      "finger": "THUMB",
+      "hand": "RIGHT"
+    },
+    "Ctrl"
+  ]
+]
