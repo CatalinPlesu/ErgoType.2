@@ -1,5 +1,22 @@
+# In kle_model.py
+
 import json
 from typing import List, Dict, Any, Optional, Union
+from enum import Enum
+
+class Finger(Enum):
+    UNKNOWN = 0
+    THUMB = 1
+    INDEX = 2
+    MIDDLE = 3
+    RING = 4
+    PINKY = 5
+
+class Hand(Enum):
+    UNKNOWN = 0
+    LEFT = 1
+    RIGHT = 2
+    BOTH = 3
 
 # ----------------------------
 # Key Class
@@ -14,6 +31,9 @@ class Key:
             "textColor": "#000000",
             "textSize": 3
         }
+        self.finger: Finger = Finger.UNKNOWN
+        self.hand: Hand = Hand.UNKNOWN
+        self.homing: bool = False
         self.x: float = 0
         self.y: float = 0
         self.z: float = 0
@@ -54,7 +74,9 @@ class Key:
             self.labels[6] = None
 
     def __repr__(self):
-        return f"Key(label={self.labels[0]}, shifted={self.labels[6]}, x={self.x}, y={self.y}, z={self.z})"
+        base_repr = f"Key(label={self.labels[0]}, shifted={self.labels[6]}, x={self.x}, y={self.y}, z={self.z}"
+        extra_repr = f", finger={self.finger.name}, hand={self.hand.name}, homing={self.homing})"
+        return base_repr + extra_repr
 
 
 # ----------------------------
@@ -129,6 +151,7 @@ class Serial:
         if not isinstance(rows, list):
             Serial.deserialize_error("expected an array of objects")
 
+        # Start with a default key template
         current = Key()
         kbd = Keyboard()
         align = 4
@@ -139,13 +162,16 @@ class Serial:
                 for k in range(len(row)):
                     item = row[k]
                     if isinstance(item, str):
-                        new_key = Serial.copy(vars(current))
+                        # --- FIXED PART 1: Copy current state BEFORE modifying current for the next key ---
+                        # Create a copy of the current template's state for this specific key
+                        new_key_state = Serial.copy(vars(current))
 
-                        # Convert back to Key object
+                        # Convert the copied state dictionary back into a Key object
                         key_obj = Key()
-                        for attr, value in new_key.items():
+                        for attr, value in new_key_state.items():
                             setattr(key_obj, attr, value)
 
+                        # Apply key-specific calculations and properties
                         key_obj.width2 = key_obj.width2 or current.width
                         key_obj.height2 = key_obj.height2 or current.height
                         key_obj.labels = Serial.reorder_labels(item.split("\n"), align)
@@ -160,15 +186,40 @@ class Serial:
                             if key_obj.textColor[i] == key_obj.default["textColor"]:
                                 key_obj.textColor[i] = None
 
+                        # Add the newly created key to the keyboard
                         kbd.keys.append(key_obj)
 
+                        # --- FIXED PART 2: Reset transient properties on the template AFTER creating the key ---
+                        # Reset properties that should not carry over to the next key implicitly.
+                        # These are typically set explicitly via property dictionaries.
+                        # width/height/x/y are positional and handled by the loop logic.
+                        # Properties like color, profile etc. *can* carry over, which is often desired.
+                        # Boolean flags like homing, nub, stepped, decal, ghost usually should NOT carry over.
+                        current.homing = False  # <-- KEY FIX: Reset homing
+                        current.finger = Finger.UNKNOWN # <-- KEY FIX: Reset finger
+                        current.hand = Hand.UNKNOWN     # <-- KEY FIX: Reset hand
+                        # Reset other transient flags if needed
+                        # current.nub = False # Example, if nub should not carry over
+                        # current.stepped = False
+                        # current.decal = False
+                        # current.ghost = False
+
+                        # Advance the x position for the next key
                         current.x += current.width
+                        # Reset width/height back to default for the next key unless overridden
                         current.width = current.height = 1
+                        # Reset secondary dimensions
                         current.x2 = current.y2 = current.width2 = current.height2 = 0
-                        current.nub = current.stepped = current.decal = False
-                    else:
+                        # Note: nub, stepped, decal are NOT reset here because their state often carries
+                        # over in KLE (e.g., a cluster of stepped keys). The reset above is for explicit flags.
+                        # If issues persist with other flags, add them to the reset list above.
+
+                    else: # item is a dict (property modifier)
+                        # Error check for rotation placement
                         if k != 0 and ("r" in item or "rx" in item or "ry" in item):
                             Serial.deserialize_error("rotation can only be specified on the first key in a row", item)
+
+                        # Apply property changes to the current template
                         if "r" in item:
                             current.rotation_angle = item["r"]
                         if "rx" in item:
@@ -226,9 +277,29 @@ class Serial:
                             current.sb = item["sb"]
                         if "st" in item:
                             current.st = item["st"]
+                        if "finger" in item:
+                            finger_val = item["finger"]
+                            if isinstance(finger_val, str):
+                                 try:
+                                    current.finger = Finger[finger_val.upper()]
+                                 except KeyError:
+                                    print(f"Warning: Invalid finger string value '{finger_val}'. Defaulting to UNKNOWN.")
+                                    current.finger = Finger.UNKNOWN
+                        if "hand" in item:
+                            hand_val = item["hand"]
+                            if isinstance(hand_val, str):
+                                try:
+                                   current.hand = Hand[hand_val.upper()]
+                                except KeyError:
+                                   print(f"Warning: Invalid hand string value '{hand_val}'. Defaulting to UNKNOWN.")
+                                   current.hand = Hand.UNKNOWN
+                        if "homing" in item:
+                            current.homing = bool(item["homing"])
+                # End of row: Move to the next row
                 current.y += 1
-                current.x = current.rotation_x
+                current.x = current.rotation_x # Reset x to the row's starting x (potentially rotated)
             elif isinstance(row, dict):
+                # Handle metadata (must be the first element)
                 if r != 0:
                     Serial.deserialize_error("keyboard metadata must be the first element", row)
                 for prop in vars(kbd.meta):

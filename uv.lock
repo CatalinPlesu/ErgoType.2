@@ -313,6 +313,17 @@ wheels = [
 ]
 
 [[package]]
+name = "dearpygui"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/92/fe/66293fc40254a29f060efd3398f2b1001ed79263ae1837db9ec42caa8f1d/dearpygui-2.1.0-cp311-cp311-macosx_10_6_x86_64.whl", hash = "sha256:03e5dc0b3dd2f7965e50bbe41f3316a814408064b582586de994d93afedb125c", size = 2100924, upload-time = "2025-07-07T14:20:00.602Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/4d/9fa1c3156ba7bbf4dc89e2e322998752fccfdc3575923a98dd6a4da48911/dearpygui-2.1.0-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:b5b37710c3fa135c48e2347f39ecd1f415146e86db5d404707a0bf72d16bd304", size = 1874441, upload-time = "2025-07-07T14:20:09.165Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/3c/af5673b50699e1734296a0b5bcef39bb6989175b001ad1f9b0e7888ad90d/dearpygui-2.1.0-cp311-cp311-manylinux1_x86_64.whl", hash = "sha256:b0cfd7ac7eaa090fc22d6aa60fc4b527fc631cee10c348e4d8df92bb39af03d2", size = 2636574, upload-time = "2025-07-07T14:20:14.951Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/db/ed4db0bb3d88e7a8c405472641419086bef9632c4b8b0489dc0c43519c0d/dearpygui-2.1.0-cp311-cp311-win_amd64.whl", hash = "sha256:a9af54f96d3ef30c5db9d12cdf3266f005507396fb0da2e12e6b22b662161070", size = 1810266, upload-time = "2025-07-07T14:19:51.565Z" },
+]
+
+[[package]]
 name = "debugpy"
 version = "1.8.17"
 source = { registry = "https://pypi.org/simple" }
@@ -349,6 +360,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
+    { name = "dearpygui" },
     { name = "gitpython" },
     { name = "ipykernel" },
     { name = "json5" },
@@ -369,6 +381,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.2" },
+    { name = "dearpygui" },
     { name = "gitpython" },
     { name = "ipykernel", specifier = ">=6.25.0" },
     { name = "json5" },

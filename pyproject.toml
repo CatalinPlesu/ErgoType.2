@@ -21,7 +21,8 @@ dependencies = [
 	"kagglehub",
 	"json5",
 	"ptpython",
-	"svgwrite"
+	"svgwrite",
+	"dearpygui",
 ]
 
 [build-system]
