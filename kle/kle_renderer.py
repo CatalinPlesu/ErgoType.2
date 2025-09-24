@@ -81,6 +81,84 @@ UNIT_SIZES = {
 # Add OEM as alias for DCS
 UNIT_SIZES["px"]["profiles"]["OEM"] = UNIT_SIZES["px"]["profiles"]["DCS"]
 
+# Gruvbox color palette for keyboard renderer
+DEFAULT_COLOR_PALETTE = {
+    # Finger colors (for key top) - Gruvbox accent colors
+    "thumb": "#CC241D",      # Gruvbox Red (dracula)
+    "index": "#98971A",      # Gruvbox Green (jedi)
+    "middle": "#D79921",     # Gruvbox Yellow (leia)
+    "ring": "#458588",       # Gruvbox Blue (skywalker)
+    "pinky": "#B16286",      # Gruvbox Purple (vader)
+    
+    # Hand colors (for key bottom) - Gruvbox background tones
+    "left": "#8EC07C",       # Gruvbox Aqua (green-cyan)
+    "right": "#BD6D2F",      # Desaturated orange (muted orange-brown)
+    "both": "#A89984",       # Gruvbox Light4 (neutral gray)
+    
+    # Homing key modifier
+    "homing_factor": 0.85    # Light homing adjustment (since gruvbox is already earthy)
+}
+
+def get_color_palette():
+    """Return the current color palette"""
+    return DEFAULT_COLOR_PALETTE.copy()
+
+def set_color_palette(palette: Dict[str, Any]):
+    """Update the color palette"""
+    global DEFAULT_COLOR_PALETTE
+    DEFAULT_COLOR_PALETTE.update(palette)
+
+def hex_to_rgb(hex_color: str) -> tuple:
+    """Convert hex color to RGB tuple"""
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+def rgb_to_hex(rgb: tuple) -> str:
+    """Convert RGB tuple to hex color"""
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+def darken_color(hex_color: str, factor: float) -> str:
+    """Darken a hex color by a factor"""
+    r, g, b = hex_to_rgb(hex_color)
+    r = int(r * factor)
+    g = int(g * factor)
+    b = int(b * factor)
+    return rgb_to_hex((r, g, b))
+
+def get_finger_color(finger) -> str:
+    """Get color for a finger (accepts Finger enum or int)"""
+    # Handle both enum and integer values
+    if hasattr(finger, 'value'):
+        finger_val = finger.value
+    else:
+        finger_val = finger
+    
+    finger_map = {
+        1: DEFAULT_COLOR_PALETTE["thumb"],    # THUMB
+        2: DEFAULT_COLOR_PALETTE["index"],    # INDEX
+        3: DEFAULT_COLOR_PALETTE["middle"],   # MIDDLE
+        4: DEFAULT_COLOR_PALETTE["ring"],     # RING
+        5: DEFAULT_COLOR_PALETTE["pinky"]     # PINKY
+    }
+    # Return a distinct color for unknown fingers to make debugging easier
+    return finger_map.get(finger_val, "#cdcdcd")  # Light red for unknown
+
+def get_hand_color(hand) -> str:
+    """Get color for a hand (accepts Hand enum or int)"""
+    # Handle both enum and integer values
+    if hasattr(hand, 'value'):
+        hand_val = hand.value
+    else:
+        hand_val = hand
+    
+    hand_map = {
+        1: DEFAULT_COLOR_PALETTE["left"],     # LEFT
+        2: DEFAULT_COLOR_PALETTE["right"],    # RIGHT
+        3: DEFAULT_COLOR_PALETTE["both"]      # BOTH
+    }
+    # Return a distinct color for unknown hands to make debugging easier
+    return hand_map.get(hand_val, "#ccc")  # Light green for unknown
+
 def get_profile(key) -> str:
     """Extract profile name from key profile string"""
     import re
@@ -205,17 +283,18 @@ def get_render_params(key, sizes: Dict[str, Any]) -> Dict[str, Any]:
         parms["outercapwidth2"] = parms["capwidth2"] - sizes["keySpacing"] * 2
         parms["outercapheight2"] = parms["capheight2"] - sizes["keySpacing"] * 2
     
-    # Dimensions of the top of the cap
-    parms["innercapwidth"] = parms["outercapwidth"] - sizes["bevelMargin"] * 2
-    parms["innercapheight"] = parms["outercapheight"] - sizes["bevelMargin"] * 2 - (sizes["bevelOffsetBottom"] - sizes["bevelOffsetTop"])
-    parms["innercapx"] = parms["outercapx"] + sizes["bevelMargin"]
-    parms["innercapy"] = parms["outercapy"] + sizes["bevelMargin"] - sizes["bevelOffsetTop"]
+    # Dimensions of the top of the cap - ensure there's enough margin to see hand color
+    bevel_margin = max(sizes["bevelMargin"], 4)  # Ensure at least 4px margin
+    parms["innercapwidth"] = parms["outercapwidth"] - bevel_margin * 2
+    parms["innercapheight"] = parms["outercapheight"] - bevel_margin * 2 - (sizes["bevelOffsetBottom"] - sizes["bevelOffsetTop"])
+    parms["innercapx"] = parms["outercapx"] + bevel_margin
+    parms["innercapy"] = parms["outercapy"] + bevel_margin - sizes["bevelOffsetTop"]
     
     if parms["jShaped"]:
-        parms["innercapwidth2"] = parms["outercapwidth2"] - sizes["bevelMargin"] * 2
-        parms["innercapheight2"] = parms["outercapheight2"] - sizes["bevelMargin"] * 2
-        parms["innercapx2"] = parms["outercapx2"] + sizes["bevelMargin"]
-        parms["innercapy2"] = parms["outercapy2"] + sizes["bevelMargin"] - sizes["bevelOffsetTop"]
+        parms["innercapwidth2"] = parms["outercapwidth2"] - bevel_margin * 2
+        parms["innercapheight2"] = parms["outercapheight2"] - bevel_margin * 2
+        parms["innercapx2"] = parms["outercapx2"] + bevel_margin
+        parms["innercapy2"] = parms["outercapy2"] + bevel_margin - sizes["bevelOffsetTop"]
     
     # Dimensions of the text part of the cap
     parms["textcapwidth"] = parms["innercapwidth"] - sizes["padding"] * 2
@@ -223,9 +302,17 @@ def get_render_params(key, sizes: Dict[str, Any]) -> Dict[str, Any]:
     parms["textcapx"] = parms["innercapx"] + sizes["padding"]
     parms["textcapy"] = parms["innercapy"] + sizes["padding"]
     
-    # Colors
-    parms["darkColor"] = key.color
-    parms["lightColor"] = lighten_color(key.color, 1.2)
+    # Determine base colors
+    finger_color = get_finger_color(key.finger)
+    hand_color = get_hand_color(key.hand)
+    
+    # Apply homing key modifier to the finger color (top part)
+    if key.homing:
+        finger_color = darken_color(finger_color, DEFAULT_COLOR_PALETTE["homing_factor"])
+    
+    # Colors - finger color is for inner (top) part, hand color for outer (bottom)
+    parms["lightColor"] = finger_color  # Top part of keycap (inner rectangle)
+    parms["darkColor"] = hand_color     # Bottom part of keycap (outer rectangle)
     
     # Rotation calculations
     parms["origin_x"] = sizes["unit"] * key.rotation_x
@@ -315,7 +402,7 @@ def draw_keycap(dwg, key, index: int, sizes: Dict[str, Any]) -> svgwrite.contain
         transform = f"rotate({key.rotation_angle}, {parms['origin_x']}, {parms['origin_y']})"
         group.attribs['transform'] = transform
     
-    # Draw outer cap (bottom part)
+    # Draw outer cap (bottom part - hand color)
     if parms["jShaped"]:
         # For J-shaped keys, we need to create a path
         path_data = [
@@ -348,7 +435,7 @@ def draw_keycap(dwg, key, index: int, sizes: Dict[str, Any]) -> svgwrite.contain
     
     group.add(outer_path)
     
-    # Draw inner cap (top part)
+    # Draw inner cap (top part - finger color)
     if parms["jShaped"]:
         # For J-shaped keys, create inner path
         path_data = [
