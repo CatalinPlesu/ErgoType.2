@@ -56,10 +56,8 @@ class Key:
         self.st: str = ""  # switch type
 
     def get_labels(self) -> tuple:
-        """Return a tuple of (primary_label, shifted_label) or fewer."""
-        primary = self.labels[0]
-        shifted = self.labels[6]
-        result = tuple(filter(lambda x: x is not None, [primary, shifted]))
+        """Return a tuple of non-None labels in order."""
+        result = tuple(label for label in self.labels if label is not None)
         return result if result else (None,)
 
     def set_labels(self, labels: Union[tuple, list]):
