@@ -1,5 +1,8 @@
+import os
+import pickle
 from keyboard_phenotype import KeyboardPhenotype
 from kle.kle_model import Serial, FingerName
+from keyboard_genotypes import LAYOUT_DATA
 
 
 with open('kle_keyboards/ansi_60_percent_hands.json', 'r') as f:
@@ -14,11 +17,9 @@ with open('kle_keyboards/ansi_60_percent_hands.json', 'r') as f:
 
 keyboard = KeyboardPhenotype(keyboard, {})
 
-keyboard.select_remap_keys(['q', 'e', 'r'])
-keyboard.remap_to_keys(['q', 'e', 'r'])
+keyboard.select_remap_keys(LAYOUT_DATA['qwerty'])
+keyboard.remap_to_keys(LAYOUT_DATA['asset'])
 
-import pickle
-import os
 
 try:
     data_file = './processed/markov_chains.pkl'
@@ -36,4 +37,6 @@ except Exception as e:
 # print(data['simple_wikipedia'])
 
 keyboard.fitness(data['simple_wikipedia'])
+
+keyboard.get_phisical_keyboard()
 # keyboard.fitness(data['cartigratis'])

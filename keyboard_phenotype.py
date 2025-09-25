@@ -18,7 +18,7 @@ def cartesian_distance(point1, point2):
 
 class Finger:
     def __init__(self, homing_key):
-        # self.homming_position = homing_key.get_key_center_position()
+        self.homming_position = homing_key.get_key_center_position()
         self.current_position = homing_key.get_key_center_position()
         self.total_cost = 0
 
@@ -26,6 +26,10 @@ class Finger:
         new_possition = key.get_key_center_position()
         cost = cartesian_distance(self.current_position, new_possition)
         self.total_cost += cost * presses
+
+    def reset(self):
+        self.total_cost = 0
+        self.current_position = self.homming_position
 
 
 class FingerManager:
@@ -50,6 +54,10 @@ class FingerManager:
         for key, value in self.fingers.items():
             total_cost += value.total_cost
         return total_cost
+
+    def reset(self):
+        for key in self.fingers.keys():
+            self.fingers[key].reset()
 
 
 class KeyboardPhenotype:
@@ -113,12 +121,13 @@ class KeyboardPhenotype:
             return
 
         remap_keys = dict()
-        for index, key in enumerate(keys_list):
-            remap_keys[key] = self.original_key_list[index]
+        for index, key in enumerate(self.original_key_list):
+            remap_keys[key] = keys_list[index]
         self.remap_keys = remap_keys
         print(self.remap_keys)
 
     def fitness(self, markov_chain, simulated_presses=1_000_000, depth=1):
+        self.finger_manager.reset()
         simulated_presses /= 100
         simulated_presses /= depth
         total_presses = 0
@@ -136,6 +145,7 @@ class KeyboardPhenotype:
 
         print(f"Total cost: {self.finger_manager.get_total_cost():,.2f}")
         print(f"Total presses: {total_presses:,}")
+        return self.finger_manager.get_total_cost()
 
     def translate_char_to_keys(self, character):
         keys = self.char_key_map[character]
@@ -159,20 +169,25 @@ class KeyboardPhenotype:
         keys = self.keymap[symbol]
         return keys
 
-    # interfaces:
-    # apply genotype
-    # format:
-    # remap List[Key] -> List[Key]
+    def get_phisical_keyboard(self):
+        for key, value in self.remap_keys.items():
+            self.keymap[key][0].set_labels((value,))
+        return self.physical_keyboard
 
-    # on init
-    # construct keyboard layouts
-    # 3 layouts a keybard has and we care about from start shift and altgr
-    # detect if it is a specific layout so we in std ro, [] keyes press ăî and you need alt gr press to reach those keys
-    # consider making the map a dict of key - base/shift/altgr to  list of keys
+        # interfaces:
+        # apply genotype
+        # format:
+        # remap List[Key] -> List[Key]
 
-    # running fitness function for a given genotype
+        # on init
+        # construct keyboard layouts
+        # 3 layouts a keybard has and we care about from start shift and altgr
+        # detect if it is a specific layout so we in std ro, [] keyes press ăî and you need alt gr press to reach those keys
+        # consider making the map a dict of key - base/shift/altgr to  list of keys
 
-    # determine travel cost for finger press
+        # running fitness function for a given genotype
 
-    # determinte travel cost for sequence
-    # think here of typing faster by paralell finger movement when not stopped.
+        # determine travel cost for finger press
+
+        # determinte travel cost for sequence
+        # think here of typing faster by paralell finger movement when not stopped.
