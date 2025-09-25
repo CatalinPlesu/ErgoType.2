@@ -5,6 +5,18 @@ from typing import List, Dict, Any, Optional, Union
 from enum import Enum
 
 
+class FingerName(Enum):
+    LEFT_PINKY = 0
+    LEFT_RING = 1
+    LEFT_MIDDLE = 2
+    LEFT_INDEX = 3
+    LEFT_THUMB = 4
+    RIGHT_THUMB = 5
+    RIGHT_INDEX = 6
+    RIGHT_MIDDLE = 7
+    RIGHT_RING = 8
+    RIGHT_PINKY = 9
+
 class Finger(Enum):
     UNKNOWN = 0
     THUMB = 1
@@ -19,6 +31,30 @@ class Hand(Enum):
     LEFT = 1
     RIGHT = 2
     BOTH = 3
+
+FINGER_NAME_MAP = {
+    FingerName.LEFT_PINKY: (Finger.PINKY, Hand.LEFT),
+    FingerName.LEFT_RING: (Finger.RING, Hand.LEFT),
+    FingerName.LEFT_MIDDLE: (Finger.MIDDLE, Hand.LEFT),
+    FingerName.LEFT_INDEX: (Finger.INDEX, Hand.LEFT),
+    FingerName.LEFT_THUMB: (Finger.THUMB, Hand.LEFT),
+    FingerName.RIGHT_THUMB: (Finger.THUMB, Hand.RIGHT),
+    FingerName.RIGHT_INDEX: (Finger.INDEX, Hand.RIGHT),
+    FingerName.RIGHT_MIDDLE: (Finger.MIDDLE, Hand.RIGHT),
+    FingerName.RIGHT_RING: (Finger.RING, Hand.RIGHT),
+    FingerName.RIGHT_PINKY: (Finger.PINKY, Hand.RIGHT)
+}
+
+def fingername_to_enums(fingername):
+    return FINGER_NAME_MAP[fingername]
+
+def enums_to_fingername(finger, hand):
+    if finger == Finger.THUMB and hand == Hand.BOTH:
+        return [FingerName.LEFT_THUMB, FingerName.RIGHT_THUMB]
+
+    for key, value in FINGER_NAME_MAP.items():
+        if value[0] == finger and value[1] == hand:
+            return key
 
 # ----------------------------
 # Key Class
@@ -62,6 +98,9 @@ class Key:
     def get_key_center_position(self):
         """Get the geometric center of the key."""
         return (self.x + self.width/2, self.y + self.height/2, self.z)
+
+    def get_finger_name(self):
+        return enums_to_fingername(self.finger, self.hand)
 
     def get_labels(self) -> tuple:
         """Return a tuple of non-None labels in order."""
@@ -110,7 +149,33 @@ class Keyboard:
     def __init__(self):
         self.meta: KeyboardMetadata = KeyboardMetadata()
         self.keys: List[Key] = []
+        self._cached_homing_keys: Optional[Dict[FingerName, Key]] = None
 
+    def _build_homing_key_cache(self):
+        """Build cache mapping finger names to their homing keys."""
+        if self._cached_homing_keys is not None:
+            return  # Already built
+
+        self._cached_homing_keys = {}
+        
+        for key in self.keys:
+            if key.homing:
+                finger_name = key.get_finger_name()
+                if finger_name and isinstance(finger_name, FingerName):
+                    # For each finger name, store the homing key
+                    self._cached_homing_keys[finger_name] = key
+                elif finger_name and isinstance(finger_name, list):
+                    # Handle case where key.get_finger_name() returns a list (e.g., for BOTH hand)
+                    for fn in finger_name:
+                        self._cached_homing_keys[fn] = key
+
+    def get_homing_key_for_finger_name(self, finger_name: FingerName) -> Optional[Key]:
+        """
+        Get the homing key for a specific finger name.
+        Uses caching for efficiency.
+        """
+        self._build_homing_key_cache()
+        return self._cached_homing_keys.get(finger_name)
 
 # ----------------------------
 # Serial Module
