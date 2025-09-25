@@ -107,7 +107,7 @@ class FingerManager:
     def __init__(self, physical_keyboard):
         self.fingers = {}
         self.list_alternation = 0
-        self.use_fitts_law = False
+        self.use_fitts_law = True
         self.fitts_a = 0.1  # Empirical constant - adjust based on typing studies
         self.fitts_b = 0.2  # Empirical constant - adjust based on typing studies
 
