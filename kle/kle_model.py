@@ -4,6 +4,7 @@ import json
 from typing import List, Dict, Any, Optional, Union
 from enum import Enum
 
+
 class Finger(Enum):
     UNKNOWN = 0
     THUMB = 1
@@ -11,6 +12,7 @@ class Finger(Enum):
     MIDDLE = 3
     RING = 4
     PINKY = 5
+
 
 class Hand(Enum):
     UNKNOWN = 0
@@ -21,6 +23,8 @@ class Hand(Enum):
 # ----------------------------
 # Key Class
 # ----------------------------
+
+
 class Key:
     def __init__(self):
         self.color: str = "#cccccc"
@@ -55,6 +59,10 @@ class Key:
         self.sb: str = ""  # switch brand
         self.st: str = ""  # switch type
 
+    def get_key_center_position(self):
+        """Get the geometric center of the key."""
+        return (self.x + self.width/2, self.y + self.height/2, self.z)
+
     def get_labels(self) -> tuple:
         """Return a tuple of non-None labels in order."""
         result = tuple(label for label in self.labels if label is not None)
@@ -72,8 +80,10 @@ class Key:
             self.labels[6] = None
 
     def __repr__(self):
-        base_repr = f"Key(label={self.labels[0]}, shifted={self.labels[6]}, x={self.x}, y={self.y}, z={self.z}"
-        extra_repr = f", finger={self.finger.name}, hand={self.hand.name}, homing={self.homing})"
+        base_repr = f"""Key(label={self.labels[0]}, shifted={
+            self.labels[6]}, x={self.x}, y={self.y}, z={self.z}"""
+        extra_repr = f""", finger={self.finger.name}, hand={
+            self.hand.name}, homing={self.homing})"""
         return base_repr + extra_repr
 
 
@@ -108,14 +118,15 @@ class Keyboard:
 class Serial:
     labelMap = [
         # 0  1  2  3  4  5  6  7  8  9 10 11   // align flags
-        [ 0, 6, 2, 8, 9,11, 3, 5, 1, 4, 7,10], # 0 = no centering
-        [ 1, 7,-1,-1, 9,11, 4,-1,-1,-1,-1,10], # 1 = center x
-        [ 3,-1, 5,-1, 9,11,-1,-1, 4,-1,-1,10], # 2 = center y
-        [ 4,-1,-1,-1, 9,11,-1,-1,-1,-1,-1,10], # 3 = center x & y
-        [ 0, 6, 2, 8,10,-1, 3, 5, 1, 4, 7,-1], # 4 = center front (default)
-        [ 1, 7,-1,-1,10,-1, 4,-1,-1,-1,-1,-1], # 5 = center front & x
-        [ 3,-1, 5,-1,10,-1,-1,-1, 4,-1,-1,-1], # 6 = center front & y
-        [ 4,-1,-1,-1,10,-1,-1,-1,-1,-1,-1,-1], # 7 = center front & x & y
+        [0, 6, 2, 8, 9, 11, 3, 5, 1, 4, 7, 10],  # 0 = no centering
+        [1, 7, -1, -1, 9, 11, 4, -1, -1, -1, -1, 10],  # 1 = center x
+        [3, -1, 5, -1, 9, 11, -1, -1, 4, -1, -1, 10],  # 2 = center y
+        [4, -1, -1, -1, 9, 11, -1, -1, -1, -1, -1, 10],  # 3 = center x & y
+        [0, 6, 2, 8, 10, -1, 3, 5, 1, 4, 7, -1],  # 4 = center front (default)
+        [1, 7, -1, -1, 10, -1, 4, -1, -1, -1, -1, -1],  # 5 = center front & x
+        [3, -1, 5, -1, 10, -1, -1, -1, 4, -1, -1, -1],  # 6 = center front & y
+        # 7 = center front & x & y
+        [4, -1, -1, -1, 10, -1, -1, -1, -1, -1, -1, -1],
     ]
 
     @staticmethod
@@ -172,8 +183,10 @@ class Serial:
                         # Apply key-specific calculations and properties
                         key_obj.width2 = key_obj.width2 or current.width
                         key_obj.height2 = key_obj.height2 or current.height
-                        key_obj.labels = Serial.reorder_labels(item.split("\n"), align)
-                        key_obj.textSize = Serial.reorder_labels(key_obj.textSize, align)
+                        key_obj.labels = Serial.reorder_labels(
+                            item.split("\n"), align)
+                        key_obj.textSize = Serial.reorder_labels(
+                            key_obj.textSize, align)
 
                         for i in range(12):
                             if not key_obj.labels[i]:
@@ -194,7 +207,7 @@ class Serial:
                         # Properties like color, profile etc. *can* carry over, which is often desired.
                         # Boolean flags like homing, nub, stepped, decal, ghost usually should NOT carry over.
                         current.homing = False  # <-- KEY FIX: Reset homing
-                        current.finger = Finger.UNKNOWN # <-- KEY FIX: Reset finger
+                        current.finger = Finger.UNKNOWN  # <-- KEY FIX: Reset finger
                         current.hand = Hand.UNKNOWN     # <-- KEY FIX: Reset hand
                         # Reset other transient flags if needed
                         # current.nub = False # Example, if nub should not carry over
@@ -212,10 +225,11 @@ class Serial:
                         # over in KLE (e.g., a cluster of stepped keys). The reset above is for explicit flags.
                         # If issues persist with other flags, add them to the reset list above.
 
-                    else: # item is a dict (property modifier)
+                    else:  # item is a dict (property modifier)
                         # Error check for rotation placement
                         if k != 0 and ("r" in item or "rx" in item or "ry" in item):
-                            Serial.deserialize_error("rotation can only be specified on the first key in a row", item)
+                            Serial.deserialize_error(
+                                "rotation can only be specified on the first key in a row", item)
 
                         # Apply property changes to the current template
                         if "r" in item:
@@ -242,12 +256,13 @@ class Serial:
                             split = item["t"].split("\n")
                             if split[0]:
                                 current.default["textColor"] = split[0]
-                            current.textColor = Serial.reorder_labels(split, align)
+                            current.textColor = Serial.reorder_labels(
+                                split, align)
                         if "x" in item:
                             current.x += item["x"]
                         if "y" in item:
                             current.y += item["y"]
-                        if "z" in item: # To enable sculpting more intricate 3D keyboards
+                        if "z" in item:  # To enable sculpting more intricate 3D keyboards
                             current.z += item["z"]
                         if "w" in item:
                             current.width = current.width2 = item["w"]
@@ -278,28 +293,32 @@ class Serial:
                         if "finger" in item:
                             finger_val = item["finger"]
                             if isinstance(finger_val, str):
-                                 try:
+                                try:
                                     current.finger = Finger[finger_val.upper()]
-                                 except KeyError:
-                                    print(f"Warning: Invalid finger string value '{finger_val}'. Defaulting to UNKNOWN.")
+                                except KeyError:
+                                    print(f"""Warning: Invalid finger string value '{
+                                          finger_val}'. Defaulting to UNKNOWN.""")
                                     current.finger = Finger.UNKNOWN
                         if "hand" in item:
                             hand_val = item["hand"]
                             if isinstance(hand_val, str):
                                 try:
-                                   current.hand = Hand[hand_val.upper()]
+                                    current.hand = Hand[hand_val.upper()]
                                 except KeyError:
-                                   print(f"Warning: Invalid hand string value '{hand_val}'. Defaulting to UNKNOWN.")
-                                   current.hand = Hand.UNKNOWN
+                                    print(f"""Warning: Invalid hand string value '{
+                                          hand_val}'. Defaulting to UNKNOWN.""")
+                                    current.hand = Hand.UNKNOWN
                         if "homing" in item:
                             current.homing = bool(item["homing"])
                 # End of row: Move to the next row
                 current.y += 1
-                current.x = current.rotation_x # Reset x to the row's starting x (potentially rotated)
+                # Reset x to the row's starting x (potentially rotated)
+                current.x = current.rotation_x
             elif isinstance(row, dict):
                 # Handle metadata (must be the first element)
                 if r != 0:
-                    Serial.deserialize_error("keyboard metadata must be the first element", row)
+                    Serial.deserialize_error(
+                        "keyboard metadata must be the first element", row)
                 for prop in vars(kbd.meta):
                     if prop in row:
                         setattr(kbd.meta, prop, row[prop])
