@@ -112,7 +112,7 @@ class KeyboardPhenotype:
         self.char_key_map = char_key_map
 
     def select_remap_keys(self, keys_list):
-        remap_keys = dict()
+        self.remap_keys = dict()
         self.remap_key_length = len(keys_list)
         self.original_key_list = keys_list
 
