@@ -17,6 +17,7 @@ class FingerName(Enum):
     RIGHT_RING = 8
     RIGHT_PINKY = 9
 
+
 class Finger(Enum):
     UNKNOWN = 0
     THUMB = 1
@@ -32,6 +33,7 @@ class Hand(Enum):
     RIGHT = 2
     BOTH = 3
 
+
 FINGER_NAME_MAP = {
     FingerName.LEFT_PINKY: (Finger.PINKY, Hand.LEFT),
     FingerName.LEFT_RING: (Finger.RING, Hand.LEFT),
@@ -45,8 +47,10 @@ FINGER_NAME_MAP = {
     FingerName.RIGHT_PINKY: (Finger.PINKY, Hand.RIGHT)
 }
 
+
 def fingername_to_enums(fingername):
     return FINGER_NAME_MAP[fingername]
+
 
 def enums_to_fingername(finger, hand):
     if finger == Finger.THUMB and hand == Hand.BOTH:
@@ -94,6 +98,12 @@ class Key:
         self.sm: str = ""  # switch mount
         self.sb: str = ""  # switch brand
         self.st: str = ""  # switch type
+
+    def get_height(self):
+        return self.height
+
+    def get_width(self):
+        return self.width
 
     def get_key_center_position(self):
         """Get the geometric center of the key."""
@@ -157,7 +167,7 @@ class Keyboard:
             return  # Already built
 
         self._cached_homing_keys = {}
-        
+
         for key in self.keys:
             if key.homing:
                 finger_name = key.get_finger_name()
@@ -180,6 +190,8 @@ class Keyboard:
 # ----------------------------
 # Serial Module
 # ----------------------------
+
+
 class Serial:
     labelMap = [
         # 0  1  2  3  4  5  6  7  8  9 10 11   // align flags
