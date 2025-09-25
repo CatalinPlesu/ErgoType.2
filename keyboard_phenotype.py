@@ -63,6 +63,7 @@ class FingerManager:
 class KeyboardPhenotype:
     def __init__(self, physical_keyboard, remap):
         print("Init keyboard phenotype")
+        self.remap_keys = {}
         self.physical_keyboard = physical_keyboard
         self.finger_manager = FingerManager(self.physical_keyboard)
 
@@ -172,6 +173,30 @@ class KeyboardPhenotype:
     def get_phisical_keyboard(self):
         for key, value in self.remap_keys.items():
             self.keymap[key][0].set_labels((value,))
+        return self.physical_keyboard
+
+    def get_physical_keyboard_with_costs(self):
+        """
+        Calculate the cost of pressing each key once with the appropriate finger
+        and store this cost information on the physical keyboard model.
+        """
+        # Reset finger manager to start from home positions
+        self.finger_manager.reset()
+        
+        # For each key on the physical keyboard, calculate the cost of one press
+        for key in self.physical_keyboard.keys:
+            # Press the key once using the finger manager
+            self.finger_manager.press(key, 1)
+            
+            # Get the total cost after this press
+            cost = self.finger_manager.get_total_cost()
+            
+            # Store the cost on the key (assuming similar interface to set_labels)
+            key.set_labels((str(f"{cost:.2f}"),))
+            
+            # Reset finger manager for next key calculation
+            self.finger_manager.reset()
+            
         return self.physical_keyboard
 
         # interfaces:
