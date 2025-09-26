@@ -143,25 +143,70 @@ class KeyboardPhenotype:
 
     def fitness(self, markov_chain, simulated_presses=1_000_000, depth=1):
         self.finger_manager.reset()
+
+        # Adjust simulated presses
+        # because we multiply the simulated persses to 100% keypresses across all chars at level 1
         simulated_presses /= 100
-        simulated_presses /= depth
+        total_cost = 0
         total_presses = 0
+        paths_explored = 0
 
-        for key in markov_chain['markov_chain'].keys():
-            if key not in self.char_key_map.keys():
-                print(f"Key {key} won't be reachable")
-            else:
-                percentage = markov_chain['markov_chain'][key]['global_percentage']
-                presses = percentage * simulated_presses
-                total_presses += presses
-                keys = self.translate_char_to_keys(key)
-                for x in keys:
-                    self.finger_manager.press(x, presses)
+        def dfs_traverse(current_key, current_depth, path_probability=1.0, path_keys=[]):
+            nonlocal total_cost, total_presses, paths_explored
+
+            # Add current key to the path
+            current_path = path_keys + [current_key]
+
+            # If we've reached the target depth, simulate the entire path
+            if current_depth == depth:
+                # Calculate how many times to simulate this path based on its probability
+                path_presses = path_probability * simulated_presses
+                total_presses += path_presses
+                paths_explored += 1
+
+                # Simulate typing the entire path sequence
+                for key_char in current_path:
+                    if key_char not in self.char_key_map.keys():
+                        print(f"Key {key_char} won't be reachable")
+                    else:
+                        keys = self.translate_char_to_keys(key_char)
+                        for key in keys:
+                            self.finger_manager.press(
+                                key, path_presses / len(current_path))
+
+                # Reset position after this complete path simulation
                 self.finger_manager.reset_position()
+                return
 
-        print(f"Total cost: {self.finger_manager.get_total_cost():,.2f}")
+            # Continue DFS - explore all possible next keys
+            if (current_key in markov_chain['markov_chain'] and
+                    'next' in markov_chain['markov_chain'][current_key]):
+
+                next_keys = markov_chain['markov_chain'][current_key]['next']
+
+                for next_key, next_data in next_keys.items():
+                    # Calculate the probability of this transition
+                    transition_prob = next_data['percentage'] / 100.0
+                    new_path_probability = path_probability * transition_prob
+
+                    # Continue DFS to next level
+                    dfs_traverse(next_key, current_depth + 1,
+                                 new_path_probability, current_path)
+
+        # Start DFS from each first-level key
+        for start_key in markov_chain['markov_chain'].keys():
+            if start_key in self.char_key_map.keys():
+                start_probability = markov_chain['markov_chain'][start_key]['global_percentage']
+                # Start with depth 1 since we're including the start key
+                dfs_traverse(start_key, 1, start_probability, [])
+            else:
+                print(f"Starting key {start_key} won't be reachable")
+
+        total_cost = self.finger_manager.get_total_cost()
+        print(f"Total cost: {total_cost:,.2f}")
         print(f"Total presses: {total_presses:,}")
-        return self.finger_manager.get_total_cost()
+        print(f"Paths explored: {paths_explored:,}")
+        return total_cost
 
     def translate_char_to_keys(self, character):
         keys = self.char_key_map[character]
