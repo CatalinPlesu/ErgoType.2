@@ -33,6 +33,9 @@ class Finger:
         # cost = cartesian_distance(self.homming_position, new_possition)
         self.total_cost += cost * presses * SCALED_COST_PER_FINGER[fingername]
 
+    def reset_position(self):
+        self.current_position = self.homming_position
+
     def reset(self):
         self.total_cost = 0
         self.current_position = self.homming_position
@@ -61,6 +64,10 @@ class FingerManager:
         for key, value in self.fingers.items():
             total_cost += value.total_cost
         return total_cost
+
+    def reset_position(self):
+        for key in self.fingers.keys():
+            self.fingers[key].reset_position()
 
     def reset(self):
         for key in self.fingers.keys():
@@ -139,17 +146,18 @@ class KeyboardPhenotype:
         simulated_presses /= 100
         simulated_presses /= depth
         total_presses = 0
+
         for key in markov_chain['markov_chain'].keys():
             if key not in self.char_key_map.keys():
                 print(f"Key {key} won't be reachable")
-
-        for key in markov_chain['markov_chain'].keys():
-            percentage = markov_chain['markov_chain'][key]['global_percentage']
-            presses = percentage * simulated_presses
-            total_presses += presses
-            keys = self.translate_char_to_keys(key)
-            for x in keys:
-                self.finger_manager.press(x, presses)
+            else:
+                percentage = markov_chain['markov_chain'][key]['global_percentage']
+                presses = percentage * simulated_presses
+                total_presses += presses
+                keys = self.translate_char_to_keys(key)
+                for x in keys:
+                    self.finger_manager.press(x, presses)
+                self.finger_manager.reset_position()
 
         print(f"Total cost: {self.finger_manager.get_total_cost():,.2f}")
         print(f"Total presses: {total_presses:,}")
@@ -179,10 +187,8 @@ class KeyboardPhenotype:
 
     def get_phisical_keyboard(self):
         for key, value in self.remap_keys.items():
-            try:
+            if len(self.keymap[key]) > 0:
                 self.keymap[key][0].set_labels((value,))
-            except:
-                self.keymap[key].set_labels((value,))
 
         return self.physical_keyboard
 
