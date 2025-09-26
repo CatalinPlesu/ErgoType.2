@@ -3,17 +3,19 @@ from collections import defaultdict
 import string
 from enum import Enum
 import math
-from finger_strength import FINGER_STRENGTHS
+from finger_strength import SCALED_COST_PER_FINGER, FINGER_MOBILITY_PENALITY
 
 
-def cartesian_distance(point1, point2):
+def cartesian_distance(point1, point2, penality):
     """
     Calculate the Cartesian distance between two points.
     """
     if len(point1) != len(point2) or len(point1) not in [2, 3]:
         raise ValueError("Points must have the same dimensionality (2D or 3D)")
 
-    squared_diffs = [(a - b) ** 2 for a, b in zip(point1, point2)]
+    # squared_diffs = [(a - b) ** 2 for a, b in zip(point1, point2, pen)]
+    squared_diffs = [c * (a - b) ** 2 for a, b,
+                     c in zip(point1, point2, penality)]
     return math.sqrt(sum(squared_diffs))
 
 
@@ -23,10 +25,13 @@ class Finger:
         self.current_position = homing_key.get_key_center_position()
         self.total_cost = 0
 
-    def press(self, key, presses):
+    def press(self, key, presses, fingername):
         new_possition = key.get_key_center_position()
-        cost = cartesian_distance(self.current_position, new_possition)
-        self.total_cost += cost * presses
+        cost = cartesian_distance(
+            self.current_position, new_possition, FINGER_MOBILITY_PENALITY[fingername])
+        self.current_position = new_possition
+        # cost = cartesian_distance(self.homming_position, new_possition)
+        self.total_cost += cost * presses * SCALED_COST_PER_FINGER[fingername]
 
     def reset(self):
         self.total_cost = 0
@@ -44,10 +49,11 @@ class FingerManager:
     def press(self, key, presses):
         fingername = key.get_finger_name()
         if isinstance(fingername, list):
-            self.fingers[fingername[self.list_alternation]].press(key, presses)
+            self.fingers[fingername[self.list_alternation]].press(
+                key, presses, fingername[0])
             self.list_alternation = 1 if self.list_alternation == 0 else 0
         else:
-            self.fingers[fingername].press(key, presses)
+            self.fingers[fingername].press(key, presses, fingername)
         pass
 
     def get_total_cost(self):
