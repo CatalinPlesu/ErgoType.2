@@ -237,10 +237,25 @@ class GeneticAlgorithm:
         sorted_combined = sorted(combined, key=lambda x: x.fitness)
         self.population = sorted_combined[:len(self.population)]
 
-    def run(self):
-        self.fitness_function_calculation()
-        self.tournament_selection()
-        self.crossover()
-        self.mutation()
-        self.survivor_selection()
-        self.order_fitness_values(limited=True)
+    def run(self, stagnant=5):
+        iteration = 0
+        while self.previous_population_iteration < stagnant:
+            self.fitness_function_calculation()
+            self.tournament_selection()
+            self.crossover()
+            self.mutation()
+            self.survivor_selection()
+
+            # Print current iteration
+            print(f"""CURRENT ITERATION: {iteration} PREVIOUS POPULATION ITERATION: {
+                  self.previous_population_iteration}""")
+
+            self.order_fitness_values(limited=True)
+
+            if self.previous_population_ids == self.get_current_population_ids():
+                self.previous_population_iteration += 1
+            else:
+                self.previous_population_ids = self.get_current_population_ids()
+                self.previous_population_iteration = 0
+
+            iteration += 1
