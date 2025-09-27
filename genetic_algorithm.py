@@ -159,7 +159,21 @@ class GeneticAlgorithm:
                 self.population.append(new_chromosome)
 
     def mutation(self):
+        for i, c in enumerate(self.population):
+            new_chromosome = self.mutate_permutation(c)
+            self.population[i] = new_chromosome
         pass
+
+    def mutate_permutation(self, chromosome, mutation_rate=0.05):
+        """Mutation for permutation problems - mutate exactly one position"""
+        mutated = chromosome.copy()
+        if random.random() < mutation_rate:
+            i = random.randint(0, len(chromosome) - 1)
+            j = random.randint(0, len(chromosome) - 1)
+            while i == j:
+                j = random.randint(0, len(chromosome) - 1)
+            mutated[i], mutated[j] = mutated[j], mutated[i]
+        return mutated
 
     def survivor_selection(self):
         pass
