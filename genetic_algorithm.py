@@ -8,6 +8,15 @@ import sys
 from contextlib import redirect_stdout
 
 
+class Individual:
+    def __init__(self, chromosome, fitness=None):
+        self.chromosome = chromosome
+        self.fitness = fitness
+
+    def __repr__(self):
+        return f"Individual(chromosome={''.join(self.chromosome)}, fitness={self.fitness})"
+
+
 class GeneticAlgorithm:
     def __init__(self):
         self.population_initialization()
@@ -27,71 +36,76 @@ class GeneticAlgorithm:
 
     def population_initialization(self, size=100):
         self.population = []
+
+        # Add heuristic individuals
         for _, genotype in LAYOUT_DATA.items():
-            self.population.append(genotype)
+            individual = Individual(chromosome=genotype)
+            self.population.append(individual)
+
         print(f"Population initialized with {len(self.population)} heuristic")
         print(f"""Population initialized with {
               size - len(self.population)} random""")
+
         if size > len(self.population):
             if self.population:
-                template_genotype = self.population[0]
+                template_genotype = self.population[0].chromosome
                 needed = size - len(self.population)
                 for _ in range(needed):
                     shuffled_clone = template_genotype.copy()
                     random.shuffle(shuffled_clone)
-                    self.population.append(shuffled_clone)
-                # for p in self.population:
-                #     print(''.join(p))
+                    individual = Individual(chromosome=shuffled_clone)
+                    self.population.append(individual)
 
     def fitness_function_calculation(self):
-        self.fitness_values = [None] * len(self.population)
-
         with open('kle_keyboards/ansi_60_percent_hands.json', 'r') as f:
             keyboard = Serial.parse(f.read())
 
         keyboard = KeyboardPhenotype(keyboard, {})
         keyboard.select_remap_keys(LAYOUT_DATA['qwerty'])
 
-        for index, genotype in enumerate(self.population):
-            with open(os.devnull, 'w') as devnull:
-                with redirect_stdout(devnull):
-                    keyboard.remap_to_keys(genotype)
-                    self.fitness_values[index] = keyboard.fitness(
-                        self.data['simple_wikipedia'])
-            # print(
-            #     f"Genotype [{index}] has fitness -> {self.fitness_values[index]}")
+        # Process population individuals
+        for individual in self.population:
+            if individual.fitness is None:  # Only calculate if not already present
+                with open(os.devnull, 'w') as devnull:
+                    with redirect_stdout(devnull):
+                        keyboard.remap_to_keys(individual.chromosome)
+                        individual.fitness = keyboard.fitness(
+                            self.data['simple_wikipedia'])
+
+        # Process children individuals if they exist
+        if hasattr(self, 'children'):
+            for child in self.children:
+                if child.fitness is None:  # Only calculate if not already present
+                    with open(os.devnull, 'w') as devnull:
+                        with redirect_stdout(devnull):
+                            keyboard.remap_to_keys(child.chromosome)
+                            child.fitness = keyboard.fitness(
+                                self.data['simple_wikipedia'])
 
     def order_fitness_values(self):
-        # Create list of (index, fitness_value) tuples
-        indexed_fitness = [(i, fitness)
-                           for i, fitness in enumerate(self.fitness_values)]
-
-        # Sort by fitness value (ascending order - best/lowest fitness first)
-        sorted_fitness = sorted(indexed_fitness, key=lambda x: x[1])
+        # Sort population by fitness value (ascending order - best/lowest fitness first)
+        sorted_population = sorted(self.population, key=lambda x: x.fitness)
 
         print("\n" + "="*80)
         print("ORDERED FITNESS VALUES (Best to Worst)")
         print("="*80)
-        print(f"{'Rank':<4} {'Index':<6} {'Fitness':<12} {'Layout':<50}")
+        print(f"{'Rank':<4} {'Fitness':<12} {'Layout':<50}")
         print("-"*80)
 
-        for rank, (index, fitness) in enumerate(sorted_fitness, 1):
-            layout_str = ''.join(self.population[index])
+        for rank, individual in enumerate(sorted_population, 1):
+            layout_str = ''.join(individual.chromosome)
             # Truncate layout if too long to save space
             display_layout = layout_str[:47] + \
                 "..." if len(layout_str) > 50 else layout_str
-            print(f"""{rank:<4} {index:<6} {
-                  fitness:<18.6f} {display_layout:<70}""")
+            print(f"{rank:<4} {individual.fitness:<18.6f} {display_layout:<70}")
 
         print("="*80 + "\n")
 
     def tournament_selection(self, k=3):
-        new_parents = []
-        new_parents_fitness = []
+        self.parents = []
 
-        # Work with copies to avoid modifying during iteration issues
+        # Create a copy of population to work with (to avoid modifying original during selection)
         temp_population = self.population.copy()
-        temp_fitness_values = self.fitness_values.copy()
 
         while len(temp_population) >= k:
             # Generate k unique random indices from the current temporary population
@@ -99,70 +113,92 @@ class GeneticAlgorithm:
             k_candidates = random.sample(
                 range(len(temp_population)), sample_size)
 
-            # Create zipped pairs
-            zipped = [(idx, temp_fitness_values[idx]) for idx in k_candidates]
-            min_tuple = min(zipped, key=lambda x: x[1])
+            # Find the candidate with the best (lowest) fitness
+            best_candidate = None
+            best_fitness = float('inf')
+
+            for idx in k_candidates:
+                if temp_population[idx].fitness < best_fitness:
+                    best_fitness = temp_population[idx].fitness
+                    best_candidate = temp_population[idx]
 
             # Add the best individual to parents
-            new_parents.append(temp_population[min_tuple[0]])
-            new_parents_fitness.append(temp_fitness_values[min_tuple[0]])
+            self.parents.append(Individual(
+                chromosome=best_candidate.chromosome.copy(),
+                fitness=best_candidate.fitness
+            ))
 
-            # Sort indices in DESCENDING order before popping to avoid index shifting
-            for index in sorted(k_candidates, reverse=True):
-                temp_population.pop(index)
-                temp_fitness_values.pop(index)
+            # Remove the selected candidates from temp_population in reverse order to avoid index shifting
+            for idx in sorted(k_candidates, reverse=True):
+                temp_population.pop(idx)
 
-        # Update the original population with remaining individuals
-        self.population = []
-        self.fitness_values = []
-        self.new_parents = new_parents
-        self.new_parents_fitness = new_parents_fitness
+        # If there are remaining individuals and we need more parents, add them
+        while temp_population and len(self.parents) < len(self.population):
+            remaining_individual = temp_population.pop()
+            self.parents.append(Individual(
+                chromosome=remaining_individual.chromosome.copy(),
+                fitness=remaining_individual.fitness
+            ))
 
     def crossover(self):
         self.uniform_crossover()
 
-    def uniform_crossover(self, offsprings=6):
-        for chromosome in self.new_parents:
-            print(''.join(chromosome))
-        # we will have bias of 75 % for the genes of the parent with lower value
-        for i in range(0, len(self.new_parents) - 1, 2):  # -1 to ensure we have pairs
-            i0, i1 = i, i+1
-            print(f"""P0 {
-                  ''.join(self.new_parents[i0])}] with fitness - {self.new_parents_fitness[i0]}""")
-            print(f"""P1 {
-                  ''.join(self.new_parents[i1])}] with fitness - {self.new_parents_fitness[i1]}""")
+    def uniform_crossover(self, offsprings_per_pair=6):
+        self.children = []
 
-            if (self.new_parents_fitness[i1] < self.new_parents_fitness[i0]):
-                print("Swap predominant parent")
-                i0, i1 = i1, i0
+        for i in range(0, len(self.parents) - 1, 2):  # -1 to ensure we have pairs
+            parent0, parent1 = self.parents[i], self.parents[i+1]
 
-            for o in range(0, offsprings):
-                print(f"Creating offspring {o}")
-                new_chromosome = [None] * len(self.new_parents[i0])
-                # take with probability 75% a gene from predominat parent
-                for i in range(0, len(new_chromosome)):
-                    if random.random() < 0.75+o/30.0:
-                        new_chromosome[i] = self.new_parents[i0][i]
-                # trie to put same genes from second parent if they are not found already
-                for i in range(0, len(new_chromosome)):
-                    if new_chromosome[i] is None and self.new_parents[i1][i] not in new_chromosome:
-                        new_chromosome[i] = self.new_parents[i1][i]
+            # print(f"""P0 [{''.join(parent0.chromosome)
+            #                }] with fitness - {parent0.fitness}""")
+            # print(f"""P1 [{''.join(parent1.chromosome)
+            #                }] with fitness - {parent1.fitness}""")
+
+            # Ensure parent0 has better (lower) fitness
+            if parent1.fitness < parent0.fitness:
+                # print("Swap predominant parent")
+                parent0, parent1 = parent1, parent0
+
+            for o in range(offsprings_per_pair):
+                # print(f"Creating offspring {o}")
+                new_chromosome = [None] * len(parent0.chromosome)
+
+                # Take with probability 75% + bias a gene from predominant parent
+                for i in range(len(new_chromosome)):
+                    if random.random() < 0.75 + o/30.0:  # next children will resemble the first parent more
+                        new_chromosome[i] = parent0.chromosome[i]
+
+                # Try to put same genes from second parent if they are not found already
+                for i in range(len(new_chromosome)):
+                    if new_chromosome[i] is None and parent1.chromosome[i] not in new_chromosome:
+                        new_chromosome[i] = parent1.chromosome[i]
+
+                # Try to put same genes from first parent if they are not found already
+                for i in range(len(new_chromosome)):
+                    if new_chromosome[i] is None and parent0.chromosome[i] not in new_chromosome:
+                        new_chromosome[i] = parent0.chromosome[i]
+
+                # Fill remaining positions with missing genes
                 existing_genes = set(
                     gene for gene in new_chromosome if gene is not None)
-                all_possible_genes = set(self.new_parents[i0])
+                all_possible_genes = set(parent0.chromosome)
                 missing_genes = list(all_possible_genes - existing_genes)
                 random.shuffle(missing_genes)
+
                 for j in range(len(new_chromosome)):
                     if new_chromosome[j] is None:
                         new_chromosome[j] = missing_genes.pop(0)
-                print(new_chromosome)
-                self.population.append(new_chromosome)
+
+                # print(new_chromosome)
+
+                # Create child individual without fitness (will be calculated later)
+                child = Individual(chromosome=new_chromosome, fitness=None)
+                self.children.append(child)
 
     def mutation(self):
-        for i, c in enumerate(self.population):
-            new_chromosome = self.mutate_permutation(c)
-            self.population[i] = new_chromosome
-        pass
+        for individual in self.children:
+            individual.chromosome = self.mutate_permutation(
+                individual.chromosome)
 
     def mutate_permutation(self, chromosome, mutation_rate=0.05):
         """Mutation for permutation problems - mutate exactly one position"""
@@ -176,7 +212,13 @@ class GeneticAlgorithm:
         return mutated
 
     def survivor_selection(self):
-        pass
+        self.fitness_function_calculation()
+        # Combine population and children, then select best individuals for next generation
+        combined = self.population + self.children
+
+        # Sort by fitness and keep the best individuals for next generation
+        sorted_combined = sorted(combined, key=lambda x: x.fitness)
+        self.population = sorted_combined[:len(self.population)]
 
     def run(self):
         pass
