@@ -46,6 +46,7 @@ class GeneticAlgorithm:
         for _, genotype in LAYOUT_DATA.items():
             individual = Individual(chromosome=genotype)
             self.population.append(individual)
+            break
 
         print(f"Population initialized with {len(self.population)} heuristic")
         print(f"""Population initialized with {
@@ -81,7 +82,7 @@ class GeneticAlgorithm:
                     with redirect_stdout(devnull):
                         keyboard.remap_to_keys(individual.chromosome)
                         individual.fitness = keyboard.fitness(
-                            self.data['simple_wikipedia'])
+                            self.data['simple_wikipedia'], depth=2)
 
         # Process children individuals if they exist
         if hasattr(self, 'children'):
@@ -91,7 +92,7 @@ class GeneticAlgorithm:
                         with redirect_stdout(devnull):
                             keyboard.remap_to_keys(child.chromosome)
                             child.fitness = keyboard.fitness(
-                                self.data['simple_wikipedia'])
+                                self.data['simple_wikipedia'], depth=2)
 
     def order_fitness_values(self, limited=False):
         sorted_population = sorted(self.population, key=lambda x: x.fitness)
@@ -237,7 +238,7 @@ class GeneticAlgorithm:
         sorted_combined = sorted(combined, key=lambda x: x.fitness)
         self.population = sorted_combined[:len(self.population)]
 
-    def run(self, stagnant=5):
+    def run(self, stagnant=10):
         iteration = 0
         while self.previous_population_iteration < stagnant:
             self.fitness_function_calculation()
