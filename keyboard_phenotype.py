@@ -290,6 +290,82 @@ class KeyboardPhenotype:
 
         return total_cost
 
+    def fitness_with_frequency_data(self, dataset_frequency_data, total_simulated_presses=50_000_000):
+        """
+        Fitness function based on frequency analysis data containing both word and character frequencies.
+
+        Args:
+            dataset_frequency_data: Single dataset from the frequency analysis (not the full results dict)
+            total_simulated_presses: Total number of presses to simulate
+        """
+        self.finger_manager.reset()
+
+        # Extract word frequencies (top words)
+        # List of dicts with 'word', 'absolute', 'relative', 'percentage'
+        word_frequencies = dataset_frequency_data['word_frequencies']
+
+        # Extract character frequencies
+        # Dict with char as key and {'absolute', 'relative'} as value
+        char_frequencies = dataset_frequency_data['character_frequencies']
+
+        # Calculate total word frequency for normalization
+        total_word_freq = sum(word_data['absolute']
+                              for word_data in word_frequencies)
+
+        # Calculate total character frequency for normalization
+        total_char_freq = sum(data['absolute']
+                              for data in char_frequencies.values())
+
+        # Process top words (allocate 70% of presses to words)
+        word_presses_budget = total_simulated_presses * 0.7
+
+        # Take top words up to 5000 if available
+        top_words = word_frequencies[:5000]
+
+        for word_data in top_words:
+            word = word_data['word']
+            word_frequency = word_data['absolute']
+
+            # Calculate how many times this word should be simulated based on its frequency
+            word_presses = (word_frequency / total_word_freq) * \
+                word_presses_budget
+
+            # Process each character in the word
+            for i, char in enumerate(word):
+                # Convert to lowercase to match the frequency data
+                char_lower = char.lower()
+
+                if char_lower in self.char_key_map.keys():
+                    keys = self.translate_char_to_keys(char_lower)
+                    for key in keys:
+                        self.finger_manager.press(key, word_presses)
+
+            # Reset position after each word to simulate moving to next word
+            self.finger_manager.reset_position()
+
+        # Process individual characters (remaining 30% of presses)
+        char_presses_budget = total_simulated_presses * 0.3
+
+        for char, char_data in char_frequencies.items():
+            char_frequency = char_data['absolute']
+            char_presses = (char_frequency / total_char_freq) * \
+                char_presses_budget
+
+            if char in self.char_key_map.keys():
+                keys = self.translate_char_to_keys(char)
+                for key in keys:
+                    self.finger_manager.press(key, char_presses)
+
+        total_cost = self.finger_manager.get_total_cost()
+
+        print(f"Total cost from frequency-based simulation: {total_cost:,.2f}")
+        print(f"Processed {min(len(top_words), 5000)} words from top 5000")
+        print(f"Processed {len(char_frequencies)} individual characters")
+        print(f"Total word frequency: {total_word_freq:,}")
+        print(f"Total character frequency: {total_char_freq:,}")
+
+        return total_cost
+
     def translate_char_to_keys(self, character):
         keys = self.char_key_map[character]
         # print(keys)

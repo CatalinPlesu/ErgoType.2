@@ -38,6 +38,8 @@ class GeneticAlgorithm:
             print(f"ERROR loading data: {e}")
             data = {}
         self.data = data
+        with open('./processed/frequency_analysis.pkl', 'rb') as f:
+            self.data2 = pickle.load(f)
 
     def population_initialization(self, size=100):
         self.population = []
@@ -46,7 +48,7 @@ class GeneticAlgorithm:
         for _, genotype in LAYOUT_DATA.items():
             individual = Individual(chromosome=genotype)
             self.population.append(individual)
-            break
+            # break
 
         print(f"Population initialized with {len(self.population)} heuristic")
         print(f"""Population initialized with {
@@ -81,8 +83,10 @@ class GeneticAlgorithm:
                 with open(os.devnull, 'w') as devnull:
                     with redirect_stdout(devnull):
                         keyboard.remap_to_keys(individual.chromosome)
-                        individual.fitness = keyboard.fitness(
-                            self.data['simple_wikipedia'], depth=1)
+                        # individual.fitness = keyboard.fitness(
+                        #     self.data['simple_wikipedia'], depth=1)
+                        individual.fitness = keyboard.fitness_with_frequency_data(
+                            self.data2['simple_wikipedia'])
 
         # Process children individuals if they exist
         if hasattr(self, 'children'):
@@ -91,8 +95,8 @@ class GeneticAlgorithm:
                     with open(os.devnull, 'w') as devnull:
                         with redirect_stdout(devnull):
                             keyboard.remap_to_keys(child.chromosome)
-                            child.fitness = keyboard.fitness(
-                                self.data['simple_wikipedia'], depth=1)
+                            child.fitness = keyboard.fitness_with_frequency_data(
+                                self.data2['simple_wikipedia'])
 
     def order_fitness_values(self, limited=False):
         sorted_population = sorted(self.population, key=lambda x: x.fitness)
@@ -293,6 +297,8 @@ class GeneticAlgorithm:
 
     def run(self, stagnant=10):
         iteration = 0
+        self.fitness_function_calculation()
+        self.order_fitness_values()
         while self.previous_population_iteration < stagnant:
             self.fitness_function_calculation()
             self.tournament_selection()
