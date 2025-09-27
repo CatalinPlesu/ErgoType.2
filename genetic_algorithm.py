@@ -9,12 +9,17 @@ from contextlib import redirect_stdout
 
 
 class Individual:
-    def __init__(self, chromosome, fitness=None):
+    _next_id = 0  # Static counter
+
+    def __init__(self, chromosome, fitness=None, parents=None):
         self.chromosome = chromosome
         self.fitness = fitness
+        self.id = Individual._next_id  # Assign current ID
+        Individual._next_id += 1       # Increment for next individual
+        self.parents = parents or []   # List of parent IDs
 
     def __repr__(self):
-        return f"Individual(chromosome={''.join(self.chromosome)}, fitness={self.fitness})"
+        return f"Individual(id={self.id}, chromosome={''.join(self.chromosome)}, fitness={self.fitness}, parents={self.parents})"
 
 
 class GeneticAlgorithm:
@@ -56,6 +61,12 @@ class GeneticAlgorithm:
                     individual = Individual(chromosome=shuffled_clone)
                     self.population.append(individual)
 
+        self.previous_population_ids = self.get_current_population_ids()
+        self.previous_population_iteration = 0
+
+    def get_current_population_ids(self):
+        return [c.id for c in self.population]
+
     def fitness_function_calculation(self):
         with open('kle_keyboards/ansi_60_percent_hands.json', 'r') as f:
             keyboard = Serial.parse(f.read())
@@ -82,24 +93,29 @@ class GeneticAlgorithm:
                             child.fitness = keyboard.fitness(
                                 self.data['simple_wikipedia'])
 
-    def order_fitness_values(self):
-        # Sort population by fitness value (ascending order - best/lowest fitness first)
+    def order_fitness_values(self, limited=False):
         sorted_population = sorted(self.population, key=lambda x: x.fitness)
-
-        print("\n" + "="*80)
+        print("\n" + "="*100)
         print("ORDERED FITNESS VALUES (Best to Worst)")
-        print("="*80)
-        print(f"{'Rank':<4} {'Fitness':<12} {'Layout':<50}")
-        print("-"*80)
+        print("="*100)
+        print(f"""{'Rank':<4} {'ID':<6} {'Fitness':<12} {
+              'Parents':<15} {'Layout':<50}""")
+        print("-"*100)
 
-        for rank, individual in enumerate(sorted_population, 1):
+        # Determine which individuals to display
+        display_population = sorted_population[:
+                                               5] if limited else sorted_population
+
+        for rank, individual in enumerate(display_population, 1):
             layout_str = ''.join(individual.chromosome)
-            # Truncate layout if too long to save space
             display_layout = layout_str[:47] + \
                 "..." if len(layout_str) > 50 else layout_str
-            print(f"{rank:<4} {individual.fitness:<18.6f} {display_layout:<70}")
 
-        print("="*80 + "\n")
+            parents_str = str(
+                individual.parents) if individual.parents else "[]"
+            print(f"""{rank:<4} {individual.id:<6} {individual.fitness:<12.6f} {
+                  parents_str:<15} {display_layout:<70}""")
+        print("="*100 + "\n")
 
     def tournament_selection(self, k=3):
         self.parents = []
@@ -192,7 +208,8 @@ class GeneticAlgorithm:
                 # print(new_chromosome)
 
                 # Create child individual without fitness (will be calculated later)
-                child = Individual(chromosome=new_chromosome, fitness=None)
+                child = Individual(chromosome=new_chromosome, fitness=None, parents=[
+                                   parent0.id, parent1.id])
                 self.children.append(child)
 
     def mutation(self):
@@ -221,4 +238,9 @@ class GeneticAlgorithm:
         self.population = sorted_combined[:len(self.population)]
 
     def run(self):
-        pass
+        self.fitness_function_calculation()
+        self.tournament_selection()
+        self.crossover()
+        self.mutation()
+        self.survivor_selection()
+        self.order_fitness_values(limited=True)
