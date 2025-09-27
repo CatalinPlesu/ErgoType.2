@@ -82,7 +82,7 @@ class GeneticAlgorithm:
                     with redirect_stdout(devnull):
                         keyboard.remap_to_keys(individual.chromosome)
                         individual.fitness = keyboard.fitness(
-                            self.data['simple_wikipedia'], depth=2)
+                            self.data['simple_wikipedia'], depth=1)
 
         # Process children individuals if they exist
         if hasattr(self, 'children'):
@@ -92,7 +92,7 @@ class GeneticAlgorithm:
                         with redirect_stdout(devnull):
                             keyboard.remap_to_keys(child.chromosome)
                             child.fitness = keyboard.fitness(
-                                self.data['simple_wikipedia'], depth=2)
+                                self.data['simple_wikipedia'], depth=1)
 
     def order_fitness_values(self, limited=False):
         sorted_population = sorted(self.population, key=lambda x: x.fitness)
@@ -163,6 +163,14 @@ class GeneticAlgorithm:
     def uniform_crossover(self, offsprings_per_pair=6):
         self.children = []
 
+        def is_duplicate(chromosome, existing_individuals):
+            """Check if chromosome exists in existing individuals"""
+            chromosome_str = ''.join(chromosome)
+            for individual in existing_individuals:
+                if ''.join(individual.chromosome) == chromosome_str:
+                    return True
+            return False
+
         for i in range(0, len(self.parents) - 1, 2):  # -1 to ensure we have pairs
             parent0, parent1 = self.parents[i], self.parents[i+1]
 
@@ -178,55 +186,100 @@ class GeneticAlgorithm:
 
             for o in range(offsprings_per_pair):
                 # print(f"Creating offspring {o}")
-                new_chromosome = [None] * len(parent0.chromosome)
 
-                # Take with probability 75% + bias a gene from predominant parent
-                for i in range(len(new_chromosome)):
-                    if random.random() < 0.75 + o/30.0:  # next children will resemble the first parent more
-                        new_chromosome[i] = parent0.chromosome[i]
+                # Keep trying until we get a unique chromosome
+                attempts = 0
+                max_attempts = 10  # Prevent infinite loops
 
-                # Try to put same genes from second parent if they are not found already
-                for i in range(len(new_chromosome)):
-                    if new_chromosome[i] is None and parent1.chromosome[i] not in new_chromosome:
-                        new_chromosome[i] = parent1.chromosome[i]
+                while attempts < max_attempts:
+                    new_chromosome = [None] * len(parent0.chromosome)
 
-                # Try to put same genes from first parent if they are not found already
-                for i in range(len(new_chromosome)):
-                    if new_chromosome[i] is None and parent0.chromosome[i] not in new_chromosome:
-                        new_chromosome[i] = parent0.chromosome[i]
+                    # Take with probability 75% + bias a gene from predominant parent
+                    for i in range(len(new_chromosome)):
+                        if random.random() < 0.75 + o/30.0:  # next children will resemble the first parent more
+                            new_chromosome[i] = parent0.chromosome[i]
 
-                # Fill remaining positions with missing genes
-                existing_genes = set(
-                    gene for gene in new_chromosome if gene is not None)
-                all_possible_genes = set(parent0.chromosome)
-                missing_genes = list(all_possible_genes - existing_genes)
-                random.shuffle(missing_genes)
+                    # Try to put same genes from second parent if they are not found already
+                    for i in range(len(new_chromosome)):
+                        if new_chromosome[i] is None and parent1.chromosome[i] not in new_chromosome:
+                            new_chromosome[i] = parent1.chromosome[i]
 
-                for j in range(len(new_chromosome)):
-                    if new_chromosome[j] is None:
-                        new_chromosome[j] = missing_genes.pop(0)
+                    # Try to put same genes from first parent if they are not found already
+                    for i in range(len(new_chromosome)):
+                        if new_chromosome[i] is None and parent0.chromosome[i] not in new_chromosome:
+                            new_chromosome[i] = parent0.chromosome[i]
 
-                # print(new_chromosome)
+                    # Fill remaining positions with missing genes
+                    existing_genes = set(
+                        gene for gene in new_chromosome if gene is not None)
+                    all_possible_genes = set(parent0.chromosome)
+                    missing_genes = list(all_possible_genes - existing_genes)
+                    random.shuffle(missing_genes)
 
-                # Create child individual without fitness (will be calculated later)
-                child = Individual(chromosome=new_chromosome, fitness=None, parents=[
-                                   parent0.id, parent1.id])
-                self.children.append(child)
+                    for j in range(len(new_chromosome)):
+                        if new_chromosome[j] is None:
+                            new_chromosome[j] = missing_genes.pop(0)
+
+                    # Check if this chromosome is a duplicate of parents or existing children
+                    all_existing = self.population + \
+                        self.children + [parent0, parent1]
+
+                    if not is_duplicate(new_chromosome, all_existing):
+                        # Create child individual without fitness (will be calculated later)
+                        child = Individual(chromosome=new_chromosome, fitness=None, parents=[
+                                           parent0.id, parent1.id])
+                        self.children.append(child)
+                        break  # Successfully created a unique child
+                    else:
+                        attempts += 1
+
+                # If we couldn't create a unique child after max attempts,
+                # create a completely random permutation
+                if attempts == max_attempts:
+                    # Create a random permutation of the parent's chromosome
+                    random_chromosome = parent0.chromosome.copy()
+                    random.shuffle(random_chromosome)
+
+                    # Double check it's not a duplicate
+                    all_existing = self.population + \
+                        self.children + [parent0, parent1]
+                    if not is_duplicate(random_chromosome, all_existing):
+                        child = Individual(chromosome=random_chromosome, fitness=None, parents=[
+                                           parent0.id, parent1.id])
+                        self.children.append(child)
+                    else:
+                        # If even random chromosome is a duplicate, skip this child
+                        continue
+
+        print(f"Created {len(self.children)} unique children")
 
     def mutation(self):
+        # Calculate mutation rate based on stagnation
+        base_mutation_rate = 0.05
+        if self.previous_population_iteration > 0:
+            mutation_rate = base_mutation_rate * 0.05  # Multiply by 0.05 when not 0
+        else:
+            mutation_rate = base_mutation_rate
+
+        # Determine number of mutations: either 1 or n (where n = previous_population_iteration)
+        num_mutations = 1 if self.previous_population_iteration == 0 else self.previous_population_iteration
+
         for individual in self.children:
             individual.chromosome = self.mutate_permutation(
-                individual.chromosome)
+                individual.chromosome, mutation_rate, num_mutations)
 
-    def mutate_permutation(self, chromosome, mutation_rate=0.05):
-        """Mutation for permutation problems - mutate exactly one position"""
+    def mutate_permutation(self, chromosome, mutation_rate=0.05, num_mutations=1):
+        """Mutation for permutation problems - mutate either 1 or n positions based on stagnation"""
         mutated = chromosome.copy()
-        if random.random() < mutation_rate:
-            i = random.randint(0, len(chromosome) - 1)
-            j = random.randint(0, len(chromosome) - 1)
-            while i == j:
+
+        for _ in range(num_mutations):
+            if random.random() < mutation_rate:
+                i = random.randint(0, len(chromosome) - 1)
                 j = random.randint(0, len(chromosome) - 1)
-            mutated[i], mutated[j] = mutated[j], mutated[i]
+                while i == j:
+                    j = random.randint(0, len(chromosome) - 1)
+                mutated[i], mutated[j] = mutated[j], mutated[i]
+
         return mutated
 
     def survivor_selection(self):
