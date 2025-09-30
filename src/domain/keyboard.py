@@ -1,5 +1,3 @@
-# In kle_model.py
-
 import json
 from typing import List, Dict, Any, Optional, Union
 from enum import Enum
