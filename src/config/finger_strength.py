@@ -29,5 +29,3 @@ for left_finger, bias in LEFT_HAND_BIAS.items():
     finger_enum, hand_enum = fingername_to_enums(left_finger)
     right_finger = enums_to_fingername(finger_enum, Hand.RIGHT)
     FINGER_BIAS[right_finger] = bias
-
-print(FINGER_BIAS)

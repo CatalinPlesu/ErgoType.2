@@ -4,42 +4,58 @@ from collections import defaultdict
 import string
 import random
 import math
-from finger_strength import SCALED_COST_PER_FINGER, FINGER_MOBILITY_PENALITY
+from src.config.finger_strength import FINGER_BIAS
 
 
-def cartesian_distance(point1, point2, penality):
+def cartesian_distance(point1, point2, penalty):
     """
-    Calculate the Cartesian distance between two points.
+    Calculate the Cartesian distance between two points with weighted penalties.
     """
     if len(point1) != len(point2) or len(point1) not in [2, 3]:
         raise ValueError("Points must have the same dimensionality (2D or 3D)")
 
-    # squared_diffs = [(a - b) ** 2 for a, b in zip(point1, point2, pen)]
     squared_diffs = [c * (a - b) ** 2 for a, b,
-                     c in zip(point1, point2, penality)]
+                     c in zip(point1, point2, penalty)]
     return math.sqrt(sum(squared_diffs))
 
 
 class Finger:
     def __init__(self, homing_key):
-        self.homming_position = homing_key.get_key_center_position()
+        self.homing_position = homing_key.get_key_center_position()
         self.current_position = homing_key.get_key_center_position()
         self.total_cost = 0
 
     def press(self, key, presses, fingername):
-        new_possition = key.get_key_center_position()
-        cost = cartesian_distance(
-            self.current_position, new_possition, FINGER_MOBILITY_PENALITY[fingername])
-        self.current_position = new_possition
-        # cost = cartesian_distance(self.homming_position, new_possition)
-        self.total_cost += cost * presses * SCALED_COST_PER_FINGER[fingername]
+        new_position = key.get_key_center_position()
+        
+        # Get the bias for this finger
+        bias = FINGER_BIAS[fingername]
+        
+        # Calculate penalties based on bias
+        if len(self.current_position) == 2:  # 2D
+            penalties = [bias.x_penalty, bias.y_penalty]
+        else:  # 3D
+            penalties = [bias.x_penalty, bias.y_penalty, bias.z_penalty]
+        
+        # Calculate distance with penalties
+        distance = cartesian_distance(self.current_position, new_position, penalties)
+        
+        # Update position
+        self.current_position = new_position
+        
+        # Calculate cost using effort multiplier
+        cost = distance * bias.effort
+        
+        # Add to total cost
+        self.total_cost += cost * presses
+
 
     def reset_position(self):
-        self.current_position = self.homming_position
+        self.current_position = self.homing_position
 
     def reset(self):
         self.total_cost = 0
-        self.current_position = self.homming_position
+        self.current_position = self.homing_position
 
 
 class FingerManager:
@@ -58,7 +74,6 @@ class FingerManager:
             self.list_alternation = 1 if self.list_alternation == 0 else 0
         else:
             self.fingers[fingername].press(key, presses, fingername)
-        pass
 
     def get_total_cost(self):
         total_cost = 0
@@ -258,7 +273,11 @@ class KeyboardPhenotype:
         # For each key on the physical keyboard, calculate the cost of one press
         for key in self.physical_keyboard.keys:
             # Press the key once using the finger manager
-            self.finger_manager.press(key, 1)
+            fingername = key.get_finger_name()
+            if isinstance(fingername, list):
+                fingername = fingername[0]  # Use the first finger if it's a list
+            
+            self.finger_manager.fingers[fingername].press(key, 1, fingername)
 
             # Get the total cost after this press
             cost = self.finger_manager.get_total_cost()
