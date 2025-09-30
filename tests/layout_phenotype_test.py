@@ -4,5 +4,5 @@ ro_config = ro_std.get_layout()
 
 # Create layout and apply the configuration
 layout = LayoutPhenotype()
-layout.apply_language_layout(ro_config)
-print(layout)
+# layout.apply_language_layout(ro_config)
+layout.debug_print_layout()

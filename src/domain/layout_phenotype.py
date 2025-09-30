@@ -336,3 +336,79 @@ class LayoutPhenotype:
     
     def __repr__(self):
         return f"LayoutPhenotype(layers={len(self.layers)}, keys={len(self.virtual_keys)})"
+
+    def debug_print_layout(self, show_all_layers: bool = True, show_mappings: bool = True, show_char_lookup: bool = False):
+        """
+        Debug function to print the complete state of the layout in a readable format.
+        
+        Args:
+            show_all_layers: Whether to show character mappings for all layers
+            show_mappings: Whether to show the key->char mappings
+            show_char_lookup: Whether to show the reverse lookup (char->key) mappings
+        """
+        print("=" * 60)
+        print("LAYOUT DEBUG STATE")
+        print("=" * 60)
+        
+        # Basic info
+        print(f"Total layers: {len(self.layers)}")
+        print(f"Total virtual keys: {len(self.virtual_keys)}")
+        print(f"Layer names: {dict(self.layers)}")
+        print()
+        
+        # Layer details
+        print("LAYER DETAILS:")
+        for layer_idx in sorted(self.layers.keys()):
+            print(f"  Layer {layer_idx} ('{self.layers[layer_idx]}'): {len([k for k in self.virtual_keys.values() if layer_idx in k.layers])} keys mapped")
+        print()
+        
+        if show_mappings:
+            print("KEY MAPPINGS BY LAYER:")
+            for layer_idx in sorted(self.layers.keys()):
+                print(f"\n  --- Layer {layer_idx} ('{self.layers[layer_idx]}') ---")
+                layer_keys = {k: v for k, v in self.virtual_keys.items() if layer_idx in v.layers}
+                if not layer_keys:
+                    print("    No keys mapped")
+                    continue
+                
+                for key_id in sorted(layer_keys.keys()):
+                    vkey = layer_keys[key_id]
+                    unshifted, shifted = vkey.layers[layer_idx]
+                    if shifted == unshifted:
+                        print(f"    {key_id:10} -> '{unshifted}'")
+                    else:
+                        print(f"    {key_id:10} -> '{unshifted}' / '{shifted}' (unshifted/shifted)")
+            print()
+        
+        if show_char_lookup:
+            print("CHARACTER LOOKUP MAPPINGS:")
+            for char in sorted(self.char_to_key_map.keys()):
+                mappings = self.char_to_key_map[char]
+                mapping_strs = []
+                for layer, key_id, shifted in mappings:
+                    layer_name = self.layers[layer]
+                    shift_str = " (shifted)" if shifted else ""
+                    mapping_strs.append(f"L{layer}({layer_name}):{key_id}{shift_str}")
+                print(f"  '{char}': {', '.join(mapping_strs)}")
+            print()
+        
+        # Special statistics
+        print("LAYER STATISTICS:")
+        for layer_idx in sorted(self.layers.keys()):
+            layer_keys = [k for k, v in self.virtual_keys.items() if layer_idx in v.layers]
+            unique_chars = set()
+            for key_id in layer_keys:
+                vkey = self.virtual_keys[key_id]
+                unshifted, shifted = vkey.layers[layer_idx]
+                unique_chars.add(unshifted)
+                if shifted != unshifted:
+                    unique_chars.add(shifted)
+            
+            print(f"  Layer {layer_idx}: {len(layer_keys)} keys, {len(unique_chars)} unique characters")
+        print()
+        
+        print("VIRTUAL KEY SUMMARY:")
+        for key_id, vkey in list(self.virtual_keys.items()):  # Show first 10
+            layers_str = ", ".join([f"L{l}" for l in sorted(vkey.layers.keys())])
+            print(f"  {key_id:10} -> layers: [{layers_str}]")
+        print("=" * 60)
