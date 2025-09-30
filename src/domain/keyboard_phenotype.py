@@ -1,6 +1,7 @@
 from src.domain.keyboard import Keyboard
 from src.domain.hand_finger_enum import FingerName, Hand
 from src.domain.layout_phenotype import LayoutPhenotype
+from src.domain.key_mapper import KeyMapper
 from collections import defaultdict
 import string
 import random
@@ -105,45 +106,12 @@ class KeyboardPhenotype:
         if remap is not None:
             self.layout.apply_language_layout(remap)
         
-        # Build key mapping between virtual keys and physical keys
-        self._build_key_mapping()
+        # Create key mapper
+        self.key_mapper = KeyMapper(self.physical_keyboard, self.layout)
         
         # Track which keys are used during fitness calculation
         self.used_physical_keys = set()
         self.unreachable_chars = set()
-
-    def _build_key_mapping(self):
-        """Build mapping between virtual keys and physical keys."""
-        # Create mapping from virtual key IDs to physical keys
-        self.virtual_to_physical = {}
-        
-        # First, create a mapping from physical key labels to physical keys
-        physical_key_map = {}
-        for physical_key in self.physical_keyboard.keys:
-            labels = physical_key.get_labels()
-            for label in labels:
-                # Add both the label and its lowercase version
-                physical_key_map[label] = physical_key
-                if label.lower() != label:
-                    physical_key_map[label.lower()] = physical_key
-        
-        # Now map virtual keys to physical keys
-        for virtual_key_id in self.layout.virtual_keys.keys():
-            # Try to find a physical key that matches this virtual key ID
-            if virtual_key_id in physical_key_map:
-                self.virtual_to_physical[virtual_key_id] = physical_key_map[virtual_key_id]
-            elif virtual_key_id.lower() in physical_key_map:
-                self.virtual_to_physical[virtual_key_id] = physical_key_map[virtual_key_id.lower()]
-            elif virtual_key_id.upper() in physical_key_map:
-                self.virtual_to_physical[virtual_key_id] = physical_key_map[virtual_key_id.upper()]
-            else:
-                print(f"Virtual key '{virtual_key_id}' not found in physical keyboard")
-        
-        # Also add special keys that might not be in the virtual layout but exist physically
-        special_keys = ['Shift', 'AltGr', 'Space', 'Tab', 'Enter', 'Backspace', 'Caps Lock', 'Ctrl', 'Win', 'Alt', 'Menu']
-        for special_key in special_keys:
-            if special_key in physical_key_map and special_key not in self.virtual_to_physical:
-                self.virtual_to_physical[special_key] = physical_key_map[special_key]
 
     def select_remap_keys(self, keys_list):
         self.remap_keys = dict()
@@ -215,7 +183,7 @@ class KeyboardPhenotype:
                 if key_sequence:
                     for key_name in key_sequence:
                         # Look up the physical key for this virtual key
-                        physical_key = self.virtual_to_physical.get(key_name)
+                        physical_key = self.key_mapper.get_physical_key(key_name)
                         if physical_key:
                             self.finger_manager.press(physical_key, word_presses)
                             self.used_physical_keys.add(physical_key)
@@ -244,7 +212,7 @@ class KeyboardPhenotype:
             if key_sequence:
                 for key_name in key_sequence:
                     # Look up the physical key for this virtual key
-                    physical_key = self.virtual_to_physical.get(key_name)
+                    physical_key = self.key_mapper.get_physical_key(key_name)
                     if physical_key:
                         self.finger_manager.press(physical_key, char_presses)
                         self.used_physical_keys.add(physical_key)
@@ -293,13 +261,13 @@ class KeyboardPhenotype:
         """Get physical key for a virtual key symbol."""
         if symbol in self.remap_keys.keys():
             symbol = self.remap_keys[symbol]
-        physical_key = self.virtual_to_physical.get(symbol)
+        physical_key = self.key_mapper.get_physical_key(symbol)
         return [physical_key] if physical_key else []
 
     def get_physical_keyboard(self):
         """Return the physical keyboard with updated labels."""
         # Update the labels on physical keys to reflect the current layout
-        for virtual_key_id, physical_key in self.virtual_to_physical.items():
+        for virtual_key_id, physical_key in self.key_mapper.get_all_mappings().items():
             if virtual_key_id in self.layout.virtual_keys:
                 vkey = self.layout.virtual_keys[virtual_key_id]
                 # Get the base layer character
@@ -321,7 +289,7 @@ class KeyboardPhenotype:
         for physical_key in self.physical_keyboard.keys:
             # Find which virtual key this physical key represents
             virtual_key_id = None
-            for virt_id, phys_key in self.virtual_to_physical.items():
+            for virt_id, phys_key in self.key_mapper.get_all_mappings().items():
                 if phys_key == physical_key:
                     virtual_key_id = virt_id
                     break
