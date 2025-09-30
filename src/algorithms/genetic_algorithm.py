@@ -3,7 +3,7 @@ import random
 import os
 import pickle
 from keyboard_phenotype import KeyboardPhenotype
-from kle.kle_model import Serial
+from src.domain.keyboard import Serial
 import sys
 from contextlib import redirect_stdout
 

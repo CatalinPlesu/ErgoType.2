@@ -1,4 +1,5 @@
-from kle.kle_model import Keyboard, FingerName, Hand
+from src.domain.keyboard import Keyboard
+from src.domain.hand_finger_enum import FingerName, Hand
 from collections import defaultdict
 import string
 import random

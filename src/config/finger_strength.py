@@ -1,4 +1,4 @@
-from kle.kle_model import FingerName
+from src.domain.keyboard import FingerName
 
 # Finger dimensions: (width_mm, length_mm) - width measured at base
 FINGER_DIMENSIONS = {

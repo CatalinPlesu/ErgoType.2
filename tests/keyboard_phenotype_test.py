@@ -2,7 +2,8 @@ import os
 import pickle
 import time
 from keyboard_phenotype import KeyboardPhenotype
-from kle.kle_model import Serial, FingerName
+from src.domain.keyboard import Serial
+from src.domain.hand_finger_enum import *
 from keyboard_genotypes import LAYOUT_DATA
 
 
