@@ -1,12 +1,11 @@
-from keyboard_genotypes import LAYOUT_DATA
-import random
+from contextlib import redirect_stdout
+from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
+from src.domain.keyboard import Serial
+from src.domain.keyboard_phenotype import KeyboardPhenotype
 import os
 import pickle
-from keyboard_phenotype import KeyboardPhenotype
-from src.domain.keyboard import Serial
+import random
 import sys
-from contextlib import redirect_stdout
-
 
 class Individual:
     _next_id = 0  # Static counter
@@ -19,45 +18,32 @@ class Individual:
         self.parents = parents or []   # List of parent IDs
 
     def __repr__(self):
-        return f"Individual(id={self.id}, chromosome={''.join(self.chromosome)}, fitness={self.fitness}, parents={self.parents})"
+        return f"Individual(id={self.id}, chromosome={''.join(self.chromosome)[:20]}..., fitness={self.fitness}, parents={self.parents})"
 
 
 class GeneticAlgorithm:
     def __init__(self):
         self.population_initialization()
-        try:
-            data_file = './processed/markov_chains.pkl'
-            if not os.path.exists(data_file):
-                print(f"ERROR: Data file not found: {data_file}")
-                data = {}
-            else:
-                with open(data_file, 'rb') as f:
-                    data = pickle.load(f)
-                print(f"✅ Successfully loaded data from {data_file}")
-        except Exception as e:
-            print(f"ERROR loading data: {e}")
-            data = {}
-        self.data = data
-        with open('./processed/frequency_analysis.pkl', 'rb') as f:
+        with open('src/data/text/processed/frequency_analysis.pkl', 'rb') as f:
             self.data2 = pickle.load(f)
 
     def population_initialization(self, size=100):
         self.population = []
 
         # Add heuristic individuals
-        for _, genotype in LAYOUT_DATA.items():
+        for layout_name, genotype in LAYOUT_DATA.items():
             individual = Individual(chromosome=genotype)
             self.population.append(individual)
-            # break
+            print(f"Added heuristic layout: {layout_name}")
 
-        print(f"Population initialized with {len(self.population)} heuristic")
-        print(f"""Population initialized with {
-              size - len(self.population)} random""")
-
+        print(f"Population initialized with {len(self.population)} heuristic individuals")
+        
         if size > len(self.population):
             if self.population:
                 template_genotype = self.population[0].chromosome
                 needed = size - len(self.population)
+                print(f"Adding {needed} random individuals")
+                
                 for _ in range(needed):
                     shuffled_clone = template_genotype.copy()
                     random.shuffle(shuffled_clone)
@@ -66,26 +52,25 @@ class GeneticAlgorithm:
 
         self.previous_population_ids = self.get_current_population_ids()
         self.previous_population_iteration = 0
+        print(f"Total population size: {len(self.population)}")
 
     def get_current_population_ids(self):
         return [c.id for c in self.population]
 
     def fitness_function_calculation(self):
-        with open('kle_keyboards/ansi_60_percent_hands.json', 'r') as f:
+        with open('src/data/keyboards/ansi_60_percent_hands.json', 'r') as f:
             keyboard = Serial.parse(f.read())
 
-        keyboard = KeyboardPhenotype(keyboard, {})
-        keyboard.select_remap_keys(LAYOUT_DATA['qwerty'])
+        keyboard_phenotype = KeyboardPhenotype(keyboard, {})
+        keyboard_phenotype.select_remap_keys(LAYOUT_DATA['qwerty'])
 
         # Process population individuals
         for individual in self.population:
             if individual.fitness is None:  # Only calculate if not already present
                 with open(os.devnull, 'w') as devnull:
                     with redirect_stdout(devnull):
-                        keyboard.remap_to_keys(individual.chromosome)
-                        # individual.fitness = keyboard.fitness(
-                        #     self.data['simple_wikipedia'], depth=1)
-                        individual.fitness = keyboard.fitness_with_frequency_data(
+                        keyboard_phenotype.remap_to_keys(individual.chromosome)
+                        individual.fitness = keyboard_phenotype.fitness(
                             self.data2['simple_wikipedia'])
 
         # Process children individuals if they exist
@@ -94,8 +79,8 @@ class GeneticAlgorithm:
                 if child.fitness is None:  # Only calculate if not already present
                     with open(os.devnull, 'w') as devnull:
                         with redirect_stdout(devnull):
-                            keyboard.remap_to_keys(child.chromosome)
-                            child.fitness = keyboard.fitness_with_frequency_data(
+                            keyboard_phenotype.remap_to_keys(child.chromosome)
+                            child.fitness = keyboard_phenotype.fitness(
                                 self.data2['simple_wikipedia'])
 
     def order_fitness_values(self, limited=False):
@@ -103,23 +88,17 @@ class GeneticAlgorithm:
         print("\n" + "="*100)
         print("ORDERED FITNESS VALUES (Best to Worst)")
         print("="*100)
-        print(f"""{'Rank':<4} {'ID':<6} {'Fitness':<12} {
-              'Parents':<15} {'Layout':<50}""")
+        print(f"{'Rank':<4} {'ID':<6} {'Fitness':<15} {'Parents':<15} {'Layout':<20}")
         print("-"*100)
 
         # Determine which individuals to display
-        display_population = sorted_population[:
-                                               5] if limited else sorted_population
+        display_population = sorted_population[:5] if limited else sorted_population
 
         for rank, individual in enumerate(display_population, 1):
-            layout_str = ''.join(individual.chromosome)
-            display_layout = layout_str[:47] + \
-                "..." if len(layout_str) > 50 else layout_str
-
-            parents_str = str(
-                individual.parents) if individual.parents else "[]"
-            print(f"""{rank:<4} {individual.id:<6} {individual.fitness:<12.6f} {
-                  parents_str:<15} {display_layout:<70}""")
+            layout_str = ''.join(individual.chromosome[:10]) + "..." if len(individual.chromosome) > 10 else ''.join(individual.chromosome)
+            parents_str = str(individual.parents) if individual.parents else "[]"
+            print(f"{rank:<4} {individual.id:<6} {individual.fitness:<15.6f} {parents_str:<15} {layout_str:<20}")
+        
         print("="*100 + "\n")
 
     def tournament_selection(self, k=3):
@@ -146,7 +125,8 @@ class GeneticAlgorithm:
             # Add the best individual to parents
             self.parents.append(Individual(
                 chromosome=best_candidate.chromosome.copy(),
-                fitness=best_candidate.fitness
+                fitness=best_candidate.fitness,
+                parents=best_candidate.parents
             ))
 
             # Remove the selected candidates from temp_population in reverse order to avoid index shifting
@@ -158,7 +138,8 @@ class GeneticAlgorithm:
             remaining_individual = temp_population.pop()
             self.parents.append(Individual(
                 chromosome=remaining_individual.chromosome.copy(),
-                fitness=remaining_individual.fitness
+                fitness=remaining_individual.fitness,
+                parents=remaining_individual.parents
             ))
 
     def crossover(self):
@@ -178,19 +159,11 @@ class GeneticAlgorithm:
         for i in range(0, len(self.parents) - 1, 2):  # -1 to ensure we have pairs
             parent0, parent1 = self.parents[i], self.parents[i+1]
 
-            # print(f"""P0 [{''.join(parent0.chromosome)
-            #                }] with fitness - {parent0.fitness}""")
-            # print(f"""P1 [{''.join(parent1.chromosome)
-            #                }] with fitness - {parent1.fitness}""")
-
             # Ensure parent0 has better (lower) fitness
             if parent1.fitness < parent0.fitness:
-                # print("Swap predominant parent")
                 parent0, parent1 = parent1, parent0
 
             for o in range(offsprings_per_pair):
-                # print(f"Creating offspring {o}")
-
                 # Keep trying until we get a unique chromosome
                 attempts = 0
                 max_attempts = 10  # Prevent infinite loops
@@ -297,18 +270,18 @@ class GeneticAlgorithm:
 
     def run(self, stagnant=10):
         iteration = 0
+        print("Starting genetic algorithm...")
         self.fitness_function_calculation()
-        self.order_fitness_values()
+        self.order_fitness_values(limited=True)
+        
         while self.previous_population_iteration < stagnant:
-            self.fitness_function_calculation()
             self.tournament_selection()
             self.crossover()
             self.mutation()
             self.survivor_selection()
 
             # Print current iteration
-            print(f"""CURRENT ITERATION: {iteration} PREVIOUS POPULATION ITERATION: {
-                  self.previous_population_iteration}""")
+            print(f"CURRENT ITERATION: {iteration}, STAGNATION COUNT: {self.previous_population_iteration}")
 
             self.order_fitness_values(limited=True)
 
@@ -319,3 +292,9 @@ class GeneticAlgorithm:
                 self.previous_population_iteration = 0
 
             iteration += 1
+            
+            if iteration % 5 == 0:  # Print every 5 iterations
+                print(f"Completed {iteration} iterations")
+                
+        print(f"Algorithm completed after {iteration} iterations")
+        self.order_fitness_values(limited=False)
