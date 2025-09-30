@@ -3,7 +3,6 @@ from src.domain.hand_finger_enum import FingerName, Hand
 from collections import defaultdict
 import string
 import random
-from enum import Enum
 import math
 from finger_strength import SCALED_COST_PER_FINGER, FINGER_MOBILITY_PENALITY
 
@@ -419,21 +418,3 @@ class KeyboardPhenotype:
             self.finger_manager.reset()
 
         return self.physical_keyboard
-
-        # interfaces:
-        # apply genotype
-        # format:
-        # remap List[Key] -> List[Key]
-
-        # on init
-        # construct keyboard layouts
-        # 3 layouts a keybard has and we care about from start shift and altgr
-        # detect if it is a specific layout so we in std ro, [] keyes press ăî and you need alt gr press to reach those keys
-        # consider making the map a dict of key - base/shift/altgr to  list of keys
-
-        # running fitness function for a given genotype
-
-        # determine travel cost for finger press
-
-        # determinte travel cost for sequence
-        # think here of typing faster by paralell finger movement when not stopped.
