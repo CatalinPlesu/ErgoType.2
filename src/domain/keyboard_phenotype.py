@@ -1,6 +1,7 @@
 from src.domain.keyboard import Keyboard
 from src.domain.hand_finger_enum import FingerName, Hand
 from src.domain.layout_phenotype import LayoutPhenotype
+from src.data_helpers.keyboards.layout_visualization import LayoutVisualization
 from src.domain.key_mapper import KeyMapper
 from collections import defaultdict
 import string
@@ -112,6 +113,9 @@ class KeyboardPhenotype:
         # Track which keys are used during fitness calculation
         self.used_physical_keys = set()
         self.unreachable_chars = set()
+
+        self.visualizer = LayoutVisualization(self.physical_keyboard, self.layout)
+        self.visualizer.set_layout(self.layout, self.key_mapper)
 
     def select_remap_keys(self, keys_list):
         self.remap_keys = dict()
@@ -264,52 +268,14 @@ class KeyboardPhenotype:
         physical_key = self.key_mapper.get_physical_key(symbol)
         return [physical_key] if physical_key else []
 
-    def get_physical_keyboard(self):
-        """Return the physical keyboard with updated labels."""
-        # Update the labels on physical keys to reflect the current layout
-        for virtual_key_id, physical_key in self.key_mapper.get_all_mappings().items():
-            if virtual_key_id in self.layout.virtual_keys:
-                vkey = self.layout.virtual_keys[virtual_key_id]
-                # Get the base layer character
-                if 0 in vkey.layers:
-                    unshifted, shifted = vkey.layers[0]
-                    physical_key.set_labels((unshifted,))
+    def inspect_layout(self, **kwargs):
+        """
+        Inspect the current layout with visualization options and display it.
         
-        return self.physical_keyboard
-
-    def get_physical_keyboard_with_costs(self):
+        Args:
+            layers: List of layers to display [0, 1] where 0=unshifted, 1=shifted
+            show_costs: Whether to show cost information on keys
+            cost_per_press: Cost multiplier for cost visualization
+            custom_labels: Optional custom labels to override default behavior
         """
-        Calculate the cost of pressing each key once with the appropriate finger
-        and store this cost information on the physical keyboard model.
-        """
-        # Reset finger manager to start from home positions
-        self.finger_manager.reset()
-
-        # For each physical key, calculate the cost of one press
-        for physical_key in self.physical_keyboard.keys:
-            # Find which virtual key this physical key represents
-            virtual_key_id = None
-            for virt_id, phys_key in self.key_mapper.get_all_mappings().items():
-                if phys_key == physical_key:
-                    virtual_key_id = virt_id
-                    break
-            
-            if virtual_key_id and virtual_key_id in self.layout.virtual_keys:
-                # Get finger name for this physical key
-                fingername = physical_key.get_finger_name()
-                if isinstance(fingername, list):
-                    fingername = fingername[0]  # Use the first finger if it's a list
-                
-                # Press the key once using the finger manager
-                self.finger_manager.fingers[fingername].press(physical_key, 1, fingername)
-
-                # Get the total cost after this press
-                cost = self.finger_manager.get_total_cost()
-
-                # Store the cost on the key (assuming similar interface to set_labels)
-                physical_key.set_labels((str(f"{cost:.2f}"),))
-
-                # Reset finger manager for next key calculation
-                self.finger_manager.reset()
-
-        return self.physical_keyboard
+        return self.visualizer.inspect(**kwargs)
