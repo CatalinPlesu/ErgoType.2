@@ -28,6 +28,8 @@ class KeyMapper:
         for physical_key in self.physical_keyboard.keys:
             labels = physical_key.get_labels()
             for label in labels:
+                if label is None:
+                    continue
                 # Add both the label and its lowercase version
                 physical_key_map[label] = physical_key
                 if label.lower() != label:

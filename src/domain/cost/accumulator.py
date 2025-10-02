@@ -1,4 +1,6 @@
 from typing import Callable, List, Dict, Tuple, Optional
+from collections import defaultdict
+from .context import CostComponent
 
 # ============================================================================
 # COST ACCUMULATOR - Collects results per physical key

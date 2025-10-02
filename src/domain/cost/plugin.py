@@ -1,4 +1,8 @@
 from typing import Callable, List, Dict, Tuple, Optional
+from .pipeline import CostPipeline
+from .context import MovementContext
+from .accumulator import CostAccumulator
+from .calculators import physical_distance, finger_effort_multiplier, directional_penalty_x, directional_penalty_y, directional_penalty_z
 # ============================================================================
 # INTEGRATION WITH EXISTING CODE
 # ============================================================================

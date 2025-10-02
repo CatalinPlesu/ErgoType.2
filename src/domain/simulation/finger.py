@@ -1,3 +1,5 @@
+from ..cost.context import MovementContext
+
 class Finger:
     def __init__(self, homing_key, cost_calculator_plugin):
         self.homing_position = homing_key.get_key_center_position()

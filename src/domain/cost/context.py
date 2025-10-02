@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Callable, List, Dict, Tuple, Optional
+from ..hand_finger_enum import FingerName
 # ============================================================================
 # COST LAYER DEFINITIONS
 # ============================================================================

@@ -8,6 +8,9 @@ import string
 import random
 import math
 from src.config.finger_strength import FINGER_BIAS
+from src.domain.cost.plugin import CostCalculatorPlugin, create_default_pipeline
+from src.domain.cost.accumulator import CostAccumulator
+from src.domain.simulation.finger_manager import FingerManager
 
 class KeyboardPhenotype:
     def __init__(self, physical_keyboard, remap=None, cost_pipeline=None):

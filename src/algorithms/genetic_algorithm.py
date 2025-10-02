@@ -1,7 +1,7 @@
 from contextlib import redirect_stdout
 from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
 from src.domain.keyboard import Serial
-from src.domain.keyboard_phenotype import KeyboardPhenotype
+from src.domain.evaluation.layout_evaluator import KeyboardPhenotype
 import os
 import pickle
 import random
@@ -58,7 +58,7 @@ class GeneticAlgorithm:
         return [c.id for c in self.population]
 
     def fitness_function_calculation(self):
-        with open('src/data/keyboards/ansi_60_percent_hands.json', 'r') as f:
+        with open('src/data/keyboards/ansi_60_percent.json', 'r') as f:
             keyboard = Serial.parse(f.read())
 
         keyboard_phenotype = KeyboardPhenotype(keyboard, {})

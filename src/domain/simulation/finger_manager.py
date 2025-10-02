@@ -1,3 +1,6 @@
+from ..hand_finger_enum import FingerName
+from .finger import Finger
+
 class FingerManager:
     def __init__(self, physical_keyboard, cost_calculator_plugin):
         self.fingers = {}
