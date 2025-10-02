@@ -1,7 +1,7 @@
 from src.domain.keyboard import Keyboard
 from src.domain.hand_finger_enum import FingerName, Hand
 from src.domain.layout_phenotype import LayoutPhenotype
-from src.data_helpers.keyboards.layout_visualization import LayoutVisualization
+from src.data_helpers.layouts.visualization import LayoutVisualization
 from src.domain.key_mapper import KeyMapper
 from collections import defaultdict
 import string
