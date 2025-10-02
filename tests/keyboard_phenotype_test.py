@@ -10,6 +10,7 @@ import src.data.languages.romanian_standard as ro_std
 ro_remap = ro_std.get_layout()
 
 with open('src/data/keyboards/ansi_60_percent_hands.json', 'r') as f:
+# with open('src/data/keyboards/dactyl_manuform_6x6_4_hands.json', 'r') as f:
     keyboard = Serial.parse(f.read())
 
 keyboard_phenotype = KeyboardPhenotype(keyboard, {})
@@ -30,7 +31,5 @@ end_time = time.time()
 fitness_freq_time = end_time - start_time
 print(f"Fitness function (frequency data) took: {fitness_freq_time:.4f} seconds")
 print(f"Fitness score: {fitness_score}")
-
-keyboard_phenotype.get_physical_keyboard()
 
 print(f"\nCompleted fitness calculation in {fitness_freq_time:.4f} seconds")

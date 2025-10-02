@@ -9,96 +9,22 @@ import random
 import math
 from src.config.finger_strength import FINGER_BIAS
 
-
-def cartesian_distance(point1, point2, penalty):
-    """
-    Calculate the Cartesian distance between two points with weighted penalties.
-    """
-    if len(point1) != len(point2) or len(point1) not in [2, 3]:
-        raise ValueError("Points must have the same dimensionality (2D or 3D)")
-
-    squared_diffs = [c * (a - b) ** 2 for a, b,
-                     c in zip(point1, point2, penalty)]
-    return math.sqrt(sum(squared_diffs))
-
-
-class Finger:
-    def __init__(self, homing_key):
-        self.homing_position = homing_key.get_key_center_position()
-        self.current_position = homing_key.get_key_center_position()
-        self.total_cost = 0
-
-    def press(self, key, presses, fingername):
-        new_position = key.get_key_center_position()
-        
-        # Get the bias for this finger
-        bias = FINGER_BIAS[fingername]
-        
-        # Calculate penalties based on bias
-        if len(self.current_position) == 2:  # 2D
-            penalties = [bias.x_penalty, bias.y_penalty]
-        else:  # 3D
-            penalties = [bias.x_penalty, bias.y_penalty, bias.z_penalty]
-        
-        # Calculate distance with penalties
-        distance = cartesian_distance(self.current_position, new_position, penalties)
-        
-        # Update position
-        self.current_position = new_position
-        
-        # Calculate cost using effort multiplier
-        cost = distance * bias.effort
-        
-        # Add to total cost
-        self.total_cost += cost * presses
-
-
-    def reset_position(self):
-        self.current_position = self.homing_position
-
-    def reset(self):
-        self.total_cost = 0
-        self.current_position = self.homing_position
-
-
-class FingerManager:
-    def __init__(self, physical_keyboard):
-        self.fingers = {}
-        self.list_alternation = 0
-        for item in FingerName:
-            self.fingers[item] = Finger(
-                physical_keyboard.get_homing_key_for_finger_name(item))
-
-    def press(self, key, presses):
-        fingername = key.get_finger_name()
-        if isinstance(fingername, list):
-            self.fingers[fingername[self.list_alternation]].press(
-                key, presses, fingername[0])
-            self.list_alternation = 1 if self.list_alternation == 0 else 0
-        else:
-            self.fingers[fingername].press(key, presses, fingername)
-
-    def get_total_cost(self):
-        total_cost = 0
-        for key, value in self.fingers.items():
-            total_cost += value.total_cost
-        return total_cost
-
-    def reset_position(self):
-        for key in self.fingers.keys():
-            self.fingers[key].reset_position()
-
-    def reset(self):
-        for key in self.fingers.keys():
-            self.fingers[key].reset()
-
-
 class KeyboardPhenotype:
-    def __init__(self, physical_keyboard, remap=None):
+    def __init__(self, physical_keyboard, remap=None, cost_pipeline=None):
         print("Init keyboard phenotype")
         self.remap_keys = {}
         self.physical_keyboard = physical_keyboard
-        self.finger_manager = FingerManager(self.physical_keyboard)
+        
+        # Create cost calculator with pipeline
+        if cost_pipeline is None:
+            cost_pipeline = create_default_pipeline()
+        self.cost_calculator = CostCalculatorPlugin(cost_pipeline)
+        
+        # Pass calculator to finger manager
+        self.finger_manager = FingerManager(
+            self.physical_keyboard, 
+            self.cost_calculator
+        )
         
         # Create layout phenotype instance
         self.layout = LayoutPhenotype()
@@ -142,26 +68,19 @@ class KeyboardPhenotype:
             total_simulated_presses: Total number of presses to simulate
         """
         self.finger_manager.reset()
-        self.used_physical_keys.clear()  # Reset tracking
-        self.unreachable_chars.clear()  # Reset tracking
+        self.used_physical_keys.clear()
+        self.unreachable_chars.clear()
 
         # Extract word frequencies (top words)
-        # List of dicts with 'word', 'absolute', 'relative', 'percentage'
         word_frequencies = dataset_frequency_data['word_frequencies']
-
-        # Extract character frequencies
-        # Dict with char as key and {'absolute', 'relative'} as value
         char_frequencies = dataset_frequency_data['character_frequencies']
 
         # Calculate total word frequency for normalization
         total_word_freq = sum(word_data['absolute']
                               for word_data in word_frequencies)
-
-        # Calculate total character frequency for normalization
         total_char_freq = sum(data['absolute']
                               for data in char_frequencies.values())
 
-        # Collect all characters that appear in the dataset
         dataset_chars = set()
         
         # Process top words
@@ -171,22 +90,15 @@ class KeyboardPhenotype:
         for word_data in top_words:
             word = word_data['word']
             word_frequency = word_data['absolute']
+            word_presses = (word_frequency / total_word_freq) * word_presses_budget
 
-            # Calculate how many times this word should be simulated based on its frequency
-            word_presses = (word_frequency / total_word_freq) * \
-                word_presses_budget
-
-            # Process each character in the word
             for i, char in enumerate(word):
-                # Convert to lowercase to match the frequency data
                 char_lower = char.lower()
                 dataset_chars.add(char_lower)
 
-                # Get the key sequence needed to type this character
                 key_sequence = self.layout.get_key_sequence(char_lower)
                 if key_sequence:
                     for key_name in key_sequence:
-                        # Look up the physical key for this virtual key
                         physical_key = self.key_mapper.get_physical_key(key_name)
                         if physical_key:
                             self.finger_manager.press(physical_key, word_presses)
@@ -198,7 +110,6 @@ class KeyboardPhenotype:
                 else:
                     self.unreachable_chars.add(char_lower)
 
-            # Reset position after each word to simulate moving to next word
             self.finger_manager.reset_position()
 
         # Process individual characters (remaining 30% of presses)
@@ -206,16 +117,13 @@ class KeyboardPhenotype:
 
         for char, char_data in char_frequencies.items():
             char_frequency = char_data['absolute']
-            char_presses = (char_frequency / total_char_freq) * \
-                char_presses_budget
+            char_presses = (char_frequency / total_char_freq) * char_presses_budget
             
             dataset_chars.add(char)
 
-            # Get the key sequence needed to type this character
             key_sequence = self.layout.get_key_sequence(char)
             if key_sequence:
                 for key_name in key_sequence:
-                    # Look up the physical key for this virtual key
                     physical_key = self.key_mapper.get_physical_key(key_name)
                     if physical_key:
                         self.finger_manager.press(physical_key, char_presses)
@@ -228,6 +136,9 @@ class KeyboardPhenotype:
                 self.unreachable_chars.add(char)
 
         total_cost = self.finger_manager.get_total_cost()
+
+        # NEW: Print cost breakdown by layer
+        self._print_cost_breakdown()
 
         # Print summary of key usage
         print(f"Total cost from frequency-based simulation: {total_cost:,.2f}")
@@ -260,6 +171,41 @@ class KeyboardPhenotype:
             print(f"Unused physical key labels: {sorted(unused_labels)}")
 
         return total_cost
+
+    def _print_cost_breakdown(self):
+        """Print detailed cost breakdown by layer"""
+        accumulator = self.finger_manager.get_accumulator()
+        
+        print("\n--- Cost Breakdown by Layer ---")
+        layer_totals = accumulator.sum_by_layer()
+        total = sum(layer_totals.values())
+        
+        for layer_name in sorted(layer_totals.keys()):
+            cost = layer_totals[layer_name]
+            percentage = (cost / total * 100) if total > 0 else 0
+            print(f"  {layer_name:25} {cost:>15,.2f} ({percentage:>5.1f}%)")
+        print(f"  {'TOTAL':25} {total:>15,.2f}")
+        print()
+
+    def inspect_costs(self, layer_names=None):
+        """
+        Inspect costs after fitness calculation.
+        
+        Args:
+            layer_names: Optional list of layer names to filter by
+        
+        Returns:
+            Dict with detailed cost information
+        """
+        accumulator = self.finger_manager.get_accumulator()
+        
+        return {
+            'total': accumulator.total(layer_names),
+            'by_layer': accumulator.sum_by_layer(),
+            'by_key': accumulator.sum_by_key(layer_names),
+            'matrix': accumulator.get_matrix(),
+            'press_counts': accumulator.get_press_counts()
+        }
 
     def get_key(self, symbol):
         """Get physical key for a virtual key symbol."""
