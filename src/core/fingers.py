@@ -1,4 +1,4 @@
-from .enums import FingerName
+from .keyboard import FingerName
 from .cost_calculator import CostCalculatorPlugin, MovementContext
 
 

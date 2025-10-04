@@ -1,5 +1,5 @@
 import pytest
-from src.core.enums import FingerName, Finger, Hand, fingername_to_enums, enums_to_fingername, FINGER_NAME_MAP
+from src.core.keyboard import FingerName, Finger, Hand, fingername_to_enums, enums_to_fingername, FINGER_NAME_MAP
 
 
 def test_fingername_enum():

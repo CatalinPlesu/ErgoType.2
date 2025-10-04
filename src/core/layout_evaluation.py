@@ -1,5 +1,5 @@
 from .keyboard import Keyboard
-from .enums import FingerName, Hand
+from .keyboard import FingerName, Hand
 from .layout_phenotype import LayoutPhenotype
 from .key_mapping import KeyMapper
 from .fingers import FingerManager

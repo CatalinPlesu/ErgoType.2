@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock
 from src.core.fingers import Finger, FingerManager
-from src.core.enums import FingerName
+from src.core.keyboard import FingerName
 
 
 class MockPhysicalKey:

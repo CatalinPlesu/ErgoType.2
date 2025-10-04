@@ -1,4 +1,4 @@
-from ..core.enums import FingerName, Hand, fingername_to_enums, enums_to_fingername
+from ..core.keyboard import FingerName, Hand, fingername_to_enums, enums_to_fingername
 from dataclasses import dataclass
 from typing import Dict
 
