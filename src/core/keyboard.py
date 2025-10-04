@@ -1,6 +1,6 @@
 import json
 from typing import List, Dict, Any, Optional, Union
-from src.domain.hand_finger_enum import *
+from src.core.hand_finger_enum import *
 
 # ----------------------------
 # Key Class

@@ -1,4 +1,4 @@
-from ..cost.context import MovementContext
+from .cost.context import MovementContext
 
 class Finger:
     def __init__(self, homing_key, cost_calculator_plugin):

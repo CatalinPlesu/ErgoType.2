@@ -1,7 +1,7 @@
 from contextlib import redirect_stdout
 from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
-from src.domain.keyboard import Serial
-from src.domain.evaluation.layout_evaluator import KeyboardPhenotype
+from src.core.keyboard import Serial
+from src.core.layout_evaluator import KeyboardPhenotype
 import os
 import pickle
 import random

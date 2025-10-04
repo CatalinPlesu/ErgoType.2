@@ -1,16 +1,16 @@
-from src.domain.keyboard import Keyboard
-from src.domain.hand_finger_enum import FingerName, Hand
-from src.domain.layout_phenotype import LayoutPhenotype
+from src.core.keyboard import Keyboard
+from src.core.hand_finger_enum import FingerName, Hand
+from src.core.layout_phenotype import LayoutPhenotype
 from src.data_helpers.layouts.visualization import LayoutVisualization
-from src.domain.key_mapper import KeyMapper
+from src.core.key_mapper import KeyMapper
 from collections import defaultdict
 import string
 import random
 import math
 from src.config.finger_strength import FINGER_BIAS
-from src.domain.cost.plugin import CostCalculatorPlugin, create_default_pipeline
-from src.domain.cost.accumulator import CostAccumulator
-from src.domain.simulation.finger_manager import FingerManager
+from src.core.cost.plugin import CostCalculatorPlugin, create_default_pipeline
+from src.core.cost.accumulator import CostAccumulator
+from src.core.finger_manager import FingerManager
 
 class KeyboardPhenotype:
     def __init__(self, physical_keyboard, remap=None, cost_pipeline=None):

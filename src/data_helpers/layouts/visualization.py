@@ -1,7 +1,7 @@
-from src.domain.keyboard import Key, Keyboard, KeyboardMetadata, Serial
+from src.core.keyboard import Key, Keyboard, KeyboardMetadata, Serial
 from src.data_helpers.keyboards.renderer import show_keyboard, render_keyboard
-from src.domain.layout_phenotype import LayoutPhenotype
-from src.domain.key_mapper import KeyMapper
+from src.core.layout_phenotype import LayoutPhenotype
+from src.core.key_mapper import KeyMapper
 import json
 
 class LayoutVisualization:
@@ -107,7 +107,7 @@ class LayoutVisualization:
     
     def _apply_costs_to_keyboard(self, keyboard, cost_per_press):
         """Apply cost information to the keyboard."""
-        from src.domain.keyboard_phenotype import FingerManager  # Import here to avoid circular dependency
+        from src.core.layout_phenotype import FingerManager  # Import here to avoid circular dependency
         
         finger_manager = FingerManager(keyboard)
         

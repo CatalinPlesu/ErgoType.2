@@ -3,7 +3,7 @@ import json
 import json5  # pip install json5
 import os
 # Import your classes - using the single consolidated module
-from src.domain.keyboard import *
+from src.core.keyboard import *
 
 # --- Configuration ---
 # Define the default directory for keyboard layouts

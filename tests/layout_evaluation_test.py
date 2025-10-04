@@ -2,9 +2,9 @@ import os
 import pickle
 import time
 import json
-from src.domain.evaluation.layout_evaluator import KeyboardPhenotype
-from src.domain.keyboard import Serial
-from src.domain.hand_finger_enum import *
+from src.core.layout_evaluator import KeyboardPhenotype
+from src.core.keyboard import Serial
+from src.core.hand_finger_enum import *
 from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
 import src.data.languages.romanian_standard as ro_std
 

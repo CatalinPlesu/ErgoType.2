@@ -1,4 +1,4 @@
-from ..hand_finger_enum import FingerName
+from .hand_finger_enum import FingerName
 from .finger import Finger
 
 class FingerManager:

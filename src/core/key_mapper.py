@@ -1,5 +1,5 @@
 from typing import Dict, Set, Optional
-from src.domain.keyboard import Keyboard
+from src.core.keyboard import Keyboard
 
 
 class KeyMapper:

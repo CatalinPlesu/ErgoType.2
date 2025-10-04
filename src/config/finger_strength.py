@@ -1,4 +1,4 @@
-from src.domain.hand_finger_enum import *
+from src.core.hand_finger_enum import *
 from dataclasses import dataclass
 from typing import Dict
 
