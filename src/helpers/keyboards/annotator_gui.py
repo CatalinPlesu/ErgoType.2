@@ -2,6 +2,7 @@ import dearpygui.dearpygui as dpg
 import json
 import json5  # pip install json5
 import os
+from pathlib import Path  # Add this import
 # Import your classes - using the single consolidated module
 from src.core.keyboard import *
 
@@ -31,6 +32,21 @@ class KeyboardAnnotatorDPG:
         self.scale = 1
         self.min_x = 0
         self.min_y = 0
+        # Scaling factors
+        self.ui_scale = 2.0
+        self.font_size = 28
+
+    def setup_font(self):
+        """Setup custom font or scale default font"""
+        font_path = Path('assets/Roboto-Regular.ttf')
+        if not font_path.exists():
+            print("Warning: Roboto-Regular.ttf not found. Using default font.")
+        with dpg.font_registry():
+            if font_path.exists():
+                default_font = dpg.add_font(str(font_path), self.font_size)
+                dpg.bind_font(default_font)
+            else:
+                dpg.set_global_font_scale(self.ui_scale)
 
     def load_keyboard_callback(self, sender, app_data, user_data):
         """Callback for the Load menu item."""
@@ -44,10 +60,12 @@ class KeyboardAnnotatorDPG:
                 self.current_file_path = file_path
                 self.selected_key_index = None
                 self.dirty = False
-                dpg.set_value("file_path_text", f"Loaded: { os.path.basename(file_path)}")
+                dpg.set_value("file_path_text", f"""Loaded: {
+                              os.path.basename(file_path)}""")
                 print(f"Successfully loaded keyboard from {file_path}")
                 # Show success message
-                dpg.set_value("status_text", f"Loaded: { os.path.basename(file_path)}")
+                dpg.set_value("status_text", f"""Loaded: {
+                              os.path.basename(file_path)}""")
                 dpg.configure_item("status_text", color=[0, 255, 0])  # Green
 
                 # Clear inspector
@@ -161,9 +179,11 @@ class KeyboardAnnotatorDPG:
                     json.dump(modified_rows, f, indent=2)
 
                 self.dirty = False
-                dpg.set_value("file_path_text", f"Saved: { os.path.basename(file_path)}")
+                dpg.set_value("file_path_text", f"""Saved: {
+                              os.path.basename(file_path)}""")
                 print(f"Successfully saved annotated keyboard to {file_path}")
-                dpg.set_value("status_text", f"Saved: { os.path.basename(file_path)}")
+                dpg.set_value("status_text", f"""Saved: {
+                              os.path.basename(file_path)}""")
                 dpg.configure_item("status_text", color=[0, 255, 0])  # Green
 
             except Exception as e:
@@ -177,7 +197,8 @@ class KeyboardAnnotatorDPG:
         if self.selected_key_index is not None and self.keyboard:
             key = self.keyboard.keys[self.selected_key_index]
             dpg.configure_item("inspector_group", show=True)
-            dpg.set_value("key_info_text", f"Editing Key { self.selected_key_index}: {key.labels[0] or '(No Label)'}")
+            dpg.set_value("key_info_text", f"""Editing Key {
+                          self.selected_key_index}: {key.labels[0] or '(No Label)'}""")
             dpg.set_value("finger_combo", key.finger.name)
             dpg.set_value("hand_combo", key.hand.name)
             dpg.set_value("homing_checkbox", key.homing)
@@ -223,14 +244,16 @@ class KeyboardAnnotatorDPG:
         """Update status text with sticky mode info"""
         sticky_modes = []
         if self.sticky_finger:
-            sticky_modes.append(f"Finger: {dpg.get_value('paint_finger_combo')}")
+            sticky_modes.append(
+                f"Finger: {dpg.get_value('paint_finger_combo')}")
         if self.sticky_hand:
             sticky_modes.append(f"Hand: {dpg.get_value('paint_hand_combo')}")
         if self.sticky_homing:
             sticky_modes.append("Homing")
 
         if sticky_modes:
-            dpg.set_value("status_text", f"Sticky Mode: { ' | '.join(sticky_modes)}")
+            dpg.set_value("status_text", f"""Sticky Mode: {
+                          ' | '.join(sticky_modes)}""")
             dpg.configure_item("status_text", color=[255, 255, 0])
         else:
             dpg.set_value(
@@ -269,7 +292,8 @@ class KeyboardAnnotatorDPG:
             # Update the specific key's color immediately
             self.update_single_key_color(key_index)
 
-            dpg.set_value( "status_text", f"Applied attributes to key {key_index}")
+            dpg.set_value(
+                "status_text", f"Applied attributes to key {key_index}")
             dpg.configure_item("status_text", color=[0, 255, 0])
 
         # If no sticky modes are active, select the key for inspection
@@ -277,7 +301,8 @@ class KeyboardAnnotatorDPG:
             self.selected_key_index = key_index
             self.update_inspector_view()
 
-            dpg.set_value("status_text", f"Selected key {key_index}: { key.labels[0] or '(No Label)'}")
+            dpg.set_value("status_text", f"""Selected key {key_index}: {
+                          key.labels[0] or '(No Label)'}""")
             dpg.configure_item("status_text", color=[255, 255, 255])
             return
 
@@ -304,8 +329,9 @@ class KeyboardAnnotatorDPG:
                 # Update inspector (in case repr changes or confirmation is needed)
                 self.update_inspector_view()
 
-                print(f"Applied changes to key {self.selected_key_index}")
-                dpg.set_value("status_text", f"Applied changes to key { self.selected_key_index}")
+                print(f"""Applied changes to key {self.selected_key_index}")
+                dpg.set_value("status_text", f"Applied changes to key {
+                    self.selected_key_index}""")
                 dpg.configure_item("status_text", color=[0, 255, 0])  # Green
 
             except Exception as e:
@@ -328,7 +354,8 @@ class KeyboardAnnotatorDPG:
             # Update key color
             self.update_single_key_color(self.selected_key_index)
 
-            dpg.set_value("status_text", f"Cleared attributes from key { self.selected_key_index}")
+            dpg.set_value("status_text", f"""Cleared attributes from key {
+                          self.selected_key_index}""")
             dpg.configure_item("status_text", color=[0, 255, 0])
 
     def render_keyboard_preview(self):
@@ -366,13 +393,13 @@ class KeyboardAnnotatorDPG:
                 max_y += padding
 
                 # Calculate scaling
-                preview_width = 900
-                preview_height = 500
+                preview_width = int(900 * self.ui_scale)
+                preview_height = int(500 * self.ui_scale)
                 scale_x = preview_width / \
                     (max_x - self.min_x) if (max_x - self.min_x) > 0 else 1
                 scale_y = preview_height / \
                     (max_y - self.min_y) if (max_y - self.min_y) > 0 else 1
-                self.scale = min(scale_x, scale_y, 30)
+                self.scale = min(scale_x, scale_y, 30 * self.ui_scale)
 
                 # Create draw list
                 self.keyboard_drawlist = dpg.add_drawlist(
@@ -384,8 +411,9 @@ class KeyboardAnnotatorDPG:
                         # Calculate position and size
                         x = (key.x - self.min_x) * self.scale
                         y = (key.y - self.min_y) * self.scale
-                        width = max(key.width * self.scale, 25)
-                        height = max(key.height * self.scale, 25)
+                        width = max(key.width * self.scale, 25 * self.ui_scale)
+                        height = max(key.height * self.scale,
+                                     25 * self.ui_scale)
 
                         # Store bounds for click detection
                         self.key_bounds.append({
@@ -406,7 +434,7 @@ class KeyboardAnnotatorDPG:
 
                         # Draw filled rectangle with colored border
                         dpg.draw_rectangle([x, y], [x + width, y + height],
-                                           color=border_color, fill=bg_color, thickness=3,
+                                           color=border_color, fill=bg_color, thickness=3 * self.ui_scale,
                                            parent=self.keyboard_drawlist, tag=f"key_rect_{i}")
 
                         # --- FIXED: Create homing symbol for ALL keys, control visibility ---
@@ -416,7 +444,7 @@ class KeyboardAnnotatorDPG:
                         # Create the circle for EVERY key, but set initial visibility with 'show'
                         dpg.draw_circle([center_x, center_y], symbol_radius,
                                         color=[0, 0, 0, 255], fill=[255, 255, 255, 255],
-                                        thickness=2, parent=self.keyboard_drawlist,
+                                        thickness=2 * self.ui_scale, parent=self.keyboard_drawlist,
                                         tag=f"homing_{i}", show=homing_symbol)
                         # --- END FIXED SECTION ---
 
@@ -426,15 +454,16 @@ class KeyboardAnnotatorDPG:
                             label = label[:4] + "..."
 
                         # Center text in rectangle (simple approach)
-                        text_x = x + width/2 - len(label) * 2
-                        text_y = y + height/2 - 6
+                        text_x = x + width/2 - len(label) * 2 * self.ui_scale
+                        text_y = y + height/2 - 6 * self.ui_scale
 
                         # Ensure text is within bounds
                         text_x = max(
-                            x + 2, min(text_x, x + width - len(label) * 4))
-                        text_y = max(y + 2, min(text_y, y + height - 12))
+                            x + 2 * self.ui_scale, min(text_x, x + width - len(label) * 4 * self.ui_scale))
+                        text_y = max(y + 2 * self.ui_scale,
+                                     min(text_y, y + height - 12 * self.ui_scale))
 
-                        dpg.draw_text([text_x, text_y], label, size=10,
+                        dpg.draw_text([text_x, text_y], label, size=10 * self.ui_scale,
                                       color=[0, 0, 0, 255], parent=self.keyboard_drawlist, tag=f"key_text_{i}")
 
                     except Exception as e:
@@ -572,6 +601,9 @@ class KeyboardAnnotatorDPG:
         """Creates the DPG context, UI, and starts the event loop."""
         dpg.create_context()
 
+        # Setup custom font
+        self.setup_font()
+
         # --- Create File Dialogs ---
         # --- Ensure default directory exists or use fallback ---
         load_dir = DEFAULT_KEYBOARD_DIR if os.path.isdir(
@@ -580,24 +612,24 @@ class KeyboardAnnotatorDPG:
             DEFAULT_KEYBOARD_DIR) else "."
 
         # Load Dialog - FIXED: Added missing closing parenthesis
-        with dpg.file_dialog(directory_selector=False, show=False, callback=self.load_keyboard_callback, tag="load_file_dialog", width=700, height=400, default_path=load_dir):
+        with dpg.file_dialog(directory_selector=False, show=False, callback=self.load_keyboard_callback, tag="load_file_dialog", width=int(700 * self.ui_scale), height=int(400 * self.ui_scale), default_path=load_dir):
             dpg.add_file_extension(".json", color=(
                 255, 255, 0, 255))  # Yellow for .json
             dpg.add_file_extension(".*")
 
         # Save Dialog - FIXED: Added missing closing parenthesis
-        with dpg.file_dialog(directory_selector=False, show=False, callback=self.save_dialog_callback, tag="save_file_dialog", width=700, height=400, default_path=save_dir):
+        with dpg.file_dialog(directory_selector=False, show=False, callback=self.save_dialog_callback, tag="save_file_dialog", width=int(700 * self.ui_scale), height=int(400 * self.ui_scale), default_path=save_dir):
             dpg.add_file_extension(".json", color=(
                 255, 255, 0, 255))  # Yellow for .json
 
         # --- Create Main Window ---
-        with dpg.window(tag="Primary Window", width=1400, height=900):
+        with dpg.window(tag="Primary Window", width=int(1400 * self.ui_scale), height=int(900 * self.ui_scale)):
             # Top button bar (instead of menu)
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="📁 Load Layout", callback=self.show_load_dialog, width=120, height=30)
+                    label="📁 Load Layout", callback=self.show_load_dialog, width=int(120 * self.ui_scale), height=int(30 * self.ui_scale))
                 dpg.add_button(
-                    label="💾 Save As", callback=self.show_save_dialog, width=120, height=30)
+                    label="💾 Save As", callback=self.show_save_dialog, width=int(120 * self.ui_scale), height=int(30 * self.ui_scale))
                 dpg.add_separator()
 
             # Status Bar
@@ -615,7 +647,7 @@ class KeyboardAnnotatorDPG:
             # Main layout - horizontal split
             with dpg.group(horizontal=True):
                 # Left panel - Controls
-                with dpg.child_window(width=480, height=800):
+                with dpg.child_window(width=int(480 * self.ui_scale), height=int(800 * self.ui_scale)):
                     dpg.add_text("🎨 STICKY PAINT CONTROLS",
                                  color=[255, 255, 100])
                     dpg.add_separator()
@@ -626,27 +658,27 @@ class KeyboardAnnotatorDPG:
                                      color=[255, 255, 255])
                         with dpg.group(horizontal=True):
                             dpg.add_combo(items=[f.name for f in Finger], tag="paint_finger_combo",
-                                          default_value="INDEX", width=120)
+                                          default_value="INDEX", width=int(120 * self.ui_scale))
                             sticky_finger_btn = dpg.add_button(label="FINGER", tag="sticky_finger_btn",
-                                                               callback=self.toggle_sticky_finger, width=80)
+                                                               callback=self.toggle_sticky_finger, width=int(80 * self.ui_scale))
 
-                        dpg.add_spacer(height=5)
+                        dpg.add_spacer(height=int(5 * self.ui_scale))
 
                         dpg.add_text("Hand Assignment:", color=[255, 255, 255])
                         with dpg.group(horizontal=True):
                             dpg.add_combo(items=[h.name for h in Hand], tag="paint_hand_combo",
-                                          default_value="LEFT", width=120)
+                                          default_value="LEFT", width=int(120 * self.ui_scale))
                             sticky_hand_btn = dpg.add_button(label="HAND", tag="sticky_hand_btn",
-                                                             callback=self.toggle_sticky_hand, width=80)
+                                                             callback=self.toggle_sticky_hand, width=int(80 * self.ui_scale))
 
-                        dpg.add_spacer(height=5)
+                        dpg.add_spacer(height=int(5 * self.ui_scale))
 
                         dpg.add_text("Homing Key:", color=[255, 255, 255])
                         with dpg.group(horizontal=True):
                             dpg.add_checkbox(
                                 label="Enable", tag="paint_homing_checkbox")
                             sticky_homing_btn = dpg.add_button(label="HOMING", tag="sticky_homing_btn",
-                                                               callback=self.toggle_sticky_homing, width=80)
+                                                               callback=self.toggle_sticky_homing, width=int(80 * self.ui_scale))
 
                     dpg.add_separator()
 
@@ -654,13 +686,13 @@ class KeyboardAnnotatorDPG:
                     with dpg.group():
                         dpg.add_text("🔧 INSTRUCTIONS", color=[100, 255, 100])
                         dpg.add_text("1. Click the attribute buttons above to enable 'sticky mode'",
-                                     color=[200, 200, 200], wrap=450)
+                                     color=[200, 200, 200], wrap=int(450 * self.ui_scale))
                         dpg.add_text("2. When sticky mode is ON (green), click keys to apply attributes",
-                                     color=[200, 200, 200], wrap=450)
+                                     color=[200, 200, 200], wrap=int(450 * self.ui_scale))
                         dpg.add_text("3. When sticky mode is OFF, click keys to select and edit individually",
-                                     color=[200, 200, 200], wrap=450)
+                                     color=[200, 200, 200], wrap=int(450 * self.ui_scale))
                         dpg.add_text("4. Use the inspector below for precise single-key editing",
-                                     color=[200, 200, 200], wrap=450)
+                                     color=[200, 200, 200], wrap=int(450 * self.ui_scale))
 
                     dpg.add_separator()
 
@@ -669,27 +701,27 @@ class KeyboardAnnotatorDPG:
                         dpg.add_text("🔍 KEY INSPECTOR", color=[255, 200, 100])
                         dpg.add_text("Click a key to edit",
                                      tag="key_info_text", color=[255, 255, 255])
-                        dpg.add_spacer(height=5)
+                        dpg.add_spacer(height=int(5 * self.ui_scale))
 
                         dpg.add_text("Finger:", color=[255, 255, 255])
                         dpg.add_combo(
-                            items=[f.name for f in Finger], tag="finger_combo", width=200)
-                        dpg.add_spacer(height=5)
+                            items=[f.name for f in Finger], tag="finger_combo", width=int(200 * self.ui_scale))
+                        dpg.add_spacer(height=int(5 * self.ui_scale))
 
                         dpg.add_text("Hand:", color=[255, 255, 255])
                         dpg.add_combo(
-                            items=[h.name for h in Hand], tag="hand_combo", width=200)
-                        dpg.add_spacer(height=5)
+                            items=[h.name for h in Hand], tag="hand_combo", width=int(200 * self.ui_scale))
+                        dpg.add_spacer(height=int(5 * self.ui_scale))
 
                         dpg.add_checkbox(label="Homing Key",
                                          tag="homing_checkbox")
-                        dpg.add_spacer(height=10)
+                        dpg.add_spacer(height=int(10 * self.ui_scale))
 
                         with dpg.group(horizontal=True):
                             apply_button = dpg.add_button(
-                                label="Apply Changes", callback=self.apply_changes_callback, width=120)
+                                label="Apply Changes", callback=self.apply_changes_callback, width=int(120 * self.ui_scale))
                             clear_button = dpg.add_button(
-                                label="Clear", callback=self.clear_key_callback, width=80)
+                                label="Clear", callback=self.clear_key_callback, width=int(80 * self.ui_scale))
 
                     # Color legend
                     dpg.add_separator()
@@ -710,7 +742,7 @@ class KeyboardAnnotatorDPG:
                         dpg.add_text("● Light Gray: Unassigned",
                                      color=[220, 220, 220])
 
-                        dpg.add_spacer(height=5)
+                        dpg.add_spacer(height=int(5 * self.ui_scale))
                         dpg.add_text("Border Colors = Hands:",
                                      color=[255, 255, 255])
                         dpg.add_text("● Blue Border: Left Hand",
@@ -722,25 +754,25 @@ class KeyboardAnnotatorDPG:
                         dpg.add_text("● Gray Border: Unassigned",
                                      color=[100, 100, 100])
 
-                        dpg.add_spacer(height=5)
+                        dpg.add_spacer(height=int(5 * self.ui_scale))
                         dpg.add_text("● White Circle: Homing Key",
                                      color=[255, 255, 255])
 
                 # Right panel - Keyboard Preview
-                with dpg.child_window(width=900, height=800):
+                with dpg.child_window(width=int(900 * self.ui_scale), height=int(800 * self.ui_scale)):
                     dpg.add_text("⌨️ KEYBOARD PREVIEW", color=[100, 200, 255])
                     dpg.add_text("Click keys to assign attributes or select for editing",
                                  color=[150, 150, 150])
                     dpg.add_separator()
 
-                    with dpg.child_window(tag="keyboard_preview_group", width=880, height=750,
+                    with dpg.child_window(tag="keyboard_preview_group", width=int(880 * self.ui_scale), height=int(750 * self.ui_scale),
                                           border=True):
                         dpg.add_text("Load a keyboard layout to see preview", color=[
                                      100, 100, 100])
 
         # Set the primary window
         dpg.create_viewport(
-            title='Enhanced Keyboard Layout Annotator', width=1400, height=900)
+            title='Enhanced Keyboard Layout Annotator', width=int(1400 * self.ui_scale), height=int(900 * self.ui_scale))
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("Primary Window", True)
