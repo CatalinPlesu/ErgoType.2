@@ -156,7 +156,6 @@ def test_keyboard_phenotype_initialization_with_remap():
 @patch('src.core.layout_evaluation.KeyboardPhenotype.key_mapper', MockKeyMapper(MockKeyboard(), MockLayoutPhenotype()))
 @patch('src.core.layout_evaluation.KeyboardPhenotype.cost_calculator', MockCostCalculator())
 @patch('src.core.layout_evaluation.KeyboardPhenotype.finger_manager', MockFingerManager(MockKeyboard(), MockCostCalculator()))
-@patch('src.core.layout_evaluation.KeyboardPhenotype.visualizer', MockLayoutVisualization(MockKeyboard(), MockLayoutPhenotype()))
 def test_keyboard_phenotype_select_remap_keys():
     """Test select_remap_keys method"""
     mock_keyboard = MockKeyboard()
@@ -173,7 +172,6 @@ def test_keyboard_phenotype_select_remap_keys():
 @patch('src.core.layout_evaluation.KeyboardPhenotype.key_mapper', MockKeyMapper(MockKeyboard(), MockLayoutPhenotype()))
 @patch('src.core.layout_evaluation.KeyboardPhenotype.cost_calculator', MockCostCalculator())
 @patch('src.core.layout_evaluation.KeyboardPhenotype.finger_manager', MockFingerManager(MockKeyboard(), MockCostCalculator()))
-@patch('src.core.layout_evaluation.KeyboardPhenotype.visualizer', MockLayoutVisualization(MockKeyboard(), MockLayoutPhenotype()))
 def test_keyboard_phenotype_remap_to_keys():
     """Test remap_to_keys method"""
     mock_keyboard = MockKeyboard()
