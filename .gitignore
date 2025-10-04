@@ -10,3 +10,4 @@ wheels/
 .venv
 raw/
 **/processed/*.json
+src/data/distance/
