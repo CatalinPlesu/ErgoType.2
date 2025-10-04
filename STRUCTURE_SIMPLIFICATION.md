@@ -3,7 +3,7 @@
 ## Current Issues:
 1. **Overcomplicated directory structure** - Too many nested directories for a genetic algorithm project
 2. **Mixed concerns** - Data processing mixed with core algorithms
-3. **Inconsistent naming** - `data` vs `data_helpers`, unclear module boundaries
+3. **Inconsistent naming** - `data` vs `helpers`, unclear module boundaries
 4. **Redundant files** - README files in subdirectories, unnecessary complexity
 
 ## Proposed Simplified Structure:
@@ -26,7 +26,7 @@ src/
 │   ├── languages/           # Language configs
 │   ├── text/                # Processed text data
 │   └── config/              # Global config files
-├── utils/                   # Helper utilities (was data_helpers)
+├── utils/                   # Helper utilities (was helpers)
 │   ├── keyboard_renderer.py
 │   ├── text_processor.py
 │   ├── scraper.py

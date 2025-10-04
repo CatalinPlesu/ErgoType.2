@@ -18,4 +18,4 @@ All layouts use the KLE JSON format with additional annotations:
 
 ### Processing
 Raw KLE files require processing to add finger/hand annotations:
-run `uv run python -m src.data_helpers.keyboards.annotator_gui`
+run `uv run python -m src.helpers.keyboards.annotator_gui`

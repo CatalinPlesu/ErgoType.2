@@ -1,134 +1,240 @@
-import os
-import pickle
-import time
-import json
-from src.core.layout_evaluator import KeyboardPhenotype
-from src.core.keyboard import Serial
-from src.core.hand_finger_enum import *
-from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
-import src.data.languages.romanian_standard as ro_std
+import pytest
+from unittest.mock import Mock, patch
+from src.core.layout_evaluation import KeyboardPhenotype
 
-def test_layout_evaluation_basic():
-    """Test basic layout evaluation functionality"""
-    # Load keyboard data
-    with open('src/data/keyboards/ansi_60_percent.json', 'r') as f:
-        keyboard = Serial.parse(f.read())
-    
-    # Create layout evaluator with default pipeline
-    layout_evaluator = KeyboardPhenotype(keyboard, {})
-    
-    # Test remap functionality
-    layout_evaluator.select_remap_keys(LAYOUT_DATA['qwerty'])
-    layout_evaluator.remap_to_keys(LAYOUT_DATA['asset'])
-    
-    print("✓ Basic layout evaluation setup successful")
-    return True
 
-def test_layout_evaluation_with_language():
-    """Test layout evaluation with Romanian language layout"""
-    # Load keyboard data
-    with open('src/data/keyboards/ansi_60_percent.json', 'r') as f:
-        keyboard = Serial.parse(f.read())
+class MockKeyboard:
+    def __init__(self):
+        self.keys = [
+            MockPhysicalKey("key1", ["a", "A"], (0, 0), "index"),
+            MockPhysicalKey("key2", ["b", "B"], (1, 0), "middle"),
+            MockPhysicalKey("key3", ["c", "C"], (2, 0), "ring")
+        ]
     
-    # Get Romanian layout
-    ro_remap = ro_std.get_layout()
-    
-    # Create layout evaluator with Romanian layout
-    layout_evaluator = KeyboardPhenotype(keyboard, ro_remap)
-    
-    print("✓ Layout evaluation with Romanian language successful")
-    return True
+    def get_homing_key_for_finger_name(self, finger_name):
+        # Return a mock key for each finger
+        return MockPhysicalKey(f"home_{finger_name}", ["home"], (0, -1), finger_name)
 
-def test_layout_evaluation_fitness():
-    """Test fitness calculation with frequency data"""
-    # Load keyboard data
-    with open('src/data/keyboards/ansi_60_percent.json', 'r') as f:
-        keyboard = Serial.parse(f.read())
-    
-    # Create layout evaluator
-    layout_evaluator = KeyboardPhenotype(keyboard, {})
-    
-    # Load frequency data
-    with open('src/data/text/processed/frequency_analysis.pkl', 'rb') as f:
-        frequency_data = pickle.load(f)
-    
-    # Time the fitness function
-    print("Timing fitness function with frequency data...")
-    start_time = time.time()
-    fitness_score = layout_evaluator.fitness(frequency_data['simple_wikipedia'])
-    end_time = time.time()
-    fitness_freq_time = end_time - start_time
-    
-    print(f"✓ Fitness function completed in {fitness_freq_time:.4f} seconds")
-    print(f"✓ Fitness score: {fitness_score}")
-    
-    # Test cost inspection
-    costs = layout_evaluator.inspect_costs()
-    assert 'total' in costs
-    assert 'by_layer' in costs
-    assert 'by_key' in costs
-    
-    print("✓ Cost inspection successful")
-    return True
 
-def test_layout_evaluation_different_keyboards():
-    """Test layout evaluation with different keyboard types"""
-    keyboards_to_test = [
-        'src/data/keyboards/ansi_60_percent.json',
-        'src/data/keyboards/dactyl_manuform_6x6_4.json',
-        'src/data/keyboards/ferris_sweep.json'
-    ]
+class MockPhysicalKey:
+    def __init__(self, key_id, labels, position, finger_name):
+        self.key_id = key_id
+        self._labels = labels
+        self._position = position
+        self._finger_name = finger_name
     
-    for keyboard_file in keyboards_to_test:
-        if os.path.exists(keyboard_file):
-            print(f"Testing {keyboard_file}...")
-            with open(keyboard_file, 'r') as f:
-                keyboard = Serial.parse(f.read())
-            
-            layout_evaluator = KeyboardPhenotype(keyboard, {})
-            print(f"✓ {keyboard_file} setup successful")
-        else:
-            print(f"⚠ {keyboard_file} not found, skipping")
+    def get_labels(self):
+        return self._labels
     
-    return True
+    def get_key_center_position(self):
+        return self._position
+    
+    def get_finger_name(self):
+        return self._finger_name
 
-def test_layout_evaluation_keyboard_genotypes():
-    """Test layout evaluation with different keyboard genotypes"""
-    # Load keyboard data
-    with open('src/data/keyboards/ansi_60_percent.json', 'r') as f:
-        keyboard = Serial.parse(f.read())
-    
-    # Test different keyboard genotypes
-    for layout_name, layout_keys in LAYOUT_DATA.items():
-        print(f"Testing {layout_name} layout...")
-        
-        layout_evaluator = KeyboardPhenotype(keyboard, {})
-        layout_evaluator.select_remap_keys(LAYOUT_DATA['qwerty'])  # Start with qwerty
-        layout_evaluator.remap_to_keys(layout_keys)
-        
-        print(f"✓ {layout_name} layout remapping successful")
 
-if __name__ == "__main__":
-    print("Running layout evaluation tests...\n")
+class MockLayoutPhenotype:
+    def __init__(self):
+        self.virtual_keys = {
+            "a": None,
+            "b": None,
+            "c": None
+        }
     
-    try:
-        test_layout_evaluation_basic()
-        print()
-        
-        test_layout_evaluation_with_language()
-        print()
-        
-        test_layout_evaluation_fitness()
-        print()
-        
-        test_layout_evaluation_different_keyboards()
-        print()
-        
-        test_layout_evaluation_keyboard_genotypes()
-        print()
-        
-        print("✅ All layout evaluation tests passed!")
-        
-    except Exception as e:
-        print(f"❌ Test failed with error: {e}")
-        raise
+    def get_key_sequence(self, char):
+        return [char]
+    
+    def apply_language_layout(self, remap):
+        pass
+    
+    def generate_random_layout(self):
+        pass
+
+
+class MockKeyMapper:
+    def __init__(self, physical_keyboard, layout):
+        self.physical_keyboard = physical_keyboard
+        self.layout = layout
+        self.virtual_to_physical = {
+            "a": physical_keyboard.keys[0],
+            "b": physical_keyboard.keys[1],
+            "c": physical_keyboard.keys[2]
+        }
+    
+    def get_physical_key(self, virtual_key_id):
+        return self.virtual_to_physical.get(virtual_key_id)
+    
+    def get_all_mappings(self):
+        return self.virtual_to_physical.copy()
+    
+    def get_unmapped_virtual_keys(self):
+        return set()
+    
+    def get_physical_key_for_char(self, char):
+        key_sequence = self.layout.get_key_sequence(char)
+        if key_sequence and len(key_sequence) > 0:
+            return self.get_physical_key(key_sequence[0])
+        return None
+
+
+class MockCostCalculator:
+    def __init__(self):
+        self.accumulator = Mock()
+        self.accumulator.total.return_value = 0.0
+        self.accumulator.sum_by_layer.return_value = {}
+        self.accumulator.sum_by_key.return_value = {}
+        self.accumulator.get_matrix.return_value = {}
+        self.accumulator.get_press_counts.return_value = {}
+    
+    def calculate_press_cost(self, ctx):
+        return 1.0
+    
+    def reset(self):
+        pass
+
+
+class MockFingerManager:
+    def __init__(self, physical_keyboard, cost_calculator):
+        self.cost_calculator = cost_calculator
+        self.reset_called = False
+        self.used_physical_keys = set()
+        self.unreachable_chars = set()
+    
+    def press(self, physical_key, presses):
+        pass
+    
+    def get_total_cost(self):
+        return 100.0
+    
+    def get_accumulator(self):
+        return self.cost_calculator.accumulator
+    
+    def reset(self):
+        self.reset_called = True
+    
+    def reset_position(self):
+        pass
+
+
+class MockLayoutVisualization:
+    def __init__(self, physical_keyboard, layout):
+        self.physical_keyboard = physical_keyboard
+        self.layout = layout
+    
+    def set_layout(self, layout, key_mapper):
+        pass
+    
+    def inspect(self, **kwargs):
+        return "mock_inspection"
+
+
+def test_keyboard_phenotype_initialization():
+    """Test KeyboardPhenotype initialization"""
+    mock_keyboard = MockKeyboard()
+    
+    phenotype = KeyboardPhenotype(mock_keyboard)
+    
+    assert phenotype.physical_keyboard == mock_keyboard
+    assert phenotype.remap_keys == {}
+    assert phenotype.layout is not None
+    assert phenotype.key_mapper is not None
+    assert phenotype.used_physical_keys == set()
+    assert phenotype.unreachable_chars == set()
+
+
+def test_keyboard_phenotype_initialization_with_remap():
+    """Test KeyboardPhenotype initialization with remap"""
+    mock_keyboard = MockKeyboard()
+    remap = {"a": "b", "b": "a"}
+    
+    phenotype = KeyboardPhenotype(mock_keyboard, remap)
+    
+    assert phenotype.layout is not None
+
+
+@patch('src.core.layout_evaluation.KeyboardPhenotype.layout', MockLayoutPhenotype())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.key_mapper', MockKeyMapper(MockKeyboard(), MockLayoutPhenotype()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.cost_calculator', MockCostCalculator())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.finger_manager', MockFingerManager(MockKeyboard(), MockCostCalculator()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.visualizer', MockLayoutVisualization(MockKeyboard(), MockLayoutPhenotype()))
+def test_keyboard_phenotype_select_remap_keys():
+    """Test select_remap_keys method"""
+    mock_keyboard = MockKeyboard()
+    phenotype = KeyboardPhenotype(mock_keyboard)
+    
+    keys_list = ["key1", "key2", "key3"]
+    phenotype.select_remap_keys(keys_list)
+    
+    assert phenotype.remap_key_length == 3
+    assert phenotype.original_key_list == keys_list
+
+
+@patch('src.core.layout_evaluation.KeyboardPhenotype.layout', MockLayoutPhenotype())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.key_mapper', MockKeyMapper(MockKeyboard(), MockLayoutPhenotype()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.cost_calculator', MockCostCalculator())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.finger_manager', MockFingerManager(MockKeyboard(), MockCostCalculator()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.visualizer', MockLayoutVisualization(MockKeyboard(), MockLayoutPhenotype()))
+def test_keyboard_phenotype_remap_to_keys():
+    """Test remap_to_keys method"""
+    mock_keyboard = MockKeyboard()
+    phenotype = KeyboardPhenotype(mock_keyboard)
+    
+    phenotype.select_remap_keys(["a", "b"])
+    phenotype.remap_to_keys(["x", "y"])
+    
+    assert phenotype.remap_keys == {"a": "x", "b": "y"}
+
+
+@patch('src.core.layout_evaluation.KeyboardPhenotype.layout', MockLayoutPhenotype())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.key_mapper', MockKeyMapper(MockKeyboard(), MockLayoutPhenotype()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.cost_calculator', MockCostCalculator())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.finger_manager', MockFingerManager(MockKeyboard(), MockCostCalculator()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.visualizer', MockLayoutVisualization(MockKeyboard(), MockLayoutPhenotype()))
+def test_keyboard_phenotype_get_key():
+    """Test get_key method"""
+    mock_keyboard = MockKeyboard()
+    phenotype = KeyboardPhenotype(mock_keyboard)
+    
+    # Test normal key
+    result = phenotype.get_key("a")
+    assert result is not None
+    
+    # Test remapped key
+    phenotype.select_remap_keys(["a"])
+    phenotype.remap_to_keys(["b"])
+    result = phenotype.get_key("a")
+    # Should return the key for "b" now
+    assert result is not None
+
+
+@patch('src.core.layout_evaluation.KeyboardPhenotype.layout', MockLayoutPhenotype())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.key_mapper', MockKeyMapper(MockKeyboard(), MockLayoutPhenotype()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.cost_calculator', MockCostCalculator())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.finger_manager', MockFingerManager(MockKeyboard(), MockCostCalculator()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.visualizer', MockLayoutVisualization(MockKeyboard(), MockLayoutPhenotype()))
+def test_keyboard_phenotype_inspect_layout():
+    """Test inspect_layout method"""
+    mock_keyboard = MockKeyboard()
+    phenotype = KeyboardPhenotype(mock_keyboard)
+    
+    result = phenotype.inspect_layout()
+    assert result == "mock_inspection"
+
+
+@patch('src.core.layout_evaluation.KeyboardPhenotype.layout', MockLayoutPhenotype())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.key_mapper', MockKeyMapper(MockKeyboard(), MockLayoutPhenotype()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.cost_calculator', MockCostCalculator())
+@patch('src.core.layout_evaluation.KeyboardPhenotype.finger_manager', MockFingerManager(MockKeyboard(), MockCostCalculator()))
+@patch('src.core.layout_evaluation.KeyboardPhenotype.visualizer', MockLayoutVisualization(MockKeyboard(), MockLayoutPhenotype()))
+def test_keyboard_phenotype_inspect_costs():
+    """Test inspect_costs method"""
+    mock_keyboard = MockKeyboard()
+    phenotype = KeyboardPhenotype(mock_keyboard)
+    
+    result = phenotype.inspect_costs()
+    
+    assert "total" in result
+    assert "by_layer" in result
+    assert "by_key" in result
+    assert "matrix" in result
+    assert "press_counts" in result

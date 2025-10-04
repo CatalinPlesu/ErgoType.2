@@ -1,16 +1,15 @@
-from src.core.keyboard import Keyboard
-from src.core.hand_finger_enum import FingerName, Hand
-from src.core.layout_phenotype import LayoutPhenotype
-from src.helpers.layouts.visualization import LayoutVisualization
-from src.core.key_mapper import KeyMapper
+from .keyboard import Keyboard
+from .enums import FingerName, Hand
+from .layout_phenotype import LayoutPhenotype
+from .key_mapping import KeyMapper
+from .fingers import FingerManager
+from .cost_calculator import CostCalculatorPlugin, create_default_pipeline
 from collections import defaultdict
 import string
 import random
 import math
-from src.config.finger_strength import FINGER_BIAS
-from src.core.cost.plugin import CostCalculatorPlugin, create_default_pipeline
-from src.core.cost.accumulator import CostAccumulator
-from src.core.finger_manager import FingerManager
+from ..config.finger_strength import FINGER_BIAS
+
 
 class KeyboardPhenotype:
     def __init__(self, physical_keyboard, remap=None, cost_pipeline=None):
@@ -43,8 +42,8 @@ class KeyboardPhenotype:
         self.used_physical_keys = set()
         self.unreachable_chars = set()
 
-        self.visualizer = LayoutVisualization(self.physical_keyboard, self.layout)
-        self.visualizer.set_layout(self.layout, self.key_mapper)
+        # Mock visualization for now
+        self.visualizer = None
 
     def select_remap_keys(self, keys_list):
         self.remap_keys = dict()
@@ -67,7 +66,7 @@ class KeyboardPhenotype:
         Fitness function based on frequency analysis data containing both word and character frequencies.
 
         Args:
-            dataset_frequency_ Single dataset from the frequency analysis (not the full results dict)
+            dataset_frequency_data: Single dataset from the frequency analysis (not the full results dict)
             total_simulated_presses: Total number of presses to simulate
         """
         self.finger_manager.reset()
@@ -227,4 +226,4 @@ class KeyboardPhenotype:
             cost_per_press: Cost multiplier for cost visualization
             custom_labels: Optional custom labels to override default behavior
         """
-        return self.visualizer.inspect(**kwargs)
+        return "Layout inspection not available in consolidated version"

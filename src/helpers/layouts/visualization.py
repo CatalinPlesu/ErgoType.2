@@ -1,5 +1,5 @@
 from src.core.keyboard import Key, Keyboard, KeyboardMetadata, Serial
-from src.data_helpers.keyboards.renderer import show_keyboard, render_keyboard
+from src.helpers.keyboards.renderer import show_keyboard, render_keyboard
 from src.core.layout_phenotype import LayoutPhenotype
 from src.core.key_mapper import KeyMapper
 import json
