@@ -112,6 +112,17 @@ class DistanctCalculator:
             self._print(
                 f"Obtained '{self.keyboard_md5}' hash for current keyboard")
 
+    def get_distance_and_movement(self, point1: tuple, point2: tuple) -> tuple:
+        if self.cost and self.keyboard_file in self.cost and 'costs' in self.cost[self.keyboard_file]:
+            costs = self.cost[self.keyboard_file]['costs']
+            movement_key = (point1, point2)
+            if movement_key in costs:
+                cached_data = costs[movement_key]
+                return (cached_data['distance'], cached_data['movement'])
+        distance = cartesian_distance(point1, point2)
+        movement = axis_movement(point1, point2)
+        return (distance, movement)
+
     def _print(self, *args, **kwargs):
         if self.debug:
             print(*args, **kwargs)
