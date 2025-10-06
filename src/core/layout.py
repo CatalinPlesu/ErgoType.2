@@ -89,3 +89,153 @@ class Layout:
 
         print(f"\nTotal layers: {len(layer_mapping)}")
         print("="*80)
+
+
+if __name__ == "__main__":
+    from src.core.keyboard import Keyboard, Serial
+    from .mapper import Mapper, KeyType, Key
+    import string
+
+    # Load keyboard
+    keyboard_file = 'src/data/keyboards/ansi_60_percent.json'
+    with open(keyboard_file, 'r') as f:
+        keyboard = Serial.parse(f.read())
+
+    # Create layout
+    layout = Layout(keyboard, debug=True)
+
+    print("\n" + "="*80)
+    print("TESTING MAPPER FUNCTIONALITY")
+    print("="*80)
+
+    # Get the mapper from the layout
+    mapper = layout.mapper
+
+    print(f"Total key-layer pairs in mapper: {len(mapper.data)}")
+
+    # Test 1: Find key and layer for specific characters
+    print("\n1. FINDING KEYS FOR SPECIFIC CHARACTERS:")
+    print("-" * 40)
+
+    test_chars = ['a', 'A', '1', '!', 'q', 'z']
+    for char in test_chars:
+        found = False
+        for (key_id, layer_id), key_obj in mapper.data.items():
+            if key_obj.key_type == KeyType.CHAR:
+                # key_obj.value is a tuple (lowercase, uppercase) for chars
+                if isinstance(key_obj.value, tuple):
+                    lower_val, upper_val = key_obj.value
+                    if lower_val == char or upper_val == char:
+                        print(f"""Character '{char}' -> Key ID: {key_id:<3} | Layer: {
+                              layer_id} | Value: {key_obj.value}""")
+                        found = True
+                        break
+        if not found:
+            print(f"Character '{char}' not found in layout")
+
+    # Test 2: Find all mappings for a specific character (case insensitive)
+    print(f"\n2. FINDING ALL MAPPINGS FOR CHARACTER 'a':")
+    print("-" * 40)
+    char_to_find = 'a'
+    for (key_id, layer_id), key_obj in mapper.data.items():
+        if key_obj.key_type == KeyType.CHAR:
+            if isinstance(key_obj.value, tuple):
+                lower_val, upper_val = key_obj.value
+                if lower_val == char_to_find or upper_val == char_to_find:
+                    print(f"""Key ID: {key_id:<3} | Layer: {layer_id} | Type: {
+                          key_obj.key_type.name:<13} | Value: {key_obj.value}""")
+
+    # Test 3: Find all printable characters and their mappings
+    print(f"\n3. ALL PRINTABLE CHARACTER MAPPINGS:")
+    print("-" * 40)
+    printable_chars = []
+    for (key_id, layer_id), key_obj in mapper.data.items():
+        if key_obj.key_type == KeyType.CHAR:
+            if isinstance(key_obj.value, tuple):
+                lower_val, upper_val = key_obj.value
+                printable_chars.append(
+                    (key_id, layer_id, lower_val, upper_val))
+
+    # Show first 20
+    for key_id, layer_id, lower, upper in printable_chars[:20]:
+        print(f"""Key ID: {key_id:<3} | Layer: {layer_id}
+              | Lower: '{lower}' | Upper: '{upper}'""")
+
+    # Test 4: Find special characters (punctuation)
+    print(f"\n4. SPECIAL CHARACTER MAPPINGS (punctuation):")
+    print("-" * 40)
+    for (key_id, layer_id), key_obj in mapper.data.items():
+        if key_obj.key_type == KeyType.CHAR:
+            if isinstance(key_obj.value, tuple):
+                lower_val, upper_val = key_obj.value
+                if lower_val in string.punctuation or upper_val in string.punctuation:
+                    print(f"""Key ID: {key_id:<3} | Layer: {
+                          layer_id} | Punct: '{lower_val}'/'{upper_val}'""")
+
+    # Test 5: Find special character keys (Tab, Enter, Space, etc.)
+    print(f"\n5. SPECIAL CHARACTER KEYS (Tab, Enter, Space, etc.):")
+    print("-" * 40)
+    for (key_id, layer_id), key_obj in mapper.data.items():
+        if key_obj.key_type == KeyType.SPECIAL_CHAR:
+            print(f"""Key ID: {key_id:<3} | Layer: {
+                  layer_id} | Special: {key_obj.value}""")
+
+    # Test 6: Find control keys
+    print(f"\n6. CONTROL KEYS:")
+    print("-" * 40)
+    for (key_id, layer_id), key_obj in mapper.data.items():
+        if key_obj.key_type == KeyType.CONTROL:
+            print(f"""Key ID: {key_id:<3} | Layer: {
+                  layer_id} | Control: {key_obj.value}""")
+
+    # Test 7: Find layer keys
+    print(f"\n7. LAYER KEYS:")
+    print("-" * 40)
+    for (key_id, layer_id), key_obj in mapper.data.items():
+        if key_obj.key_type == KeyType.LAYER:
+            print(f"""Key ID: {key_id:<3} | Layer: {
+                  layer_id} | Layer Key: {key_obj.value}""")
+
+    # Test 8: Count how many shift keys exist
+    print(f"\n8. COUNTING SHIFT KEYS:")
+    print("-" * 40)
+    shift_keys = []
+    for (key_id, layer_id), key_obj in mapper.data.items():
+        if key_obj.key_type == KeyType.CONTROL and key_obj.value == 'Shift':
+            shift_keys.append((key_id, layer_id))
+
+    print(f"Total SHIFT keys found: {len(shift_keys)}")
+    for key_id, layer_id in shift_keys:
+        print(f"""Shift key -> Key ID: {key_id} | Layer: {layer_id}""")
+
+    # Test 9: Function to find key for any character
+    def find_key_for_char(target_char):
+        """Find the key_id and layer_id for a given character"""
+        for (key_id, layer_id), key_obj in mapper.data.items():
+            if key_obj.key_type == KeyType.CHAR:
+                if isinstance(key_obj.value, tuple):
+                    lower_val, upper_val = key_obj.value
+                    if lower_val == target_char or upper_val == target_char:
+                        return key_id, layer_id, key_obj
+            elif key_obj.key_type == KeyType.SPECIAL_CHAR:
+                if isinstance(key_obj.value, tuple):
+                    special_set, display_val = key_obj.value
+                    if target_char in special_set:
+                        return key_id, layer_id, key_obj
+        return None, None, None
+
+    # Test the function
+    print(f"\n9. TESTING find_key_for_char FUNCTION:")
+    print("-" * 40)
+    test_chars_func = ['a', 'Z', '5', '\t', '\n', ' ']
+    for char in test_chars_func:
+        key_id, layer_id, key_obj = find_key_for_char(char)
+        if key_id is not None:
+            print(f"""Character '{char}' -> Key ID: {key_id}
+                  | Layer: {layer_id} | Value: {key_obj.value}""")
+        else:
+            print(f"""Character '{char}' -> NOT FOUND""")
+
+    print(f"\n" + "="*80)
+    print("TESTING COMPLETE")
+    print("="*80)
