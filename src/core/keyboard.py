@@ -68,7 +68,16 @@ def enums_to_fingername(finger, hand):
 
 
 class Key:
+    _id_counter = 0
+
+    @classmethod
+    def get_next_id(cls):
+        current_id = cls._id_counter
+        cls._id_counter += 1  # Increment by 1, not by the current id
+        return current_id
+
     def __init__(self):
+        self.id = Key.get_next_id()
         self.color: str = "#cccccc"
         self.labels: List[Optional[str]] = [None] * 12
         self.textColor: List[Optional[str]] = [None] * 12
