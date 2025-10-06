@@ -71,7 +71,33 @@ class Layout:
                 KeyType.CHAR, (after, after.upper()))
 
     def apply_language_layout(self, remap):
-        pass
+        self._print(f"Applying: '{remap['name']}' language layout")
+        base = remap['base_remaps']
+        altgr = remap['altgr_remaps']
+        base_keys_to_update = []
+        altgr_keys_to_update = []
+        for before, after in base.items():
+            char_keys = self.mapper.filter_data(
+                lambda key_id, layer_id, value: value.key_type == KeyType.CHAR and value.value[0] == before)
+            for char_key in char_keys:
+                base_keys_to_update.append((char_key[0], before, after))
+        for before, after in altgr.items():
+            char_keys = self.mapper.filter_data(
+                lambda key_id, layer_id, value: value.key_type == KeyType.CHAR and value.value[0] == before)
+            for char_key in char_keys:
+                altgr_keys_to_update.append((char_key[0], before, after))
+
+        print(base_keys_to_update)
+        print(altgr_keys_to_update)
+
+        for key_id, before, after in base_keys_to_update:
+            self.mapper[key_id] = Key(
+                KeyType.CHAR, after)
+        for key_id, before, after in altgr_keys_to_update:
+            key, _ = key_id
+            key_id = (key, ALTGR_LAYER)
+            self.mapper[key_id] = Key(
+                KeyType.CHAR, after)
 
     def _print(self, *args, **kwargs):
         if self.debug:
@@ -258,4 +284,8 @@ if __name__ == "__main__":
     print("TESTING COMPLETE")
     print("="*80)
     layout.querty_based_remap(LAYOUT_DATA["asset"])
+    layout._print_layout()
+
+    import src.data.languages.romanian_standard as ro
+    layout.apply_language_layout(ro.get_layout())
     layout._print_layout()
