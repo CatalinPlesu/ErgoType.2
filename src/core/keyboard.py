@@ -149,6 +149,7 @@ class Key:
 # ----------------------------
 class KeyboardMetadata:
     def __init__(self):
+        Key._id = 0
         self.author: str = ""
         self.backcolor: str = "#eeeeee"
         self.background: Optional[Dict[str, str]] = None
@@ -248,7 +249,6 @@ class Serial:
             Serial.deserialize_error("expected an array of objects")
 
         # Start with a default key template
-        # Key._id = 0
         current = Key()
         kbd = Keyboard()
         align = 4
