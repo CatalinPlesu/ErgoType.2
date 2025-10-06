@@ -58,6 +58,15 @@ class DistanceCalculator:
             self.cost[self.keyboard_file] = {}
 
         self.cost[self.keyboard_file]['md5'] = self.keyboard_md5
+
+        # Get the exact matrix size from the keyboard keys list
+        # No -1, no buffer - exact size needed
+        matrix_size = len(self.keyboard.keys)
+
+        # Initialize 2D matrix with None values - list of lists
+        movement_matrix = [[None for _ in range(
+            matrix_size)] for _ in range(matrix_size)]
+
         fingers = [member for member in FingerName]
         finger_keys = {}
         for finger in fingers:
@@ -65,28 +74,24 @@ class DistanceCalculator:
 
         self._print("Identified keys of each finger")
 
-        all_movements = {}
+        self._print(
+            "Calculating all possible movements and caching in 2D matrix")
+
+        # Calculate distances and movements for all key pairs within each finger
         for finger in fingers:
             keys = finger_keys[finger]
-            all_movements[finger] = [(key1.id, key2.id)
-                                     for key1 in keys for key2 in keys]
+            for key1 in keys:
+                for key2 in keys:
+                    key_id1, key_id2 = key1.id, key2.id
 
-        self._print("Identified all possible movements of a finger")
+                    # Store in matrix as tuple (distance, movement)
+                    # Assuming key IDs are within the range [0, matrix_size)
+                    movement_matrix[key_id1][key_id2] = self._calculate_distance_and_movement(
+                        key_id1, key_id2)
 
-        movement_distance = {}
-        for finger in fingers:
-            for movement in all_movements[finger]:
-                key_id1, key_id2 = movement
-                distance, movement_vector = self._calculate_distance_and_movement(
-                    key_id1, key_id2)
-
-                movement_distance[(key_id1, key_id2)] = {
-                    'distance': distance,
-                    'movement': movement_vector
-                }
-
-        self.cost[self.keyboard_file]['costs'] = movement_distance
-        self._print("cost's for this keyboard have been cached")
+        self.cost[self.keyboard_file]['movement_matrix'] = movement_matrix
+        self.cost[self.keyboard_file]['matrix_size'] = matrix_size
+        self._print("cost's for this keyboard have been cached in 2D matrix")
 
     def load_cost(self):
         if self.cost is None or self.debug:
@@ -114,7 +119,7 @@ class DistanceCalculator:
                     self._print(f"""✅ Successfully loaded data from {
                                 DISTANCE_CACHE}""")
         except Exception as e:
-            self._print(f"ERROR loading data: {e}")
+            self._print(f"ERROR loading {e}")
             self.cost = None
 
     def save_cache(self):
@@ -131,12 +136,19 @@ class DistanceCalculator:
                 f"Obtained '{self.keyboard_md5}' hash for current keyboard")
 
     def get_distance_and_movement(self, key1_id: int, key2_id: int) -> tuple:
-        if self.cost and self.keyboard_file in self.cost and 'costs' in self.cost[self.keyboard_file]:
-            costs = self.cost[self.keyboard_file]['costs']
-            movement_key = (key1_id, key2_id)
-            if movement_key in costs:
-                cached_data = costs[movement_key]
-                return (cached_data['distance'], cached_data['movement'])
+        if (self.cost and
+            self.keyboard_file in self.cost and
+                'movement_matrix' in self.cost[self.keyboard_file]):
+
+            movement_matrix = self.cost[self.keyboard_file]['movement_matrix']
+            matrix_size = self.cost[self.keyboard_file]['matrix_size']
+
+            # Check if key IDs are within bounds
+            if key1_id < matrix_size and key2_id < matrix_size:
+                cached_data = movement_matrix[key1_id][key2_id]
+
+                if cached_data is not None:
+                    return cached_data
 
         return self._calculate_distance_and_movement(key1_id, key2_id)
 
