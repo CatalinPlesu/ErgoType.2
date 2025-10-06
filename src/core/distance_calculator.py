@@ -25,7 +25,7 @@ def axis_movement(point1: tuple, point2: tuple) -> tuple:
     return movement
 
 
-class DistanctCalculator:
+class DistanceCalculator:
     def __init__(self, keyboard_file, keyboard, debug=False):
         self.debug = debug
         self._print("Distance Calculator Invoked")
@@ -36,6 +36,19 @@ class DistanctCalculator:
         self.load_cost()
         print("here")
         self.save_cache()
+
+    def _calculate_distance_and_movement(self, key1_id: int, key2_id: int) -> tuple:
+        key1 = self.keyboard.keys[key1_id]
+        key2 = self.keyboard.keys[key2_id]
+
+        if not key1 or not key2:
+            raise ValueError(f"Key with ID {key1_id} or {key2_id} not found")
+
+        p1 = key1.get_key_center_position()
+        p2 = key2.get_key_center_position()
+        distance = cartesian_distance(p1, p2)
+        movement = axis_movement(p1, p2)
+        return distance, movement
 
     def calculate_cost(self):
         if self.cost is None:
@@ -48,25 +61,30 @@ class DistanctCalculator:
         fingers = [member for member in FingerName]
         finger_keys = {}
         for finger in fingers:
-            finger_keys[finger] = [key.get_key_center_position()
-                                   for key in self.keyboard.get_finger_keys(finger)]
+            finger_keys[finger] = self.keyboard.get_finger_keys(finger)
+
         self._print("Identified keys of each finger")
 
         all_movements = {}
         for finger in fingers:
-            x = finger_keys[finger]
-            all_movements[finger] = [(x1, x2) for x1 in x for x2 in x]
+            keys = finger_keys[finger]
+            all_movements[finger] = [(key1.id, key2.id)
+                                     for key1 in keys for key2 in keys]
 
         self._print("Identified all possible movements of a finger")
 
         movement_distance = {}
         for finger in fingers:
             for movement in all_movements[finger]:
-                movement_distance[movement] = {}
-                p1, p2 = movement
-                movement_distance[movement]['distance'] = cartesian_distance(
-                    p1, p2)
-                movement_distance[movement]['movement'] = axis_movement(p1, p2)
+                key_id1, key_id2 = movement
+                distance, movement_vector = self._calculate_distance_and_movement(
+                    key_id1, key_id2)
+
+                movement_distance[(key_id1, key_id2)] = {
+                    'distance': distance,
+                    'movement': movement_vector
+                }
+
         self.cost[self.keyboard_file]['costs'] = movement_distance
         self._print("cost's for this keyboard have been cached")
 
@@ -112,16 +130,15 @@ class DistanctCalculator:
             self._print(
                 f"Obtained '{self.keyboard_md5}' hash for current keyboard")
 
-    def get_distance_and_movement(self, point1: tuple, point2: tuple) -> tuple:
+    def get_distance_and_movement(self, key1_id: int, key2_id: int) -> tuple:
         if self.cost and self.keyboard_file in self.cost and 'costs' in self.cost[self.keyboard_file]:
             costs = self.cost[self.keyboard_file]['costs']
-            movement_key = (point1, point2)
+            movement_key = (key1_id, key2_id)
             if movement_key in costs:
                 cached_data = costs[movement_key]
                 return (cached_data['distance'], cached_data['movement'])
-        distance = cartesian_distance(point1, point2)
-        movement = axis_movement(point1, point2)
-        return (distance, movement)
+
+        return self._calculate_distance_and_movement(key1_id, key2_id)
 
     def _print(self, *args, **kwargs):
         if self.debug:
