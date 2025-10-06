@@ -68,16 +68,9 @@ def enums_to_fingername(finger, hand):
 
 
 class Key:
-    _id_counter = 0
-
-    @classmethod
-    def get_next_id(cls):
-        current_id = cls._id_counter
-        cls._id_counter += 1  # Increment by 1, not by the current id
-        return current_id
+    _id = 0
 
     def __init__(self):
-        self.id = Key.get_next_id()
         self.color: str = "#cccccc"
         self.labels: List[Optional[str]] = [None] * 12
         self.textColor: List[Optional[str]] = [None] * 12
@@ -109,6 +102,10 @@ class Key:
         self.sm: str = ""  # switch mount
         self.sb: str = ""  # switch brand
         self.st: str = ""  # switch type
+
+    def id(self):
+        self.id = Key._id
+        Key._id += 1
 
     def get_height(self):
         return self.height
@@ -251,6 +248,7 @@ class Serial:
             Serial.deserialize_error("expected an array of objects")
 
         # Start with a default key template
+        # Key._id = 0
         current = Key()
         kbd = Keyboard()
         align = 4
@@ -269,6 +267,8 @@ class Serial:
                         key_obj = Key()
                         for attr, value in new_key_state.items():
                             setattr(key_obj, attr, value)
+
+                        key_obj.id()
 
                         # Apply key-specific calculations and properties
                         key_obj.width2 = key_obj.width2 or current.width
