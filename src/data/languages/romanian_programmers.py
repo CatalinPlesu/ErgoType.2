@@ -13,10 +13,9 @@ ROMANIAN_PROGRAMMERS = {
         "s": ("ș", "Ș"),
         "t": ("ț", "Ț"),
         "q": ("â", "Â")
-    },
-    "altgr_recovery": {}
+    }
 }
 
-# Standalone function to get this layout
+
 def get_layout():
     return ROMANIAN_PROGRAMMERS

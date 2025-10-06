@@ -20,9 +20,8 @@ ROMANIAN_STANDARD = {
         "\\": ("\\", "|"),
         "'": ("'", "\"")
     },
-    "altgr_recovery": {}
 }
 
-# Standalone function to get this layout
+
 def get_layout():
     return ROMANIAN_STANDARD
