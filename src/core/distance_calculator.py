@@ -71,7 +71,7 @@ class DistanctCalculator:
         self._print("cost's for this keyboard have been cached")
 
     def load_cost(self):
-        if self.cost is None:
+        if self.cost is None or self.debug:
             self._print("Calculating costs")
             self.calculate_cost()
             return
