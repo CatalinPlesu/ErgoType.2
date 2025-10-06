@@ -72,32 +72,31 @@ class Layout:
 
     def apply_language_layout(self, remap):
         self._print(f"Applying: '{remap['name']}' language layout")
+
+        def _find_char_keys_for_remap(remap_dict):
+            """Helper function to find character keys that match the remap dictionary."""
+            keys_to_update = []
+            for before, after in remap_dict.items():
+                char_keys = self.mapper.filter_data(
+                    lambda key_id, layer_id, value: value.key_type == KeyType.CHAR and value.value[0] == before)
+                for char_key in char_keys:
+                    keys_to_update.append((char_key[0], before, after))
+            return keys_to_update
+
+        def _apply_remap_updates(keys_to_update, target_layer):
+            """Helper function to apply remap updates to the specified layer."""
+            for key_id, before, after in keys_to_update:
+                if target_layer == ALTGR_LAYER:
+                    key, _ = key_id
+                    key_id = (key, target_layer)
+                self.mapper[key_id] = Key(KeyType.CHAR, after)
+
         base = remap['base_remaps']
         altgr = remap['altgr_remaps']
-        base_keys_to_update = []
-        altgr_keys_to_update = []
-        for before, after in base.items():
-            char_keys = self.mapper.filter_data(
-                lambda key_id, layer_id, value: value.key_type == KeyType.CHAR and value.value[0] == before)
-            for char_key in char_keys:
-                base_keys_to_update.append((char_key[0], before, after))
-        for before, after in altgr.items():
-            char_keys = self.mapper.filter_data(
-                lambda key_id, layer_id, value: value.key_type == KeyType.CHAR and value.value[0] == before)
-            for char_key in char_keys:
-                altgr_keys_to_update.append((char_key[0], before, after))
-
-        print(base_keys_to_update)
-        print(altgr_keys_to_update)
-
-        for key_id, before, after in base_keys_to_update:
-            self.mapper[key_id] = Key(
-                KeyType.CHAR, after)
-        for key_id, before, after in altgr_keys_to_update:
-            key, _ = key_id
-            key_id = (key, ALTGR_LAYER)
-            self.mapper[key_id] = Key(
-                KeyType.CHAR, after)
+        base_keys_to_update = _find_char_keys_for_remap(base)
+        altgr_keys_to_update = _find_char_keys_for_remap(altgr)
+        _apply_remap_updates(base_keys_to_update, BASE_LAYER)
+        _apply_remap_updates(altgr_keys_to_update, ALTGR_LAYER)
 
     def _print(self, *args, **kwargs):
         if self.debug:
