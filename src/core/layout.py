@@ -50,7 +50,25 @@ class Layout:
         self.remap(LAYOUT_DATA["qwerty"], symbols)
 
     def remap(self, symbols_before, symbols_after):
-        pass
+        if len(symbols_before) != len(symbols_after):
+            print("Can't remap layou's with differnet length")
+            return
+        print("############33 here")
+        remap = zip(symbols_before, symbols_after)
+        # Stage 1: Collect all keys that need to be remapped
+        keys_to_update = []
+        for before, after in remap:
+            if before == after:
+                continue
+            char_keys = self.mapper.filter_data(
+                lambda key_id, layer_id, value: value.key_type == KeyType.CHAR and value.value[0] == before)
+            for char_key in char_keys:
+                keys_to_update.append((char_key[0], before, after))
+
+        # Stage 2: Apply all remappings
+        for key_id, before, after in keys_to_update:
+            self.mapper[key_id] = Key(
+                KeyType.CHAR, (after, after.upper()))
 
     def apply_language_layout(self, remap):
         pass
@@ -239,3 +257,5 @@ if __name__ == "__main__":
     print(f"\n" + "="*80)
     print("TESTING COMPLETE")
     print("="*80)
+    layout.querty_based_remap(LAYOUT_DATA["asset"])
+    layout._print_layout()
