@@ -155,3 +155,70 @@ class DistanceCalculator:
     def _print(self, *args, **kwargs):
         if self.debug:
             print(*args, **kwargs)
+
+
+if __name__ == "__main__":
+    import os
+    from src.core.keyboard import Serial
+    from src.config.file_paths import DISTANCE_CACHE
+
+    def load_keyboard(keyboard_file):
+        print(f"""load_keyboard called with: keyboard_file={keyboard_file}""")
+        with open(keyboard_file, 'r') as f:
+            print(f"""Read file: '{keyboard_file}'""")
+            keyboard = Serial.parse(f.read())
+        print(f"""load_keyboard returning: keyboard_file={
+              keyboard_file}, keyboard type={type(keyboard)}""")
+        return keyboard_file, keyboard
+
+    def load_distance(keyboard_file, keyboard, debug=True):
+        print(f"""load_distance called with: keyboard_file={
+              keyboard_file}, keyboard={keyboard}, debug={debug}""")
+        distance = DistanceCalculator(keyboard_file, keyboard, debug=debug)
+        print(f"""load_distance returning: distance={distance}""")
+        return distance
+
+    # Test all keyboard files
+    keyboard_files = [
+        'src/data/keyboards/ansi_60_percent.json',
+        'src/data/keyboards/ansi_60_percent_thinkpad.json',
+        'src/data/keyboards/dactyl_manuform_6x6_4.json',
+        'src/data/keyboards/ferris_sweep.json'
+    ]
+
+    print(f"""Testing keyboard files: {keyboard_files}""")
+
+    for keyboard_file in keyboard_files:
+        print(f"""Processing keyboard_file: {keyboard_file}""")
+        if os.path.exists(keyboard_file):
+            print(f"""\n--- Testing {keyboard_file} ---""")
+            keyboard_file_loaded, keyboard = load_keyboard(keyboard_file)
+            distance = load_distance(keyboard_file_loaded, keyboard)
+
+            # Test with first key only to avoid cross-finger issues
+            print(f"""Keyboard has {len(keyboard.keys)} keys""")
+            if len(keyboard.keys) >= 1:
+                # Test distance from key to itself (should be 0)
+                print(f"""Testing distance for key 0 to itself""")
+                dist, movement = distance.get_distance_and_movement(0, 0)
+                print(f"""Distance for key 0 to itself: {dist}""")
+
+                # Test with actual finger keys if available
+                from src.core.keyboard import FingerName
+                fingers = [member for member in FingerName]
+                print(f"""Testing finger keys for fingers: {fingers}""")
+                for finger in fingers:
+                    finger_keys = keyboard.get_finger_keys(finger)
+                    print(f"""Finger {finger} has {len(finger_keys)} keys""")
+                    if len(finger_keys) >= 2:
+                        key1_id = finger_keys[0].id
+                        key2_id = finger_keys[1].id
+                        print(f"""Testing distance between {
+                              finger} keys {key1_id} and {key2_id}""")
+                        dist, movement = distance.get_distance_and_movement(
+                            key1_id, key2_id)
+                        print(f"""Distance between {finger} keys {
+                              key1_id} and {key2_id}: {dist}""")
+                        break  # Just test first finger with multiple keys
+        else:
+            print(f"""File not found: {keyboard_file}""")
