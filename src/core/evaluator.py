@@ -1,6 +1,6 @@
 import sys
 from src.core.keyboard import Key, Keyboard, KeyboardMetadata, Serial
-from src.core.distance_calculator import DistanctCalculator
+from src.core.distance_calculator import DistanceCalculator
 
 
 class Evaluator:
@@ -17,7 +17,7 @@ class Evaluator:
 
     def load_distance(self):
         self._print("Calculating distance")
-        self.distance = DistanctCalculator(
+        self.distance = DistanceCalculator(
             self.keyboard_file, self.keyboard, debug=self.debug)
         return self
 
