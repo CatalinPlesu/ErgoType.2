@@ -1,12 +1,12 @@
 import sys
 from src.core.keyboard import Key, Keyboard, KeyboardMetadata, Serial
 from src.core.distance_calculator import DistanceCalculator
+from src.core.layout import Layout
 
 
 class Evaluator:
     def __init__(self, debug=False):
         self.debug = debug
-        pass
 
     def load_keyoard(self, keyboard_file='src/data/keyboards/ansi_60_percent.json'):
         with open(keyboard_file, 'r') as f:
@@ -22,7 +22,7 @@ class Evaluator:
         return self
 
     def load_layout(self):
-        return self
+        self.layout = Layout(self.keyboard, debug=self.debug)
 
     def load_mapper(self):
         return self
@@ -43,4 +43,4 @@ class Evaluator:
 # layout = Layout(keyboard, langauage, maping)
 # test
 if __name__ == "__main__":
-    ev = Evaluator(debug=True).load_keyoard().load_distance()
+    ev = Evaluator(debug=True).load_keyoard().load_distance().load_layout()
