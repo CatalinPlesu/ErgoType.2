@@ -1,4 +1,5 @@
 import sys
+import pickle
 from src.core.keyboard import Key, Keyboard, KeyboardMetadata, Serial
 from src.core.distance_calculator import DistanceCalculator
 from src.core.layout import Layout
@@ -33,6 +34,13 @@ class Evaluator:
         LayoutVisualization(self.keyboard, self.layout).inspect()
         return self
 
+    def load_dataset(self, dataset_file='src/data/text/processed/frequency_analysis.pkl', dataset_name='simple_wikipedia'):
+        with open(dataset_file, 'rb') as f:
+            self._print("Dataset loaded successfully")
+            self.dataset = pickle.load(f)
+            self.dataset_name = dataset_name
+        return self
+
     def _print(self, *args, **kwargs):
         if self.debug:
             print(*args, **kwargs)
@@ -44,3 +52,4 @@ class Evaluator:
 # test
 if __name__ == "__main__":
     ev = Evaluator(debug=True).load_keyoard().load_distance().load_layout()
+    ev.load_dataset()
