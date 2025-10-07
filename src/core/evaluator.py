@@ -2,6 +2,7 @@ import sys
 from src.core.keyboard import Key, Keyboard, KeyboardMetadata, Serial
 from src.core.distance_calculator import DistanceCalculator
 from src.core.layout import Layout
+from src.helpers.layouts.visualization import LayoutVisualization
 
 
 class Evaluator:
@@ -23,15 +24,14 @@ class Evaluator:
 
     def load_layout(self):
         self.layout = Layout(self.keyboard, debug=self.debug)
-
-    def load_mapper(self):
         return self
 
     def get_fitness(self):
-        pass
+        return self
 
     def render_layout(self):
-        pass
+        LayoutVisualization(self.keyboard, self.layout).inspect()
+        return self
 
     def _print(self, *args, **kwargs):
         if self.debug:
