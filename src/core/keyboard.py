@@ -136,6 +136,11 @@ class Key:
         if len(labels) < 2:
             self.labels[6] = None
 
+    def clear_labels(self):
+        self.labels[0] = None
+        self.labels[4] = None
+        self.labels[6] = None
+
     def __repr__(self):
         base_repr = f"""Key(label={self.labels[0]}, shifted={
             self.labels[6]}, x={self.x}, y={self.y}, z={self.z}"""
