@@ -1,16 +1,16 @@
-import sys
-import pickle
-from src.core.keyboard import Key, Keyboard, KeyboardMetadata, Serial
 from src.core.distance_calculator import DistanceCalculator
+from src.core.keyboard import Serial
 from src.core.layout import Layout
 from src.helpers.layouts.visualization import LayoutVisualization
+import pickle
 
 
 class Evaluator:
     def __init__(self, debug=False):
         self.debug = debug
 
-    def load_keyoard(self, keyboard_file='src/data/keyboards/ansi_60_percent.json'):
+    def load_keyoard(self,
+                     keyboard_file='src/data/keyboards/ansi_60_percent.json'):
         with open(keyboard_file, 'r') as f:
             self._print(f"Read file: '{keyboard_file}'")
             self.keyboard_file = keyboard_file
@@ -34,7 +34,9 @@ class Evaluator:
         LayoutVisualization(self.keyboard, self.layout).inspect()
         return self
 
-    def load_dataset(self, dataset_file='src/data/text/processed/frequency_analysis.pkl', dataset_name='simple_wikipedia'):
+    def load_dataset(self,
+                     dataset_file='src/data/text/processed/frequency_analysis.pkl',
+                     dataset_name='simple_wikipedia'):
         with open(dataset_file, 'rb') as f:
             self._print("Dataset loaded successfully")
             self.dataset = pickle.load(f)
@@ -46,10 +48,6 @@ class Evaluator:
             print(*args, **kwargs)
 
 
-# keyboard = Keyboard(keyboard_file)
-# phisical_key_cost = RawDistanceCalculator(keyboard_file)
-# layout = Layout(keyboard, langauage, maping)
-# test
 if __name__ == "__main__":
     ev = Evaluator(debug=True).load_keyoard().load_distance().load_layout()
     ev.load_dataset()
