@@ -63,15 +63,15 @@ class Typer:
         score = 0
         unshifted = self.layout.get_unshifted_symbols()
         shifted = self.layout.get_shifted_symbols()
-        print(f"unshifted {unshifted}")
-        print(f"shifted {shifted}")
+        # print(f"unshifted {unshifted}")
+        # print(f"shifted {shifted}")
 
         shift_keys = self.layout.mapper.filter_data(
             lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
 
         shift_key = None
         shift_key_id = None
-        print(f"shift keys {shift_keys}")
+        # print(f"shift keys {shift_keys}")
 
         for key, value in self.dataset[Config.dataset.field_character_frequencies].items():
             # print(key, value)
@@ -79,7 +79,7 @@ class Typer:
             total_percentage += relative
             # data = self.layout.mapper.filter_data(
             #     lambda key_id, layer_id, value:  key in value)
-            print(f"seraching for charater '{key}'")
+            # print(f"seraching for charater '{key}'")
             key_id, layer, qmk_key = self.layout.find_key_for_char(key)
             # print(key_id, layer)
             if key in shifted:
@@ -88,10 +88,10 @@ class Typer:
                     if self.keyboard.keys[key_id].hand != self.keyboard.keys[shift_id[0]].hand:
                         shift_key = shift
                         break
-            print(f""" key {key} - key_id {key_id} """)
+            # print(f""" key {key} - key_id {key_id} """)
             if shift_key is not None:
                 shift_key_id = shift_key[0][0]
-                print(f""" shift - key_id {shift_key_id} """)
+                # print(f""" shift - key_id {shift_key_id} """)
 
                 fingername = enums_to_fingername(
                     self.keyboard.keys[shift_key_id].finger, self.keyboard.keys[shift_key_id].hand)
