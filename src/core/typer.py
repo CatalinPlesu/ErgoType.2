@@ -8,9 +8,21 @@ Extensibility: Can incorporate additional cost factors (e.g., finger effort, alt
 """
 
 
-class Typing:
-    def __init__(self):
+class Typer:
+    def __init__(self, keyboard, layout, dataset, debug=False):
+        self.debug = debug
+        self._print("Typer initiated")
+        self.keyboard = keyboard
+        self.layout = layout
+        self.dataset = dataset
+        self.fitness()
+
+    def fitness(words=True, symbols=True):
         pass
+
+    def _print(self, *args, **kwargs):
+        if self.debug:
+            print(*args, **kwargs)
 
 
 if __name__ == "__main__":

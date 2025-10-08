@@ -2,6 +2,7 @@ from src.core.distance_calculator import DistanceCalculator
 from src.core.keyboard import Serial
 from src.core.layout import Layout
 from src.helpers.layouts.visualization import LayoutVisualization
+from src.core.typer import Typer
 import pickle
 
 
@@ -39,8 +40,14 @@ class Evaluator:
                      dataset_name='simple_wikipedia'):
         with open(dataset_file, 'rb') as f:
             self._print("Dataset loaded successfully")
-            self.dataset = pickle.load(f)
+            self.full_dataset = pickle.load(f)
             self.dataset_name = dataset_name
+            self.dataset = self.full_dataset[self.dataset_name]
+        return self
+
+    def load_typer(self):
+        self.typer = Typer(self.keyboard, self.layout,
+                           self.dataset, debug=self.debug)
         return self
 
     def _print(self, *args, **kwargs):
@@ -51,3 +58,4 @@ class Evaluator:
 if __name__ == "__main__":
     ev = Evaluator(debug=True).load_keyoard().load_distance().load_layout()
     ev.load_dataset()
+    ev.load_typer()
