@@ -5,13 +5,10 @@ import string
 import re
 from collections import Counter, defaultdict
 from typing import Dict, List, Any, Optional
-from src.config.config import (
-    TOP_N_WORDS, MIN_WORD_LENGTH, TEXT_RAW_DIR, TEXT_PROCESSED_DIR,
-    DATASET_CONFIGS, ALLOWED_DIGITS, ALLOWED_SYMBOLS
-)
+from src.config.config import Config
 
 
-def is_valid_word(word: str, allowed_letters: str, min_length: int = MIN_WORD_LENGTH) -> bool:
+def is_valid_word(word: str, allowed_letters: str, min_length: int = Config.dataset.min_word_length) -> bool:
     """Check if a word is valid (contains only letters and meets minimum length)"""
     if len(word) < min_length:
         return False
@@ -43,30 +40,30 @@ def extract_words_from_text(text: str, allowed_letters: str) -> List[str]:
 
 def calculate_remaining_character_pool_scaled(
     results: Dict[str, Any],
-    top_n_words: int = TOP_N_WORDS
+    top_n_words: int = Config.dataset.select_top_n_words
 ) -> Dict[str, Any]:
     """Calculate remaining character pool with proper scaling based on relative frequencies"""
     updated_results = {}
 
     for dataset_name, dataset_result in results.items():
         # Get the original character frequencies (relative and absolute)
-        original_char_frequencies = dataset_result['character_frequencies']
+        original_char_frequencies = dataset_result[Config.dataset.field_character_frequencies]
         original_char_counter = Counter()
         for char, freq_data in original_char_frequencies.items():
-            original_char_counter[char] = freq_data['absolute']
+            original_char_counter[char] = freq_data[Config.dataset.field_character_frequencies_absolute]
 
         # Get total original characters
-        total_original_chars = dataset_result['stats']['total_characters']
+        total_original_chars = dataset_result[Config.dataset.field_stats][Config.dataset.field_stats_total_characters]
 
         # Get top N words
-        top_words = dataset_result['word_frequencies'][:top_n_words]
+        top_words = dataset_result[Config.dataset.field_word_frequencies][:top_n_words]
 
         # Calculate characters used in typing top N words
         characters_used = Counter()
 
         for word_data in top_words:
-            word = word_data['word']
-            word_count = word_data['absolute']
+            word = word_data[Config.dataset.field_word_frequencies_word]
+            word_count = word_data[Config.dataset.field_word_frequencies_absolute]
 
             for char in word:
                 # Each character typed as many times as the word appears
@@ -88,9 +85,8 @@ def calculate_remaining_character_pool_scaled(
         for char, count in remaining_pool.items():
             relative_freq = count / total_remaining_chars if total_remaining_chars > 0 else 0
             remaining_char_frequencies[char] = {
-                'absolute': count,
-                'relative': relative_freq,
-                'percentage_of_remaining': relative_freq * 100
+                Config.dataset.field_character_frequencies_absolute: count,
+                Config.dataset.field_character_frequencies_relative: relative_freq,
             }
 
         # Also calculate what percentage of original each remaining character represents
@@ -103,16 +99,9 @@ def calculate_remaining_character_pool_scaled(
 
         # Create updated result with remaining pool
         updated_dataset_result = dataset_result.copy()
-        updated_dataset_result[f'{top_n_words}_remaining_characters_pool'] = {
-            'remaining_pool': dict(remaining_pool),
-            'remaining_frequencies': remaining_char_frequencies,
-            'total_remaining_characters': total_remaining_chars,
-            'characters_used_in_top_words': dict(characters_used),
-            'original_total_characters': total_original_chars,
-            'characters_subtracted': sum(characters_used.values()),
-            'percentage_of_original_remaining': original_percentage_remaining,
-            'top_words_used': [w['word'] for w in top_words],
-            'top_words_absolute_counts': [w['absolute'] for w in top_words],
+        updated_dataset_result[Config.dataset.field_remaining_pool] = {
+            Config.dataset.field_remaining_pool_remaining_frequencies: remaining_char_frequencies,
+            Config.dataset.field_remaining_pool_percentage_of_original_remaining: original_percentage_remaining,
         }
 
         updated_results[dataset_name] = updated_dataset_result
@@ -121,9 +110,9 @@ def calculate_remaining_character_pool_scaled(
 
 
 def process_text_datasets(
-    root_dir: str = TEXT_RAW_DIR,
-    output_dir: str = TEXT_PROCESSED_DIR,
-    top_n_words: int = TOP_N_WORDS
+    root_dir: str = Config.processor.raw_dir,
+    output_dir: str = Config.processor.processed_dir,
+    top_n_words: int = Config.dataset.select_top_n_words
 ) -> Dict[str, Any]:
     """Main processing function - analyzes character and word frequencies in datasets."""
 
@@ -143,17 +132,14 @@ def process_text_datasets(
     results = {}
     for dataset_name in datasets:
         # Define character sets based on dataset
-        allowed_letters = get_allowed_letters_for_dataset(dataset_name)
-        allowed_digits = ALLOWED_DIGITS
-        allowed_symbols = ALLOWED_SYMBOLS
+        allowed_letters = Config.dataset.get_allowed_letters(dataset_name)
+        allowed_digits = Config.dataset.allowed_digits
+        allowed_symbols = Config.dataset.allowed_symbols
 
         # Initialize counters
         char_counter = Counter()
-        category_counters = {
-            'letters': Counter(),
-            'digits': Counter(),
-            'symbols': Counter()
-        }
+        category_counters = {category: Counter()
+                             for category in Config.dataset.character_categories}
         word_counter = Counter()
 
         total_chars = 0
@@ -201,9 +187,8 @@ def process_text_datasets(
         for char, count in char_counter.items():
             relative_freq = count / total_chars if total_chars > 0 else 0
             char_frequencies[char] = {
-                'absolute': count,
-                'relative': relative_freq,
-                'percentage': relative_freq * 100
+                Config.dataset.field_character_frequencies_absolute: count,
+                Config.dataset.field_character_frequencies_relative: relative_freq,
             }
 
         # Calculate category-specific frequencies (unchanged)
@@ -214,47 +199,50 @@ def process_text_datasets(
             for char, count in counter.items():
                 relative_freq = count / category_total if category_total > 0 else 0
                 category_frequencies[category][char] = {
-                    'absolute': count,
-                    'relative': relative_freq,
-                    'category_relative': relative_freq
+                    Config.dataset.field_category_frequencies_absolute: count,
+                    Config.dataset.field_category_frequencies_relative: relative_freq,
                 }
 
-        # Convert word counter to sorted list by frequency
+        # Convert word counter to sorted list by frequency - keep only top N words
         sorted_words = []
-        for word, count in word_counter.most_common():
+        # Get only the top N most common words
+        top_words = word_counter.most_common(top_n_words)
+
+        for word, count in top_words:
             relative_freq = count / total_words if total_words > 0 else 0
             sorted_words.append({
-                'word': word,
-                'absolute': count,
-                'relative': relative_freq,
-                'percentage': relative_freq * 100
+                Config.dataset.field_word_frequencies_word: word,
+                Config.dataset.field_word_frequencies_absolute: count,
+                Config.dataset.field_word_frequencies_relative: relative_freq,
             })
 
         # Prepare result for this dataset
         result = {
-            'config': {
-                'allowed_letters': allowed_letters,
-                'allowed_digits': allowed_digits,
-                'allowed_symbols': allowed_symbols,
-                'min_word_length': MIN_WORD_LENGTH
+            Config.dataset.field_config: {
+                Config.dataset.field_config_allowed_letters: allowed_letters,
+                Config.dataset.field_config_allowed_digits: allowed_digits,
+                Config.dataset.field_config_allowed_symbols: allowed_symbols,
+                Config.dataset.field_config_min_word_length: Config.dataset.min_word_length
             },
-            'stats': {
-                'total_characters': total_chars,
-                'unique_characters': len(char_counter),
-                'total_words': total_words,
-                'unique_words': len(word_counter)
+            Config.dataset.field_stats: {
+                Config.dataset.field_stats_total_characters: total_chars,
+                Config.dataset.field_stats_unique_characters: len(char_counter),
+                Config.dataset.field_stats_total_words: total_words,
+                # This will still be the total unique words
+                Config.dataset.field_stats_unique_words: len(word_counter),
             },
-            'character_frequencies': char_frequencies,
-            'category_frequencies': category_frequencies,
-            'word_frequencies': sorted_words
+            Config.dataset.field_character_frequencies: char_frequencies,
+            Config.dataset.field_category_frequencies: category_frequencies,
+            Config.dataset.field_word_frequencies: sorted_words
         }
 
         results[dataset_name] = result
         print(f"""Processed {dataset_name}: {total_chars} chars, {
-              len(word_counter)} unique words""")
+              len(word_counter)} unique words (keeping top {len(sorted_words)})""")
 
         # Show sample of top words for debugging
-        print(f"  Top 10 words: {[w['word'] for w in sorted_words[:10]]}")
+        print(f"""  Top {min(10, len(sorted_words))} words: {
+              [w[Config.dataset.field_word_frequencies_word] for w in sorted_words[:10]]}""")
 
     # Calculate remaining character pool after typing top N words
     print(f"""\nCalculating remaining character pool for top {
@@ -263,26 +251,20 @@ def process_text_datasets(
         results, top_n_words)
 
     # Save single combined pickle file
-    pickle_file = os.path.join(output_dir, 'frequency_analysis.pkl')
+    pickle_file = os.path.join(output_dir, Config.dataset.main_pickle_filename)
     with open(pickle_file, 'wb') as f:
         pickle.dump(results_with_remaining_pool, f)
 
     # Save individual JSON files for each dataset
     for dataset_name, dataset_data in results_with_remaining_pool.items():
         dataset_json_file = os.path.join(
-            output_dir, f'{dataset_name}_analysis.json')
+            output_dir, f'{dataset_name}{Config.dataset.dataset_json_pattern}')
         with open(dataset_json_file, 'w', encoding='utf-8') as f:
             json.dump({dataset_name: dataset_data},
                       f, ensure_ascii=False, indent=2)
 
-    # Also save combined JSON file
-    json_file = os.path.join(output_dir, 'frequency_analysis.json')
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(results_with_remaining_pool, f, ensure_ascii=False, indent=2)
-
     print(f"\nProcessing complete. Results saved to:")
     print(f"  Single Pickle: {pickle_file}")
-    print(f"  Combined JSON: {json_file}")
     print(f"  Individual JSON files saved for each dataset")
 
     return results_with_remaining_pool
@@ -294,7 +276,7 @@ def analyze_word_patterns(results: Dict[str, Any], dataset_name: str) -> None:
         print(f"Dataset {dataset_name} not found")
         return
 
-    words = results[dataset_name]['word_frequencies']
+    words = results[dataset_name][Config.dataset.field_word_frequencies]
 
     print(f"\nAnalysis for {dataset_name}:")
     print(f"Total unique words: {len(words)}")
@@ -302,7 +284,8 @@ def analyze_word_patterns(results: Dict[str, Any], dataset_name: str) -> None:
     # Length distribution
     length_dist = Counter()
     for word_data in words:
-        length_dist[len(word_data['word'])] += 1
+        length_dist[len(
+            word_data[Config.dataset.field_word_frequencies_word])] += 1
 
     print("Word length distribution:")
     for length in sorted(length_dist.keys()):
@@ -311,7 +294,7 @@ def analyze_word_patterns(results: Dict[str, Any], dataset_name: str) -> None:
     # Show words with unusual patterns
     suspicious_words = []
     for word_data in words[:50]:  # Check top 50
-        word = word_data['word']
+        word = word_data[Config.dataset.field_word_frequencies_word]
         if any(char.isdigit() for char in word) or len(word) == 1:
             suspicious_words.append(word)
 
@@ -321,11 +304,11 @@ def analyze_word_patterns(results: Dict[str, Any], dataset_name: str) -> None:
         print("No suspicious words in top 50")
 
 
-def load_and_update_pickle(pickle_path: Optional[str] = None, top_n_words: int = TOP_N_WORDS) -> Optional[Dict[str, Any]]:
+def load_and_update_pickle(pickle_path: Optional[str] = None, top_n_words: int = Config.dataset.select_top_n_words) -> Optional[Dict[str, Any]]:
     """Load existing pickle file and update with remaining character pool"""
     if pickle_path is None:
         pickle_path = os.path.join(
-            TEXT_PROCESSED_DIR, 'frequency_analysis.pkl')
+            Config.processor.processed_dir, Config.dataset.main_pickle_filename)
 
     if not os.path.exists(pickle_path):
         print(f"ERROR: Pickle file does not exist: {pickle_path}")
@@ -346,36 +329,20 @@ def load_and_update_pickle(pickle_path: Optional[str] = None, top_n_words: int =
     # Save single updated pickle file
     output_dir = os.path.dirname(pickle_path)
     updated_pickle_file = os.path.join(
-        output_dir, f'frequency_analysis_updated_top_{top_n_words}.pkl')
+        output_dir, Config.dataset.main_pickle_filename)
     with open(updated_pickle_file, 'wb') as f:
         pickle.dump(updated_results, f)
 
     # Save individual updated JSON files
     for dataset_name, dataset_data in updated_results.items():
         dataset_json_file = os.path.join(
-            output_dir, f'{dataset_name}_analysis_updated.json')
+            output_dir, f'{dataset_name}{Config.dataset.dataset_json_pattern}')
         with open(dataset_json_file, 'w', encoding='utf-8') as f:
             json.dump({dataset_name: dataset_data},
                       f, ensure_ascii=False, indent=2)
 
-    # Also save combined updated JSON file
-    updated_json_file = os.path.join(
-        output_dir, f'frequency_analysis_updated_top_{top_n_words}.json')
-    with open(updated_json_file, 'w', encoding='utf-8') as f:
-        json.dump(updated_results, f, ensure_ascii=False, indent=2)
-
     print(f"Updated results saved to:")
     print(f"  Single Pickle: {updated_pickle_file}")
-    print(f"  Combined JSON: {updated_json_file}")
     print(f"  Individual updated JSON files saved for each dataset")
 
     return updated_results
-
-
-def get_allowed_letters_for_dataset(dataset_name: str) -> str:
-    """Get allowed letters for a specific dataset"""
-    dataset_lower = dataset_name.lower()
-    if dataset_lower in DATASET_CONFIGS:
-        return DATASET_CONFIGS[dataset_lower]['allowed_letters']
-    else:
-        return DATASET_CONFIGS['default']['allowed_letters']
