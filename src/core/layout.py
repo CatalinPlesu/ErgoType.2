@@ -34,7 +34,7 @@ class Layout:
             else:
                 k = kl[0]
                 if k in SPECIAL_CHARS:
-                    v = ({SPECIAL_CHARS[k]}, k)
+                    v = (SPECIAL_CHARS[k], k)
                     self.mapper[key.id, BASE_LAYER] = Key(
                         KeyType.SPECIAL_CHAR, v)
                 elif k in CONTROLS:
@@ -51,9 +51,8 @@ class Layout:
 
     def remap(self, symbols_before, symbols_after):
         if len(symbols_before) != len(symbols_after):
-            print("Can't remap layou's with differnet length")
+            self._print("Can't remap layou's with differnet length")
             return
-        print("############33 here")
         remap = zip(symbols_before, symbols_after)
         # Stage 1: Collect all keys that need to be remapped
         keys_to_update = []
@@ -111,6 +110,24 @@ class Layout:
                     special_set, display_val = key_obj.value
                     if target_char in special_set:
                         return key_id, layer_id, key_obj
+
+    def get_unshifted_symbols(self):
+        unshifted_symbols = []
+        for (key_id, layer_id), key_obj in self.mapper.data.items():
+            if key_obj.key_type == KeyType.CHAR:
+                unshifted_symbols.append(key_obj.value[0])
+            elif key_obj.key_type == KeyType.SPECIAL_CHAR:
+                char, _name = key_obj.value
+                unshifted_symbols.append(char)
+        return unshifted_symbols
+
+    def get_shifted_symbols(self):
+        shifted_symbols = []
+        for (key_id, layer_id), key_obj in self.mapper.data.items():
+            if key_obj.key_type == KeyType.CHAR:
+                shifted_symbols.append(key_obj.value[1])
+
+        return shifted_symbols
 
     def _print(self, *args, **kwargs):
         if self.debug:
