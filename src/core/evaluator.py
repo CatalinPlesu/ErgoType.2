@@ -46,7 +46,7 @@ class Evaluator:
         return self
 
     def load_typer(self):
-        self.typer = Typer(self.keyboard, self.layout,
+        self.typer = Typer(self.keyboard, self.distance, self.layout,
                            self.dataset, debug=self.debug)
         return self
 
