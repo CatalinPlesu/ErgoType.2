@@ -1,27 +1,3 @@
-# Configuration for text processing module
-# Processing parameters
-TOP_N_WORDS = 1000
-MIN_WORD_LENGTH = 1
-
-# Directory paths
-TEXT_RAW_DIR = '../src/data/text/raw'
-TEXT_PROCESSED_DIR = '../src/data/text/processed'
-
-# Dataset-specific configurations
-DATASET_CONFIGS = {
-    'cartigratis': {
-        'allowed_letters': 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZăâîșțĂÂÎȘȚ'
-    },
-    'default': {
-        'allowed_letters': 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    }
-}
-
-# Character sets
-ALLOWED_DIGITS = '0123456789'
-ALLOWED_SYMBOLS = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ \t\n'
-
-
 class DatasetConfig:
     # ROOT LEVEL FIELDS (top-level keys in JSON)
     field_config = 'config'
@@ -60,7 +36,7 @@ class DatasetConfig:
     field_remaining_pool_percentage_of_original_remaining = 'percentage_of_original_remaining'
 
     # Processing parameters
-    select_top_n_words = 1000
+    select_top_n_words = 3000
     min_word_length = 1
 
     # Character sets
