@@ -54,6 +54,32 @@ class Layout:
             self._print("Can't remap layou's with differnet length")
             return
         remap = zip(symbols_before, symbols_after)
+
+        # Create mapping for common punctuation shifts
+        punctuation_shift_map = {
+            ';': ':',  # semicolon -> colon
+            ',': '<',  # comma -> less than
+            '.': '>',  # period -> greater than
+            '/': '?',  # slash -> question mark
+            "'": '"',  # apostrophe -> quote
+            '[': '{',  # bracket -> brace
+            ']': '}',  # bracket -> brace
+            '\\': '|',  # backslash -> pipe
+            '-': '_',  # minus -> underscore
+            '=': '+',  # equals -> plus
+            '`': '~',  # backtick -> tilde
+            '1': '!',  # number -> symbol
+            '2': '@',
+            '3': '#',
+            '4': '$',
+            '5': '%',
+            '6': '^',
+            '7': '&',
+            '8': '*',
+            '9': '(',
+            '0': ')',
+        }
+
         # Stage 1: Collect all keys that need to be remapped
         keys_to_update = []
         for before, after in remap:
@@ -66,8 +92,24 @@ class Layout:
 
         # Stage 2: Apply all remappings
         for key_id, before, after in keys_to_update:
-            self.mapper[key_id] = Key(
-                KeyType.CHAR, (after, after.upper()))
+            # Get the original key to determine how to map the shifted version
+            original_key_obj = self.mapper[key_id]
+            if original_key_obj.key_type == KeyType.CHAR and isinstance(original_key_obj.value, tuple):
+                original_lower, original_upper = original_key_obj.value
+
+                # Determine new shifted character
+                if after in punctuation_shift_map:
+                    new_upper = punctuation_shift_map[after]
+                elif after.islower():
+                    new_upper = after.upper()
+                elif after.isupper():
+                    new_upper = after.lower()
+                else:
+                    new_upper = after.upper()  # Default fallback
+            else:
+                new_upper = after.upper()
+
+            self.mapper[key_id] = Key(KeyType.CHAR, (after, new_upper))
 
     def apply_language_layout(self, remap):
         self._print(f"Applying: '{remap['name']}' language layout")
