@@ -1,8 +1,9 @@
 from src.core.distance_calculator import DistanceCalculator
 from src.core.keyboard import Serial
 from src.core.layout import Layout
-from src.helpers.layouts.visualization import LayoutVisualization
 from src.core.typer import Typer
+from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
+from src.helpers.layouts.visualization import LayoutVisualization
 import pickle
 
 
@@ -57,5 +58,7 @@ class Evaluator:
 
 if __name__ == "__main__":
     ev = Evaluator(debug=True).load_keyoard().load_distance().load_layout()
-    ev.load_dataset()
+    # ev.layout.querty_based_remap(LAYOUT_DATA["asset"])
+    # ev.layout._print_layout()
+    ev.load_dataset(dataset_name='newsgroup')
     ev.load_typer()
