@@ -98,6 +98,20 @@ class Layout:
         _apply_remap_updates(base_keys_to_update, BASE_LAYER)
         _apply_remap_updates(altgr_keys_to_update, ALTGR_LAYER)
 
+    def find_key_for_char(self, target_char):
+        """Find the key_id and layer_id for a given character"""
+        for (key_id, layer_id), key_obj in self.mapper.data.items():
+            if key_obj.key_type == KeyType.CHAR:
+                if isinstance(key_obj.value, tuple):
+                    lower_val, upper_val = key_obj.value
+                    if lower_val == target_char or upper_val == target_char:
+                        return key_id, layer_id, key_obj
+            elif key_obj.key_type == KeyType.SPECIAL_CHAR:
+                if isinstance(key_obj.value, tuple):
+                    special_set, display_val = key_obj.value
+                    if target_char in special_set:
+                        return key_id, layer_id, key_obj
+
     def _print(self, *args, **kwargs):
         if self.debug:
             print(*args, **kwargs)
