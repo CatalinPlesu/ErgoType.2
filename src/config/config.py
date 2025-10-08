@@ -93,6 +93,34 @@ class ProcessorConfig:
     processed_dir = '../src/data/text/processed'
 
 
+class FitnessConfig:
+    # distance based calculation config
+    # use_words simulate typing select_top_n_words, it will type at once biggest n-gram it can
+    use_words = True
+    # use_symbols simulate pressing the rest of symbols not typed in a word, alternatively, only symbols when disabling words
+    use_symbols = True
+    # fluid_typing - personal assumption that is easier to tpye from outside keyboard inside if it is a n-gram
+    # a -> f | j <- ;
+    fluid_typing = False
+
+    # wether to use finger_strength configs.
+    # effort is simply added
+    use_finger_effort = False
+    # penalities are added with scaling depending distance related to 1
+    use_x_penality = False
+    use_y_penality = False
+    use_z_penality = False
+
+    distance_weight = 0.3
+    # prefere tpyhing longre bygrams at once as oposed to shorter ones.
+    n_gram_weight = 0.2
+    # prefre typing on the home row
+    homerow_weight = 0.3
+    hand_distribution = 0.1
+    finger_distribution = 0.1
+
+
 class Config:
     dataset = DatasetConfig()
     processor = ProcessorConfig()
+    fitness = FitnessConfig()
