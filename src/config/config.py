@@ -114,6 +114,8 @@ class FitnessConfig:
     distance_weight = 0.3
     # prefere tpyhing longre bygrams at once as oposed to shorter ones.
     n_gram_weight = 0.2
+    # give higher score to higher ngrams ngarm count * ngarm rank * bias
+    n_gram_multiplier = 1.1
     # prefre typing on the home row
     homerow_weight = 0.3
     hand_distribution = 0.1

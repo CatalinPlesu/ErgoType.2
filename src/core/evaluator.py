@@ -59,6 +59,7 @@ class Evaluator:
 if __name__ == "__main__":
     ev = Evaluator(debug=True).load_keyoard().load_distance().load_layout()
     # ev.layout.querty_based_remap(LAYOUT_DATA["dvorak"])
+    # ev.layout.querty_based_remap(LAYOUT_DATA["asset"])
     # ev.layout._print_layout()
     ev.load_dataset(dataset_name='newsgroup')
     ev.load_typer()
