@@ -49,7 +49,7 @@ class GeneticAlgorithm:
         print("Evaluator initialized successfully")
 
         self.population_initialization()
-        
+
         # Determine optimal number of processes
         self.num_processes = mp.cpu_count()
         print(f"Using {self.num_processes} processes for parallel evaluation")
@@ -97,11 +97,11 @@ class GeneticAlgorithm:
             evaluator.load_distance()
             evaluator.load_layout()
             evaluator.load_dataset(
-                dataset_file=self.dataset_file, 
+                dataset_file=self.dataset_file,
                 dataset_name=self.dataset_name
             )
             evaluator.load_typer()
-            
+
             # Remap layout to individual's chromosome
             evaluator.layout.querty_based_remap(individual.chromosome)
 
@@ -117,12 +117,15 @@ class GeneticAlgorithm:
 
             # Fitness formula: lower is better
             # Penalize distance, reward high ngram and homing scores
-            fitness = distance * (2.0 - ngram) * (2.0 - homing)
-            print(f"Process {os.getpid()}: Evaluated individual {individual.id}, fitness = {fitness:.6f}")
+            fitness = distance + distance * \
+                (1.0 - ngram) + distance * (1.0 - homing)
+            print(f"""Process {os.getpid()}: Evaluated individual {
+                  individual.id}, fitness = {fitness:.6f}""")
             return individual.id, fitness
-            
+
         except Exception as e:
-            print(f"Error evaluating individual {individual.id} in process {os.getpid()}: {e}")
+            print(f"""Error evaluating individual {
+                  individual.id} in process {os.getpid()}: {e}""")
             return individual.id, float('inf')
 
     def fitness_function_calculation(self):
@@ -137,13 +140,14 @@ class GeneticAlgorithm:
         if not individuals_to_evaluate:
             return
 
-        print(f"Evaluating {len(individuals_to_evaluate)} individuals in parallel using {self.num_processes} processes...")
+        print(f"""Evaluating {len(individuals_to_evaluate)} individuals in parallel using {
+              self.num_processes} processes...""")
 
         # Use ProcessPoolExecutor for process-based parallel execution
         with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
             # Submit all evaluation tasks
             future_to_individual = {
-                executor.submit(self.evaluate_individual_fitness, ind): ind 
+                executor.submit(self.evaluate_individual_fitness, ind): ind
                 for ind in individuals_to_evaluate
             }
 
@@ -158,9 +162,10 @@ class GeneticAlgorithm:
                             ind.fitness = fitness
                             break
                     completed_count += 1
-                    
+
                     if completed_count % 10 == 0:
-                        print(f"  Completed {completed_count}/{len(individuals_to_evaluate)} evaluations")
+                        print(f"""  Completed {
+                              completed_count}/{len(individuals_to_evaluate)} evaluations""")
                 except Exception as e:
                     print(f"Error getting future result: {e}")
                     completed_count += 1
