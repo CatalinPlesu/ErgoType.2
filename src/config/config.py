@@ -1,3 +1,8 @@
+"""
+Configuration file for keyboard layout optimization
+"""
+
+
 class DatasetConfig:
     # ROOT LEVEL FIELDS (top-level keys in JSON)
     field_config = 'config'
@@ -94,35 +99,130 @@ class ProcessorConfig:
 
 
 class FitnessConfig:
-    # distance based calculation config
-    # use_words simulate typing select_top_n_words, it will type at once biggest n-gram it can
+    # Distance-based calculation config
+    # use_words: simulate typing select_top_n_words, it will type at once biggest n-gram it can
     use_words = True
-    # use_symbols simulate pressing the rest of symbols not typed in a word, alternatively, only symbols when disabling words
+    # use_symbols: simulate pressing the rest of symbols not typed in a word, alternatively, only symbols when disabling words
     use_symbols = True
-    # fluid_typing - personal assumption that is easier to tpye from outside keyboard inside if it is a n-gram
-    # a -> f | j <- ;
-    fluid_typing = False
+    # fluid_typing: personal assumption that is easier to type from outside keyboard inside if it is a n-gram
+    # a -> f | j <- ; (alternating hands moving inward)
+    fluid_typing = True
 
-    # wether to use finger_strength configs.
+    # Whether to use finger_strength configs
     # effort is simply added
     use_finger_effort = False
-    # penalities are added with scaling depending distance related to 1
+    # penalties are added with scaling depending distance related to 1
     use_x_penality = False
     use_y_penality = False
     use_z_penality = False
 
+    # Fitness component weights
     distance_weight = 0.3
-    # prefere tpyhing longre bygrams at once as oposed to shorter ones.
+    # Prefer typing longer bigrams at once as opposed to shorter ones
     n_gram_weight = 0.2
-    # give higher score to higher ngrams ngarm count * ngarm rank * bias
-    n_gram_multiplier = 1.1
-    # prefre typing on the home row
+    # Give higher score to higher ngrams: ngram_count * ngram_rank * bias
+    n_gram_multiplier = 1.0
+    # Prefer typing on the home row
     homerow_weight = 0.3
     hand_distribution = 0.1
     finger_distribution = 0.1
 
 
+class GeneticAlgorithmConfig:
+    """Genetic algorithm parameters"""
+    # Population
+    default_population_size = 50
+
+    # Selection
+    tournament_size = 3
+
+    # Crossover
+    offsprings_per_pair = 4
+    crossover_bias_base = 0.75  # Bias towards better parent
+    crossover_bias_increment = 1/30.0  # How much to increase bias per offspring
+
+    # Mutation
+    base_mutation_rate = 0.05
+    stagnation_mutation_multiplier = 0.5  # Multiply mutation rate when stagnant
+    max_mutation_swaps = 5  # Maximum number of swaps during stagnation
+
+    # Termination
+    default_max_iterations = 100
+    default_stagnation_limit = 15
+
+
+class KeyboardConfig:
+    """Keyboard-specific configuration"""
+    default_keyboard = 'src/data/keyboards/ansi_60_percent.json'
+
+    available_keyboards = {
+        'ansi_60': 'src/data/keyboards/ansi_60_percent.json',
+        'ansi_60_thinkpad': 'src/data/keyboards/ansi_60_percent_thinkpad.json',
+        'dactyl': 'src/data/keyboards/dactyl_manuform_6x6_4.json',
+        'ferris': 'src/data/keyboards/ferris_sweep.json'
+    }
+
+
+class CacheConfig:
+    """Cache configuration"""
+    distance_cache_enabled = True
+
+
 class Config:
+    """Main configuration class"""
     dataset = DatasetConfig()
     processor = ProcessorConfig()
     fitness = FitnessConfig()
+    ga = GeneticAlgorithmConfig()
+    keyboard = KeyboardConfig()
+    cache = CacheConfig()
+
+    @classmethod
+    def print_config(cls):
+        """Print all configuration values"""
+        print("="*80)
+        print("CONFIGURATION")
+        print("="*80)
+
+        print("\nDataset Configuration:")
+        for attr in dir(cls.dataset):
+            if not attr.startswith('_') and not callable(getattr(cls.dataset, attr)):
+                print(f"  {attr}: {getattr(cls.dataset, attr)}")
+
+        print("\nProcessor Configuration:")
+        for attr in dir(cls.processor):
+            if not attr.startswith('_') and not callable(getattr(cls.processor, attr)):
+                print(f"  {attr}: {getattr(cls.processor, attr)}")
+
+        print("\nFitness Configuration:")
+        for attr in dir(cls.fitness):
+            if not attr.startswith('_') and not callable(getattr(cls.fitness, attr)):
+                print(f"  {attr}: {getattr(cls.fitness, attr)}")
+
+        print("\nGenetic Algorithm Configuration:")
+        for attr in dir(cls.ga):
+            if not attr.startswith('_') and not callable(getattr(cls.ga, attr)):
+                print(f"  {attr}: {getattr(cls.ga, attr)}")
+
+        print("\nKeyboard Configuration:")
+        for attr in dir(cls.keyboard):
+            if not attr.startswith('_') and not callable(getattr(cls.keyboard, attr)):
+                value = getattr(cls.keyboard, attr)
+                if isinstance(value, dict):
+                    print(f"  {attr}:")
+                    for k, v in value.items():
+                        print(f"    {k}: {v}")
+                else:
+                    print(f"  {attr}: {value}")
+
+        print("\nCache Configuration:")
+        for attr in dir(cls.cache):
+            if not attr.startswith('_') and not callable(getattr(cls.cache, attr)):
+                print(f"  {attr}: {getattr(cls.cache, attr)}")
+
+        print("="*80)
+
+
+if __name__ == "__main__":
+    # Print configuration
+    Config.print_config()
