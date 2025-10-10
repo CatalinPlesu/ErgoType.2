@@ -1,4 +1,5 @@
 from contextlib import redirect_stdout
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
 from src.core.keyboard import Serial
 from src.core.evaluator import Evaluator
@@ -6,6 +7,8 @@ import os
 import pickle
 import random
 import sys
+import multiprocessing as mp
+import time
 
 
 class Individual:
@@ -29,6 +32,11 @@ class GeneticAlgorithm:
         """Initialize GA with evaluator"""
         print("Initializing Genetic Algorithm...")
 
+        # Store file paths for parallel evaluators
+        self.keyboard_file = keyboard_file
+        self.dataset_file = dataset_file
+        self.dataset_name = dataset_name
+
         # Initialize evaluator
         self.evaluator = Evaluator(debug=False)
         self.evaluator.load_keyoard(keyboard_file)
@@ -41,6 +49,10 @@ class GeneticAlgorithm:
         print("Evaluator initialized successfully")
 
         self.population_initialization()
+        
+        # Determine optimal number of processes
+        self.num_processes = mp.cpu_count()
+        print(f"Using {self.num_processes} processes for parallel evaluation")
 
     def population_initialization(self, size=50):
         """Initialize population with heuristic layouts and random permutations"""
@@ -76,8 +88,45 @@ class GeneticAlgorithm:
         """Get list of current population IDs"""
         return [ind.id for ind in self.population]
 
+    def evaluate_individual_fitness(self, individual):
+        """Evaluate fitness for a single individual using process-based parallelism"""
+        try:
+            # Create evaluator for this process
+            evaluator = Evaluator(debug=False)
+            evaluator.load_keyoard(self.keyboard_file)
+            evaluator.load_distance()
+            evaluator.load_layout()
+            evaluator.load_dataset(
+                dataset_file=self.dataset_file, 
+                dataset_name=self.dataset_name
+            )
+            evaluator.load_typer()
+            
+            # Remap layout to individual's chromosome
+            evaluator.layout.querty_based_remap(individual.chromosome)
+
+            # Calculate fitness
+            with open(os.devnull, 'w') as devnull:
+                with redirect_stdout(devnull):
+                    fitness_dict = evaluator.typer.fitness()
+
+            # Combined fitness score (lower is better)
+            distance = fitness_dict['distance_score']
+            ngram = fitness_dict['ngram_score']
+            homing = fitness_dict['homing_score']
+
+            # Fitness formula: lower is better
+            # Penalize distance, reward high ngram and homing scores
+            fitness = distance * (2.0 - ngram) * (2.0 - homing)
+            print(f"Process {os.getpid()}: Evaluated individual {individual.id}, fitness = {fitness:.6f}")
+            return individual.id, fitness
+            
+        except Exception as e:
+            print(f"Error evaluating individual {individual.id} in process {os.getpid()}: {e}")
+            return individual.id, float('inf')
+
     def fitness_function_calculation(self):
-        """Calculate fitness for all individuals without fitness values"""
+        """Calculate fitness for all individuals without fitness values using process-based parallelism"""
         individuals_to_evaluate = [
             ind for ind in self.population if ind.fitness is None]
 
@@ -88,30 +137,33 @@ class GeneticAlgorithm:
         if not individuals_to_evaluate:
             return
 
-        print(f"Evaluating {len(individuals_to_evaluate)} individuals...")
+        print(f"Evaluating {len(individuals_to_evaluate)} individuals in parallel using {self.num_processes} processes...")
 
-        for i, individual in enumerate(individuals_to_evaluate):
-            # Remap layout to individual's chromosome
-            self.evaluator.layout.querty_based_remap(individual.chromosome)
+        # Use ProcessPoolExecutor for process-based parallel execution
+        with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
+            # Submit all evaluation tasks
+            future_to_individual = {
+                executor.submit(self.evaluate_individual_fitness, ind): ind 
+                for ind in individuals_to_evaluate
+            }
 
-            # Calculate fitness
-            with open(os.devnull, 'w') as devnull:
-                with redirect_stdout(devnull):
-                    fitness_dict = self.evaluator.typer.fitness()
-
-            # Combined fitness score (lower is better)
-            # Distance score is primary, modified by ngram and homing scores
-            distance = fitness_dict['distance_score']
-            ngram = fitness_dict['ngram_score']
-            homing = fitness_dict['homing_score']
-
-            # Fitness formula: lower is better
-            # Penalize distance, reward high ngram and homing scores
-            individual.fitness = distance * (2.0 - ngram) * (2.0 - homing)
-
-            if (i + 1) % 10 == 0:
-                print(f"""  Evaluated {
-                      i + 1}/{len(individuals_to_evaluate)} individuals""")
+            # Process completed evaluations as they finish
+            completed_count = 0
+            for future in as_completed(future_to_individual):
+                try:
+                    individual_id, fitness = future.result()
+                    # Find the individual by ID and set its fitness
+                    for ind in individuals_to_evaluate:
+                        if ind.id == individual_id:
+                            ind.fitness = fitness
+                            break
+                    completed_count += 1
+                    
+                    if completed_count % 10 == 0:
+                        print(f"  Completed {completed_count}/{len(individuals_to_evaluate)} evaluations")
+                except Exception as e:
+                    print(f"Error getting future result: {e}")
+                    completed_count += 1
 
     def order_fitness_values(self, limited=False):
         """Print ordered fitness values"""
