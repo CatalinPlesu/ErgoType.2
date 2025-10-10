@@ -283,6 +283,24 @@ class Typer:
         score = 1 - max(0, score * -1) / ngram_sum
         return score
 
+    def calculate_homing_score(self):
+        """Calculate unified homing key usage score as weighted average percentage"""
+        total_presses = 0
+        total_homing = 0
+
+        for finger in self.finger:
+            homing = self.finger[finger][USE_HOMING]
+            non_homing = self.finger[finger][USE_NON_HOMING]
+            total = homing + non_homing
+
+            total_presses += total
+            total_homing += homing
+
+        if total_presses == 0:
+            return 0.0
+
+        return (total_homing / total_presses) * 100
+
     def print_finger_statistics(self):
         """Print usage statistics for each finger"""
         self._print("\n=== Finger Statistics ===")
@@ -296,6 +314,9 @@ class Typer:
                 self._print(f"{finger.name}:")
                 self._print(f"  Homing: {homing} ({ratio:.1f}%)")
                 self._print(f"  Non-homing: {non_homing}")
+
+        homing_score = self.calculate_homing_score()
+        self._print(f"\nOverall Homing Usage: {homing_score:.2f}%")
 
     def fitness(self, words=True, symbols=True, fluid_typing=False):
         """Main fitness calculation dispatcher"""
@@ -335,6 +356,7 @@ class Typer:
             use_fluid=False)
         char_score, char_percentage = self.calculate_character_fitness()
         ngram_score = self.calculate_ngram_score(ngram_counter)
+        homing_score = self.calculate_homing_score()
 
         print(f"\n=== Words and Symbols Fitness ===")
         print(f"Word coverage: {word_percentage:.2f}%")
@@ -346,6 +368,7 @@ class Typer:
         print(f"Total distance: {word_score + char_score:.2f}")
         print(f"\nN-grams detected: {ngram_counter}")
         print(f"N-gram score: {ngram_score:.4f}")
+        print(f"Homing usage: {homing_score:.2f}%")
 
         self.print_finger_statistics()
 
@@ -356,7 +379,8 @@ class Typer:
             'word_percentage': word_percentage,
             'char_percentage': char_percentage,
             'ngram_counter': ngram_counter,
-            'ngram_score': ngram_score
+            'ngram_score': ngram_score,
+            'homing_score': homing_score
         }
 
     def fitness_words_and_symbols_fluid(self):
@@ -365,6 +389,7 @@ class Typer:
             use_fluid=True)
         char_score, char_percentage = self.calculate_character_fitness()
         ngram_score = self.calculate_ngram_score(ngram_counter)
+        homing_score = self.calculate_homing_score()
 
         print(f"\n=== Words and Symbols Fitness (Fluid Typing) ===")
         print(f"Word coverage: {word_percentage:.2f}%")
@@ -376,6 +401,7 @@ class Typer:
         print(f"Total distance: {word_score + char_score:.2f}")
         print(f"\nFluid n-grams detected: {ngram_counter}")
         print(f"N-gram score: {ngram_score:.4f}")
+        print(f"Homing usage: {homing_score:.2f}%")
 
         self.print_finger_statistics()
 
@@ -386,7 +412,8 @@ class Typer:
             'word_percentage': word_percentage,
             'char_percentage': char_percentage,
             'ngram_counter': ngram_counter,
-            'ngram_score': ngram_score
+            'ngram_score': ngram_score,
+            'homing_score': homing_score
         }
 
     def _print(self, *args, **kwargs):
