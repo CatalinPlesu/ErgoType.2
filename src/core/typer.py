@@ -1,5 +1,5 @@
 """
-    This class will be responsible for handling the simulation logic, of typing words and symbols
+This class will be responsible for handling the simulation logic, of typing words and symbols
 Stateful Simulation: Tracks finger positions across key presses, resetting Shift key positions after each n-gram.
 Parallel Typing: Handles simultaneous key presses (e.g., Shift + 'a' for 'A') by including Shift in the key sequence for uppercase characters.
 N-gram Support: Uses unigrams, bigrams, or higher-order n-grams to optimize cost calculations, weighted by frequency.
@@ -27,7 +27,6 @@ class Typer:
         self.layout = layout
         self.dataset = dataset
         self.load_finger_positions()
-        self.fitness()
 
     def load_finger_positions(self):
         """Initialize finger positions and counters"""
@@ -180,25 +179,6 @@ class Typer:
 
         return distance
 
-    def type_char_stateful(self, char, shift_keys):
-        """Type a single character with n-gram detection"""
-        key_id, layer, qmk_key = self.layout.find_key_for_char(char)
-        distance = 0
-        ngram = None
-
-        # Handle shift if needed
-        shift_key_id = self.get_shift_key_for_char(char, key_id, shift_keys)
-        if shift_key_id is not None:
-            shift_finger = self.get_finger_for_key(shift_key_id)
-            distance += self.move_finger(shift_finger, shift_key_id)
-
-        # Type the character with state tracking
-        finger = self.get_finger_for_key(key_id)
-        char_distance, ngram = self.move_finger_stateful(finger, key_id)
-        distance += char_distance
-
-        return distance, ngram
-
     def type_char_fluid(self, char, shift_keys):
         """Type a single character with fluid typing detection"""
         key_id, layer, qmk_key = self.layout.find_key_for_char(char)
@@ -217,25 +197,6 @@ class Typer:
         distance += char_distance
 
         return distance, ngram
-
-    def calculate_character_fitness(self):
-        """Calculate fitness for individual character frequencies"""
-        shift_keys = self.layout.mapper.filter_data(
-            lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
-
-        char_freq = self.dataset[Config.dataset.field_character_frequencies]
-        total_percentage = 0
-        total_score = 0
-
-        for char, value in char_freq.items():
-            percentage = value[Config.dataset.field_category_frequencies_relative] * 100
-            total_percentage += percentage
-
-            distance = self.type_char_simple(char, shift_keys)
-            total_score += distance  # No frequency weighting - just raw distance
-            self.reset_finger_position()
-
-        return total_score, total_percentage
 
     def calculate_scaled_character_fitness(self):
         """Scale character score to represent remaining typing after words"""
@@ -278,8 +239,8 @@ class Typer:
 
         return scaled_score, remaining_percentage
 
-    def calculate_word_fitness(self, use_fluid=False):
-        """Calculate fitness for word frequencies with n-gram detection"""
+    def calculate_word_fitness(self):
+        """Calculate fitness for word frequencies with fluid typing detection"""
         shift_keys = self.layout.mapper.filter_data(
             lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
 
@@ -297,10 +258,7 @@ class Typer:
             self.reset_finger_position()
 
             for char in word:
-                if use_fluid:
-                    distance, ngram = self.type_char_fluid(char, shift_keys)
-                else:
-                    distance, ngram = self.type_char_stateful(char, shift_keys)
+                distance, ngram = self.type_char_fluid(char, shift_keys)
 
                 # Weight by the word's frequency
                 weighted_distance = distance * percentage
@@ -344,84 +302,27 @@ class Typer:
 
         return (total_homing / total_presses)
 
-    def fitness(self, words=True, symbols=True, fluid_typing=False):
-        """Main fitness calculation dispatcher"""
-        match (words, symbols, fluid_typing):
-            case (False, True, False):
-                self._print("Calculating: Symbols only")
-                return self.fitness_symbols_only()
-            case (True, True, False):
-                self._print(
-                    "Calculating: Words and symbols (standard n-grams)")
-                return self.fitness_words_and_symbols()
-            case (True, True, True):
-                self._print("Calculating: Words and symbols (fluid typing)")
-                return self.fitness_words_and_symbols_fluid()
-            case _:
-                self._print(f"""Warning: Unsupported combination (words={
-                            words}, symbols={symbols}, fluid={fluid_typing})""")
-                return None
-
-    def fitness_symbols_only(self):
-        """Calculate fitness for symbols/characters only"""
-        char_score, char_percentage = self.calculate_character_fitness()
-
-        print(f"\n=== Symbols Only Fitness ===")
-        print(f"Character coverage: {char_percentage:.2f}% (should be ~100%)")
-        print(f"Total distance: {char_score:.2f}")
-
-        return {
-            'char_score': char_score,
-        }
-
-    def fitness_words_and_symbols(self):
-        """Calculate fitness with words and symbols (standard n-grams)"""
-        word_score, word_percentage, ngram_counter = self.calculate_word_fitness(
-            use_fluid=False)
+    def fitness(self):
+        """Main fitness calculation with fluid typing"""
+        word_score, word_percentage, ngram_counter = self.calculate_word_fitness()
         scaled_char_score, char_percentage = self.calculate_scaled_character_fitness()
         ngram_score = self.calculate_ngram_score(ngram_counter)
         homing_score = self.calculate_homing_score()
 
-        print(f"\n=== Words and Symbols Fitness ===")
+        distance_score = word_score + scaled_char_score
+
+        print(f"\n=== Fluid Typing Fitness ===")
         print(f"Word coverage: {word_percentage:.2f}%")
         print(f"Character coverage (scaled): {char_percentage:.2f}%")
         print(f"\nWord distance: {word_score:.2f}")
         print(f"Scaled character distance: {scaled_char_score:.2f}")
+        print(f"Total distance: {distance_score:.2f}")
         print(f"\nN-grams detected: {ngram_counter}")
         print(f"N-gram score: {ngram_score:.4f}")
         print(f"Homing usage: {homing_score:.2f}%")
 
         return {
-            'word_score': word_score,
-            'scaled_char_score': scaled_char_score,
-            'ngram_score': ngram_score,
-            'homing_score': homing_score
-        }
-
-    def fitness_words_and_symbols_fluid(self):
-        """Calculate fitness with words and symbols (fluid typing)"""
-        word_score, word_percentage, ngram_counter = self.calculate_word_fitness(
-            use_fluid=True)
-        char_score, char_percentage = self.calculate_character_fitness()
-        ngram_score = self.calculate_ngram_score(ngram_counter)
-        homing_score = self.calculate_homing_score()
-
-        print(f"\n=== Words and Symbols Fitness (Fluid Typing) ===")
-        print(f"Word coverage: {word_percentage:.2f}%")
-        print(f"Character coverage: {char_percentage:.2f}%")
-        print(f"""Total coverage: {word_percentage +
-              char_percentage:.2f}% (should be ~100%)""")
-        print(f"\nWord distance: {word_score:.2f}")
-        print(f"Character distance: {char_score:.2f}")
-        print(f"\nFluid n-grams detected: {ngram_counter}")
-        print(f"N-gram score: {ngram_score:.4f}")
-        print(f"Homing usage: {homing_score:.2f}%")
-
-        self.print_finger_statistics()
-
-        return {
-            'word_score': word_score,
-            'char_score': char_score,
+            'distance_score': distance_score,
             'ngram_score': ngram_score,
             'homing_score': homing_score
         }
