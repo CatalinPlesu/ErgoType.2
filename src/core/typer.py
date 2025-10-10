@@ -9,7 +9,7 @@ Extensibility: Can incorporate additional cost factors (e.g., finger effort, alt
 
 from src.config.config import Config
 from src.core.mapper import KeyType
-from src.core.keyboard import FingerName, enums_to_fingername
+from src.core.keyboard import FingerName, enums_to_fingername, fingername_to_enums, Hand
 from collections import Counter
 
 HOMING_POSITION = 'homing'
@@ -30,26 +30,27 @@ class Typer:
         self.fitness()
 
     def load_finger_positions(self):
+        """Initialize finger positions and counters"""
         self.finger = {finger:
                        {HOMING_POSITION: self.keyboard.get_homing_key_for_finger_name(
                            finger).id} for finger in FingerName}
 
         for finger in self.finger:
             self.finger[finger][USE_HOMING] = 0
-
-        for finger in self.finger:
             self.finger[finger][USE_NON_HOMING] = 0
 
         self.reset_finger_position()
 
     def reset_finger_position(self):
+        """Reset all fingers to homing position"""
         for finger in self.finger:
             self.finger[finger][CURRENT_POSITION] = self.finger[finger][HOMING_POSITION]
         self.moved_fingers = []
+        self.last_key_x = None
+        self.last_hand = None
 
     def move_finger(self, finger, key_to):
-        # self.moved_fingers.append(finger)
-
+        """Move a single finger and update counters"""
         if self.finger[finger][HOMING_POSITION] == key_to:
             self.finger[finger][USE_HOMING] += 1
         else:
@@ -61,20 +62,22 @@ class Typer:
         return d
 
     def move_fingers_home(self):
+        """Move all fingers back to homing position"""
         self.moved_fingers = []
-        sum = 0
+        total = 0
         for finger in self.finger:
             homing_key = self.finger[finger][HOMING_POSITION]
-            sum += self.move_finger(finger, homing_key)
-        return sum
+            total += self.move_finger(finger, homing_key)
+        return total
 
-    # moved_fingers represnt the bigram
     def move_finger_stateful(self, finger, key_to):
-        sum = 0
+        """Move finger with n-gram detection (same finger reuse)"""
+        extra_distance = 0
         ngram = None
+
         if finger in self.moved_fingers:
             ngram = len(self.moved_fingers)
-            sum += self.move_fingers_home()
+            extra_distance += self.move_fingers_home()
 
         if self.finger[finger][HOMING_POSITION] == key_to:
             self.finger[finger][USE_HOMING] += 1
@@ -85,181 +88,309 @@ class Typer:
         key_from = self.finger[finger][CURRENT_POSITION]
         self.finger[finger][CURRENT_POSITION] = key_to
         distance, _ = self.distance.get_distance_and_movement(key_from, key_to)
-        return (distance+sum, ngram)
+        return (distance + extra_distance, ngram)
 
-    def fitness(self, words=True, symbols=True, fluid_typing=False):
-        match (words, symbols, fluid_typing):
-            case (False, True, False):
-                self._print("Only Symbols")
-                self.fitness_symbol_simple()
-            case (True, True, False):
-                self._print("Words and Symbols")
-                self.fitness_with_words()
-            case (True, True, True):
-                self._print("Fluid Words and Symbols")
-            case _:
-                self._print("Other case")
+    def move_finger_fluid(self, finger, key_to):
+        """
+        Move finger with fluid typing detection (alternating hands moving inward).
+        Detects when typing alternates between hands and both hands move inward.
+        """
+        extra_distance = 0
+        fluid_ngram = None
 
-        pass
+        # Get current key position and hand
+        current_key = self.keyboard.keys[key_to]
+        current_x = current_key.x
+        _, current_hand = fingername_to_enums(finger)
 
-    def fitness_symbol_simple(self):
-        total_percentage = 0
-        score = 0
-        unshifted = self.layout.get_unshifted_symbols()
+        # Check for fluid typing pattern
+        if self.last_key_x is not None and self.last_hand is not None:
+            # Check if hands alternate
+            if current_hand != self.last_hand:
+                # Check if both hands are moving inward
+                left_moving_right = (
+                    self.last_hand == Hand.LEFT and current_x > self.last_key_x)
+                right_moving_left = (
+                    self.last_hand == Hand.RIGHT and current_x < self.last_key_x)
+
+                if left_moving_right or right_moving_left:
+                    fluid_ngram = len(self.moved_fingers)
+                    extra_distance += self.move_fingers_home()
+
+        # Check for same-finger reuse (traditional n-gram)
+        if finger in self.moved_fingers and fluid_ngram is None:
+            fluid_ngram = len(self.moved_fingers)
+            extra_distance += self.move_fingers_home()
+
+        # Update counters
+        if self.finger[finger][HOMING_POSITION] == key_to:
+            self.finger[finger][USE_HOMING] += 1
+        else:
+            self.finger[finger][USE_NON_HOMING] += 1
+
+        self.moved_fingers.append(finger)
+        key_from = self.finger[finger][CURRENT_POSITION]
+        self.finger[finger][CURRENT_POSITION] = key_to
+        distance, _ = self.distance.get_distance_and_movement(key_from, key_to)
+
+        # Update tracking for next iteration
+        self.last_key_x = current_x
+        self.last_hand = current_hand
+
+        return (distance + extra_distance, fluid_ngram)
+
+    def get_shift_key_for_char(self, char, key_id, shift_keys):
+        """Get the appropriate shift key (opposite hand) for a character"""
         shifted = self.layout.get_shifted_symbols()
-        # print(f"unshifted {unshifted}")
-        # print(f"shifted {shifted}")
 
+        if char not in shifted:
+            return None
+
+        for shift in shift_keys:
+            shift_id, _ = shift
+            if self.keyboard.keys[key_id].hand != self.keyboard.keys[shift_id[0]].hand:
+                return shift_id[0]
+
+        return None
+
+    def get_finger_for_key(self, key_id):
+        """Get the finger name for a key"""
+        fingername = enums_to_fingername(
+            self.keyboard.keys[key_id].finger,
+            self.keyboard.keys[key_id].hand
+        )
+        if isinstance(fingername, list):
+            fingername = fingername[0]
+        return fingername
+
+    def type_char_simple(self, char, shift_keys):
+        """Type a single character without state tracking"""
+        key_id, layer, qmk_key = self.layout.find_key_for_char(char)
+        distance = 0
+
+        # Handle shift if needed
+        shift_key_id = self.get_shift_key_for_char(char, key_id, shift_keys)
+        if shift_key_id is not None:
+            shift_finger = self.get_finger_for_key(shift_key_id)
+            distance += self.move_finger(shift_finger, shift_key_id)
+
+        # Type the character
+        finger = self.get_finger_for_key(key_id)
+        distance += self.move_finger(finger, key_id)
+
+        return distance
+
+    def type_char_stateful(self, char, shift_keys):
+        """Type a single character with n-gram detection"""
+        key_id, layer, qmk_key = self.layout.find_key_for_char(char)
+        distance = 0
+        ngram = None
+
+        # Handle shift if needed
+        shift_key_id = self.get_shift_key_for_char(char, key_id, shift_keys)
+        if shift_key_id is not None:
+            shift_finger = self.get_finger_for_key(shift_key_id)
+            distance += self.move_finger(shift_finger, shift_key_id)
+
+        # Type the character with state tracking
+        finger = self.get_finger_for_key(key_id)
+        char_distance, ngram = self.move_finger_stateful(finger, key_id)
+        distance += char_distance
+
+        return distance, ngram
+
+    def type_char_fluid(self, char, shift_keys):
+        """Type a single character with fluid typing detection"""
+        key_id, layer, qmk_key = self.layout.find_key_for_char(char)
+        distance = 0
+        ngram = None
+
+        # Handle shift if needed
+        shift_key_id = self.get_shift_key_for_char(char, key_id, shift_keys)
+        if shift_key_id is not None:
+            shift_finger = self.get_finger_for_key(shift_key_id)
+            distance += self.move_finger(shift_finger, shift_key_id)
+
+        # Type the character with fluid tracking
+        finger = self.get_finger_for_key(key_id)
+        char_distance, ngram = self.move_finger_fluid(finger, key_id)
+        distance += char_distance
+
+        return distance, ngram
+
+    def calculate_character_fitness(self):
+        """Calculate fitness for individual character frequencies"""
         shift_keys = self.layout.mapper.filter_data(
             lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
-
-        shift_key = None
-        shift_key_id = None
-        # print(f"shift keys {shift_keys}")
-
-        for key, value in self.dataset[Config.dataset.field_character_frequencies].items():
-            # print(key, value)
-            relative = value[Config.dataset.field_category_frequencies_relative] * 100
-            total_percentage += relative
-            # data = self.layout.mapper.filter_data(
-            #     lambda key_id, layer_id, value:  key in value)
-            # print(f"seraching for charater '{key}'")
-            key_id, layer, qmk_key = self.layout.find_key_for_char(key)
-            # print(key_id, layer)
-            if key in shifted:
-                for shift in shift_keys:
-                    shift_id, _ = shift
-                    if self.keyboard.keys[key_id].hand != self.keyboard.keys[shift_id[0]].hand:
-                        shift_key = shift
-                        break
-            # print(f""" key {key} - key_id {key_id} """)
-            if shift_key is not None:
-                shift_key_id = shift_key[0][0]
-                # print(f""" shift - key_id {shift_key_id} """)
-
-                fingername = enums_to_fingername(
-                    self.keyboard.keys[shift_key_id].finger, self.keyboard.keys[shift_key_id].hand)
-                if isinstance(fingername, list):
-                    fingername = fingername[0]
-                score += self.move_finger(fingername, shift_key_id)
-
-            fingername = enums_to_fingername(
-                self.keyboard.keys[key_id].finger, self.keyboard.keys[key_id].hand)
-            if isinstance(fingername, list):
-                fingername = fingername[0]
-            score += self.move_finger(fingername, key_id)
-            self.reset_finger_position()
-
-        print(f"""Total percentage of key pressed is '{
-              total_percentage}', it should be almost 100""")
-        print(f"""Total score {score}""")
-
-    def fitness_with_words(self):
-        total_percentage = 0
-        score = 0
-        unshifted = self.layout.get_unshifted_symbols()
-        shifted = self.layout.get_shifted_symbols()
-        ngrams = []
-        # print(f"unshifted {unshifted}")
-        # print(f"shifted {shifted}")
-
-        shift_keys = self.layout.mapper.filter_data(
-            lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
-
-        shift_key = None
-        shift_key_id = None
-        # print(f"shift keys {shift_keys}")
-        words = self.dataset[Config.dataset.field_word_frequencies]
-        i = 0
-        for word in words:
-            i += 1
-            print(word)
-            word, percentage = (word[Config.dataset.field_word_frequencies_word],
-                                word[Config.dataset.field_word_frequencies_relative] * 100)
-            total_percentage += percentage
-            print(word, percentage)
-
-            shift_key = None
-            shift_key_id = None
-            for key in word:
-                key_id, layer, qmk_key = self.layout.find_key_for_char(key)
-                if key in shifted:
-                    for shift in shift_keys:
-                        shift_id, _ = shift
-                        if self.keyboard.keys[key_id].hand != self.keyboard.keys[shift_id[0]].hand:
-                            shift_key = shift
-                            break
-                if shift_key is not None:
-                    shift_key_id = shift_key[0][0]
-
-                    fingername = enums_to_fingername(
-                        self.keyboard.keys[shift_key_id].finger, self.keyboard.keys[shift_key_id].hand)
-                    if isinstance(fingername, list):
-                        fingername = fingername[0]
-                    score += self.move_finger(fingername, shift_key_id)
-
-                fingername = enums_to_fingername(
-                    self.keyboard.keys[key_id].finger, self.keyboard.keys[key_id].hand)
-                if isinstance(fingername, list):
-                    fingername = fingername[0]
-                distance, ngram = self.move_finger_stateful(fingername, key_id)
-                print(distance, ngram)
-                score += distance
-                if ngram:
-                    ngrams.append(ngram)
 
         char_freq = self.dataset[Config.dataset.field_character_frequencies]
-        chart_total_percentage = 0
-        char_score = 0
-        for key, value in char_freq.items():
-            percentage = char_freq[key][Config.dataset.field_word_frequencies_relative] * 100
-            chart_total_percentage += percentage
+        total_percentage = 0
+        total_score = 0
 
-            key_id, layer, qmk_key = self.layout.find_key_for_char(key)
-            if key in shifted:
-                for shift in shift_keys:
-                    shift_id, _ = shift
-                    if self.keyboard.keys[key_id].hand != self.keyboard.keys[shift_id[0]].hand:
-                        shift_key = shift
-                        break
-            if shift_key is not None:
-                shift_key_id = shift_key[0][0]
+        for char, value in char_freq.items():
+            percentage = value[Config.dataset.field_category_frequencies_relative] * 100
+            total_percentage += percentage
 
-                fingername = enums_to_fingername(
-                    self.keyboard.keys[shift_key_id].finger, self.keyboard.keys[shift_key_id].hand)
-                if isinstance(fingername, list):
-                    fingername = fingername[0]
-                char_score += self.move_finger(fingername, shift_key_id)
-
-            fingername = enums_to_fingername(
-                self.keyboard.keys[key_id].finger, self.keyboard.keys[key_id].hand)
-            if isinstance(fingername, list):
-                fingername = fingername[0]
-            char_score += self.move_finger(fingername, key_id)
+            distance = self.type_char_simple(char, shift_keys)
+            total_score += distance  # No frequency weighting - just raw distance
             self.reset_finger_position()
 
-        print(f"""Total percentage of key pressed is '{
-              total_percentage}' + '{chart_total_percentage}', it should be almost 100""")
-        print(f"""Total words score {score}""")
-        print(f"""Total chars score {char_score}""")
-        print(f"""Ngrams {Counter(ngrams)}""")
-        ngram_score = self.score_ngrams(Counter(ngrams))
-        print(f"""Ngrams_score {ngram_score}""")
+        return total_score, total_percentage
 
-        for finger in self.finger:
-            print(finger)
-            print(f"homing use: {self.finger[finger][USE_HOMING]}")
-            print(f"not homing use: {self.finger[finger][USE_NON_HOMING]}")
+    def calculate_word_fitness(self, use_fluid=False):
+        """Calculate fitness for word frequencies with n-gram detection"""
+        shift_keys = self.layout.mapper.filter_data(
+            lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
 
-    def score_ngrams(self, ngarms_counter):
+        words = self.dataset[Config.dataset.field_word_frequencies]
+        total_percentage = 0
+        total_score = 0
+        ngrams = []
+
+        for word_data in words:
+            word = word_data[Config.dataset.field_word_frequencies_word]
+            percentage = word_data[Config.dataset.field_word_frequencies_relative] * 100
+            total_percentage += percentage
+
+            self._print(f"Processing: {word} ({percentage:.4f}%)")
+            self.reset_finger_position()
+
+            for char in word:
+                if use_fluid:
+                    distance, ngram = self.type_char_fluid(char, shift_keys)
+                else:
+                    distance, ngram = self.type_char_stateful(char, shift_keys)
+
+                total_score += distance  # No frequency weighting - just raw distance
+
+                if ngram:
+                    ngrams.append(ngram)
+                    self._print(f"  N-gram detected: {ngram}")
+
+        return total_score, total_percentage, Counter(ngrams)
+
+    def calculate_ngram_score(self, ngram_counter):
+        """Calculate normalized n-gram score"""
+        if not ngram_counter:
+            return 1.0
+
         score = 0
-        ngram_sum = sum(ngarms_counter.values()) * 8
-        for k, v in ngarms_counter.items():
+        ngram_sum = sum(ngram_counter.values()) * 8
+
+        for k, v in ngram_counter.items():
             score -= v * k * Config.fitness.n_gram_multiplier
+
         score = 1 - max(0, score * -1) / ngram_sum
         return score
 
+    def print_finger_statistics(self):
+        """Print usage statistics for each finger"""
+        self._print("\n=== Finger Statistics ===")
+        for finger in self.finger:
+            homing = self.finger[finger][USE_HOMING]
+            non_homing = self.finger[finger][USE_NON_HOMING]
+            total = homing + non_homing
+
+            if total > 0:
+                ratio = homing / total * 100
+                self._print(f"{finger.name}:")
+                self._print(f"  Homing: {homing} ({ratio:.1f}%)")
+                self._print(f"  Non-homing: {non_homing}")
+
+    def fitness(self, words=True, symbols=True, fluid_typing=False):
+        """Main fitness calculation dispatcher"""
+        match (words, symbols, fluid_typing):
+            case (False, True, False):
+                self._print("Calculating: Symbols only")
+                return self.fitness_symbols_only()
+            case (True, True, False):
+                self._print(
+                    "Calculating: Words and symbols (standard n-grams)")
+                return self.fitness_words_and_symbols()
+            case (True, True, True):
+                self._print("Calculating: Words and symbols (fluid typing)")
+                return self.fitness_words_and_symbols_fluid()
+            case _:
+                self._print(f"""Warning: Unsupported combination (words={
+                            words}, symbols={symbols}, fluid={fluid_typing})""")
+                return None
+
+    def fitness_symbols_only(self):
+        """Calculate fitness for symbols/characters only"""
+        char_score, char_percentage = self.calculate_character_fitness()
+
+        print(f"\n=== Symbols Only Fitness ===")
+        print(f"Character coverage: {char_percentage:.2f}% (should be ~100%)")
+        print(f"Total distance: {char_score:.2f}")
+
+        return {
+            'char_score': char_score,
+            'char_percentage': char_percentage,
+            'total_score': char_score
+        }
+
+    def fitness_words_and_symbols(self):
+        """Calculate fitness with words and symbols (standard n-grams)"""
+        word_score, word_percentage, ngram_counter = self.calculate_word_fitness(
+            use_fluid=False)
+        char_score, char_percentage = self.calculate_character_fitness()
+        ngram_score = self.calculate_ngram_score(ngram_counter)
+
+        print(f"\n=== Words and Symbols Fitness ===")
+        print(f"Word coverage: {word_percentage:.2f}%")
+        print(f"Character coverage: {char_percentage:.2f}%")
+        print(f"""Total coverage: {word_percentage +
+              char_percentage:.2f}% (should be ~100%)""")
+        print(f"\nWord distance: {word_score:.2f}")
+        print(f"Character distance: {char_score:.2f}")
+        print(f"Total distance: {word_score + char_score:.2f}")
+        print(f"\nN-grams detected: {ngram_counter}")
+        print(f"N-gram score: {ngram_score:.4f}")
+
+        self.print_finger_statistics()
+
+        return {
+            'word_score': word_score,
+            'char_score': char_score,
+            'total_score': word_score + char_score,
+            'word_percentage': word_percentage,
+            'char_percentage': char_percentage,
+            'ngram_counter': ngram_counter,
+            'ngram_score': ngram_score
+        }
+
+    def fitness_words_and_symbols_fluid(self):
+        """Calculate fitness with words and symbols (fluid typing)"""
+        word_score, word_percentage, ngram_counter = self.calculate_word_fitness(
+            use_fluid=True)
+        char_score, char_percentage = self.calculate_character_fitness()
+        ngram_score = self.calculate_ngram_score(ngram_counter)
+
+        print(f"\n=== Words and Symbols Fitness (Fluid Typing) ===")
+        print(f"Word coverage: {word_percentage:.2f}%")
+        print(f"Character coverage: {char_percentage:.2f}%")
+        print(f"""Total coverage: {word_percentage +
+              char_percentage:.2f}% (should be ~100%)""")
+        print(f"\nWord distance: {word_score:.2f}")
+        print(f"Character distance: {char_score:.2f}")
+        print(f"Total distance: {word_score + char_score:.2f}")
+        print(f"\nFluid n-grams detected: {ngram_counter}")
+        print(f"N-gram score: {ngram_score:.4f}")
+
+        self.print_finger_statistics()
+
+        return {
+            'word_score': word_score,
+            'char_score': char_score,
+            'total_score': word_score + char_score,
+            'word_percentage': word_percentage,
+            'char_percentage': char_percentage,
+            'ngram_counter': ngram_counter,
+            'ngram_score': ngram_score
+        }
+
     def _print(self, *args, **kwargs):
+        """Debug printing"""
         if self.debug:
             print(*args, **kwargs)
 
