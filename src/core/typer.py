@@ -237,6 +237,47 @@ class Typer:
 
         return total_score, total_percentage
 
+    def calculate_scaled_character_fitness(self):
+        """Scale character score to represent remaining typing after words"""
+        shift_keys = self.layout.mapper.filter_data(
+            lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
+
+        char_freq = self.dataset[Config.dataset.field_character_frequencies]
+        words = self.dataset[Config.dataset.field_word_frequencies]
+
+        # Calculate how much of typing is done by words
+        total_word_percentage = sum(word_data[Config.dataset.field_word_frequencies_relative] * 100
+                                    for word_data in words)
+
+        # Calculate remaining percentage for characters (100% - word percentage)
+        remaining_percentage = 100.0 - total_word_percentage
+
+        # Calculate character score weighted by their relative frequencies
+        total_char_score = 0
+        total_char_percentage = 0
+
+        for char, value in char_freq.items():
+            percentage = value[Config.dataset.field_category_frequencies_relative] * 100
+            total_char_percentage += percentage
+
+            distance = self.type_char_simple(char, shift_keys)
+            # Weight the character distance by its frequency
+            weighted_distance = distance * percentage
+            total_char_score += weighted_distance
+
+            self.reset_finger_position()
+
+        # Now scale the character score to represent what it would be
+        # if characters filled the remaining typing percentage (remaining_percentage)
+        if total_char_percentage > 0:
+            # Scale character score to match the remaining typing percentage
+            scale_factor = remaining_percentage / total_char_percentage
+            scaled_score = total_char_score * scale_factor
+        else:
+            scaled_score = 0
+
+        return scaled_score, remaining_percentage
+
     def calculate_word_fitness(self, use_fluid=False):
         """Calculate fitness for word frequencies with n-gram detection"""
         shift_keys = self.layout.mapper.filter_data(
@@ -261,7 +302,9 @@ class Typer:
                 else:
                     distance, ngram = self.type_char_stateful(char, shift_keys)
 
-                total_score += distance  # No frequency weighting - just raw distance
+                # Weight by the word's frequency
+                weighted_distance = distance * percentage
+                total_score += weighted_distance  # Weighted by word frequency
 
                 if ngram:
                     ngrams.append(ngram)
@@ -335,24 +378,22 @@ class Typer:
         """Calculate fitness with words and symbols (standard n-grams)"""
         word_score, word_percentage, ngram_counter = self.calculate_word_fitness(
             use_fluid=False)
-        char_score, char_percentage = self.calculate_character_fitness()
+        scaled_char_score, char_percentage = self.calculate_scaled_character_fitness()
         ngram_score = self.calculate_ngram_score(ngram_counter)
         homing_score = self.calculate_homing_score()
 
         print(f"\n=== Words and Symbols Fitness ===")
         print(f"Word coverage: {word_percentage:.2f}%")
-        print(f"Character coverage: {char_percentage:.2f}%")
-        print(f"""Total coverage: {word_percentage +
-              char_percentage:.2f}% (should be ~100%)""")
+        print(f"Character coverage (scaled): {char_percentage:.2f}%")
         print(f"\nWord distance: {word_score:.2f}")
-        print(f"Character distance: {char_score:.2f}")
+        print(f"Scaled character distance: {scaled_char_score:.2f}")
         print(f"\nN-grams detected: {ngram_counter}")
         print(f"N-gram score: {ngram_score:.4f}")
         print(f"Homing usage: {homing_score:.2f}%")
 
         return {
             'word_score': word_score,
-            'char_score': char_score,
+            'scaled_char_score': scaled_char_score,
             'ngram_score': ngram_score,
             'homing_score': homing_score
         }
