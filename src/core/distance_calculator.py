@@ -34,7 +34,6 @@ class DistanceCalculator:
         self.file_hash()
         self.load_cache()
         self.load_cost()
-        print("here")
         self.save_cache()
 
     def _calculate_distance_and_movement(self, key1_id: int, key2_id: int) -> tuple:
