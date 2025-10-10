@@ -311,15 +311,15 @@ class Typer:
 
         distance_score = word_score + scaled_char_score
 
-        print(f"\n=== Fluid Typing Fitness ===")
-        print(f"Word coverage: {word_percentage:.2f}%")
-        print(f"Character coverage (scaled): {char_percentage:.2f}%")
-        print(f"\nWord distance: {word_score:.2f}")
-        print(f"Scaled character distance: {scaled_char_score:.2f}")
-        print(f"Total distance: {distance_score:.2f}")
-        print(f"\nN-grams detected: {ngram_counter}")
-        print(f"N-gram score: {ngram_score:.4f}")
-        print(f"Homing usage: {homing_score:.2f}%")
+        self._print(f"\n=== Fluid Typing Fitness ===")
+        self._print(f"Word coverage: {word_percentage:.2f}%")
+        self._print(f"Character coverage (scaled): {char_percentage:.2f}%")
+        self._print(f"\nWord distance: {word_score:.2f}")
+        self._print(f"Scaled character distance: {scaled_char_score:.2f}")
+        self._print(f"Total distance: {distance_score:.2f}")
+        self._print(f"\nN-grams detected: {ngram_counter}")
+        self._print(f"N-gram score: {ngram_score:.4f}")
+        self._print(f"Homing usage: {homing_score:.2f}%")
 
         return {
             'distance_score': distance_score,
