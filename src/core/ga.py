@@ -3,6 +3,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
 from src.core.keyboard import Serial
 from src.core.evaluator import Evaluator
+from src.config.config import Config
 import os
 import pickle
 import random
@@ -117,8 +118,9 @@ class GeneticAlgorithm:
 
             # Fitness formula: lower is better
             # Penalize distance, reward high ngram and homing scores
-            fitness = distance + distance * \
-                (1.0 - ngram) + distance * (1.0 - homing)
+            fitness = Config.fitness.distance_weight * distance + \
+                Config.fitness.n_gram_weight * distance * (1.0 - ngram) + \
+                Config.fitness.homerow_weight * distance * (1.0 - homing)
             print(f"""Process {os.getpid()}: Evaluated individual {
                   individual.id}, fitness = {fitness:.6f}""")
             return individual.id, fitness
