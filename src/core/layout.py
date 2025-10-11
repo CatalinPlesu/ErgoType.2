@@ -171,6 +171,18 @@ class Layout:
 
         return shifted_symbols
 
+    def get_altgr_symbols(self):
+        """Get all characters that are on AltGr layer (layer 1)"""
+        altgr_symbols = []
+        for (key_id, layer_idx), key_obj in self.mapper.data.items():
+            if layer_idx == 1 and key_obj.key_type == KeyType.CHAR:
+                # For layer 1, we want the target characters (second element of tuple)
+                if isinstance(key_obj.value, tuple) and len(key_obj.value) >= 2:
+                    altgr_symbols.append(key_obj.value[1])
+                else:
+                    altgr_symbols.append(key_obj.value)
+        return altgr_symbols
+
     def _print(self, *args, **kwargs):
         if self.debug:
             print(*args, **kwargs)

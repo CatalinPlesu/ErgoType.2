@@ -7,6 +7,8 @@ import math
 import svgwrite
 from typing import List, Dict, Any
 from IPython.display import SVG, display
+from src.core.mapper import KeyType
+from src.core.typer import Typer
 
 # Unit sizes configuration (similar to the JavaScript version)
 UNIT_SIZES = {
@@ -579,3 +581,213 @@ def show_keyboard(keyboard):
     """
     svg = render_keyboard(keyboard)
     display(svg)
+
+def render_keyboard_with_heatmap(keyboard, char_frequencies: Dict, layer_idx: int = 0, 
+                               freq_range: float = 1.0, min_freq: float = 0.0, layout=None) -> SVG:
+    """
+    Render a keyboard to SVG with heatmap overlay and return as IPython SVG for Jupyter display.
+    
+    Args:
+        keyboard: Keyboard object with meta and keys attributes
+        char_frequencies: Dictionary of character frequency data
+        layer_idx: Layer to display (default 0)
+        freq_range: Range of frequencies for normalization
+        min_freq: Minimum frequency value
+        layout: Layout object to get character mappings
+    
+    Returns:
+        IPython.display.SVG object ready for display in Jupyter
+    """
+    # Get sizes for the unit system
+    unit_config = UNIT_SIZES["px"]
+    sizes_base = unit_config["profiles"]
+    
+    # Calculate overall bounding box
+    bbox = {"x": float('inf'), "y": float('inf'), "x2": float('-inf'), "y2": float('-inf')}
+    
+    # First pass: calculate bounding box
+    for key in keyboard.keys:
+        profile = get_profile(key)
+        # Create a complete size dictionary with unit and strokeWidth
+        key_sizes = sizes_base[profile] if profile in sizes_base else sizes_base[""]
+        key_sizes["unit"] = unit_config["unit"]
+        key_sizes["strokeWidth"] = unit_config["strokeWidth"]
+        
+        parms = get_render_params(key, key_sizes)
+        bbox["x"] = min(bbox["x"], parms["bbox"]["x"])
+        bbox["y"] = min(bbox["y"], parms["bbox"]["y"])
+        bbox["x2"] = max(bbox["x2"], parms["bbox"]["x2"])
+        bbox["y2"] = max(bbox["y2"], parms["bbox"]["y2"])
+    
+    # Add margins
+    margin = 10
+    bbox["x"] -= margin
+    bbox["y"] -= margin
+    bbox["x2"] += margin
+    bbox["y2"] += margin
+    width = bbox["x2"] - bbox["x"]
+    height = bbox["y2"] - bbox["y"]
+    
+    # Create SVG drawing
+    dwg = svgwrite.Drawing(
+        size=(f"{width}px", f"{height}px"),
+        viewBox=(f"{bbox['x']} {bbox['y']} {width} {height}")
+    )
+    
+    # Add background
+    background = dwg.rect(
+        insert=(bbox["x"], bbox["y"]),
+        size=(width, height),
+        fill=keyboard.meta.backcolor
+    )
+    dwg.add(background)
+    
+    # Draw each key
+    for i, key in enumerate(keyboard.keys):
+        profile = get_profile(key)
+        # Create a complete size dictionary with unit and strokeWidth
+        key_sizes = sizes_base[profile] if profile in sizes_base else sizes_base[""]
+        key_sizes["unit"] = unit_config["unit"]
+        key_sizes["strokeWidth"] = unit_config["strokeWidth"]
+        
+        key_group = draw_keycap(dwg, key, i, key_sizes)
+        dwg.add(key_group)
+    
+    # Add heatmap overlay
+    for key in keyboard.keys:
+        key_id = key.id
+        
+        # Get character from layout mapping if available
+        char = None
+        if layout and hasattr(layout, 'mapper') and layout.mapper:
+            # Check if key has mapping for the specified layer
+            if (key_id, layer_idx) in layout.mapper.data:
+                key_data = layout.mapper.data[(key_id, layer_idx)]
+                if key_data.key_type == KeyType.CHAR:
+                    # For CHAR type, value is a tuple (unshifted, shifted)
+                    char = key_data.value[0]  # Use unshifted character
+                elif key_data.key_type == KeyType.SPECIAL_CHAR:
+                    # For SPECIAL_CHAR type, value is a tuple (character, display_name)
+                    char = key_data.value[0]  # Use actual character
+                elif key_data.key_type == KeyType.CONTROL and key_data.value == 'Shift':
+                    # Handle shift keys specially
+                    char = 'SHIFT'  # Special marker for shift keys
+                elif key_data.key_type == KeyType.LAYER:
+                    # Handle layer keys - use the layer name as the character for heatmap
+                    char = key_data.value  # Use the layer name like "AltGr"
+        
+        # Fallback to key labels if no layout mapping
+        if char is None:
+            labels = key.get_labels()
+            if labels and len(labels) > 0 and labels[0]:
+                label = labels[0]
+                # Try to map common labels to actual characters
+                if label == 'Space':
+                    char = ' '
+                elif label == 'Tab':
+                    char = '\t'
+                elif label == 'Enter':
+                    char = '\n'
+                elif label == 'AltGr':
+                    # Layer key (modifier) - use layer name for heatmap
+                    char = 'AltGr'
+                else:
+                    char = label  # Use label as-is for other cases
+        
+        # Calculate total frequency for this character or shift key
+        total_freq = 0.0
+        if char == 'SHIFT' and layout:
+            # For shift keys, calculate frequency based on uppercase characters
+            shift_key_freq = 0.0
+            uppercase_chars = [c for c in char_frequencies.keys() if c.isupper()]
+            
+            for upper_char in uppercase_chars:
+                # Find the base key for this uppercase character
+                base_key_id, _, _ = layout.find_key_for_char(upper_char.lower())
+                if base_key_id:
+                    # Get the appropriate shift key for this character (opposite hand)
+                    shift_keys = layout.mapper.filter_data(
+                        lambda k_id, l_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift'
+                    )
+                    typer = Typer(keyboard, None, layout, None, debug=False)  # We don't need distance for this
+                    shift_key_for_char = typer.get_shift_key_for_char(upper_char, base_key_id, shift_keys)
+                    
+                    # If this shift key is used for this character, add its frequency
+                    if shift_key_for_char == key_id:
+                        shift_key_freq += char_frequencies[upper_char]['relative']
+            
+            total_freq = shift_key_freq
+        elif char == 'AltGr' and layout:
+            # For AltGr keys, calculate frequency based on layer 1 characters
+            altgr_key_freq = 0.0
+            
+            # Get all AltGr layer 1 characters (target characters)
+            layer1_chars = []
+            for (char_key_id, layer_idx), key_data in layout.mapper.data.items():
+                if layer_idx == 1 and key_data.key_type == KeyType.CHAR:
+                    # For layer 1, we want the target characters (second element of tuple)
+                    if isinstance(key_data.value, tuple) and len(key_data.value) >= 2:
+                        layer1_chars.append(key_data.value[1])
+                    else:
+                        layer1_chars.append(key_data.value)
+            
+            # Get all AltGr modifier keys
+            altgr_modifier_keys = layout.mapper.filter_data(
+                lambda k_id, l_id, value: value.key_type == KeyType.LAYER and value.value == 'AltGr'
+            )
+            
+            # For each layer 1 character, find if it maps to this AltGr key
+            for layer1_char in layer1_chars:
+                if layer1_char in char_frequencies:
+                    # Find the base key for this layer 1 character
+                    base_key_id, _, _ = layout.find_key_for_char(layer1_char)
+                    if base_key_id:
+                        # Get the appropriate AltGr key for this character
+                        typer = Typer(keyboard, None, layout, None, debug=False)
+                        altgr_key_for_char = typer.get_altgr_key_for_char(layer1_char, base_key_id, altgr_modifier_keys)
+                        
+                        # If this AltGr key is used for this character, add its frequency
+                        if altgr_key_for_char == key_id:
+                            altgr_key_freq += char_frequencies[layer1_char]['relative']
+            
+            total_freq = altgr_key_freq
+        elif char and char in char_frequencies:
+            # For regular characters, use their direct frequency
+            total_freq = char_frequencies[char]['relative']
+        
+        if total_freq > 0:
+                # Normalize frequency (0-1 range)
+                normalized_freq = (total_freq - min_freq) / freq_range
+                
+                # Calculate opacity (0.3 to 1.0) - increased minimum opacity
+                opacity = 0.3 + (normalized_freq * 0.7)
+                
+                # Calculate circle size based on key size - increased size
+                key_width = key.width * 54  # 54px unit size
+                key_height = key.height * 54
+                circle_radius = min(key_width, key_height) * 0.35  # Increased from 0.2 to 0.35
+                
+                # Calculate key center position
+                center_x = key.x * 54 + key_width / 2
+                center_y = key.y * 54 + key_height / 2
+                
+                # Enhanced color gradient from blue (low) to red (high)
+                # Make colors more vibrant
+                red = int(255 * normalized_freq)
+                blue = int(255 * (1 - normalized_freq))
+                green = int(50 * (1 - abs(normalized_freq - 0.5) * 2))  # Less green, more vibrant
+                color = f"#{red:02x}{green:02x}{blue:02x}"
+                
+                # Add heatmap circle with stroke for better visibility
+                circle = dwg.circle(
+                    center=(center_x, center_y),
+                    r=circle_radius,
+                    fill=color,
+                    fill_opacity=opacity,
+                    stroke="black",
+                    stroke_width=0.5
+                )
+                dwg.add(circle)
+    
+    # Return as IPython SVG for Jupyter display
+    return SVG(dwg.tostring())

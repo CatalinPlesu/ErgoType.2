@@ -32,9 +32,59 @@ class Evaluator:
     def get_fitness(self):
         return self
 
-    def render_layout(self):
-        LayoutVisualization(self.keyboard, self.layout).inspect()
+    def render_layout(self, show_heatmap=False, dataset_file=None, dataset_name='simple_wikipedia'):
+        """Render the keyboard layout.
+        
+        Args:
+            show_heatmap: If True, show heatmap overlay with frequency data
+            dataset_file: Path to frequency dataset file
+            dataset_name: Name of dataset to use for heatmap
+            
+        Returns:
+            Self for method chaining
+        """
+        if show_heatmap:
+            # Load frequency data if not already loaded
+            if not hasattr(self, 'dataset') or self.dataset_name != dataset_name:
+                if dataset_file is None:
+                    dataset_file = 'src/data/text/processed/frequency_analysis.pkl'
+                
+                try:
+                    with open(dataset_file, 'rb') as f:
+                        self.full_dataset = pickle.load(f)
+                        self.dataset_name = dataset_name
+                        self.dataset = self.full_dataset[dataset_name]
+                        self._print(f"Loaded dataset: {dataset_name}")
+                except FileNotFoundError:
+                    print(f"Dataset file not found: {dataset_file}")
+                    return self
+                except KeyError:
+                    print(f"Dataset '{dataset_name}' not found in frequency data")
+                    return self
+            
+            LayoutVisualization(self.keyboard, self.layout).inspect(
+                show_heatmap=True, 
+                dataset_file=dataset_file, 
+                dataset_name=dataset_name,
+                dataset=self.dataset
+            )
+        else:
+            LayoutVisualization(self.keyboard, self.layout).inspect()
         return self
+    
+    def render_heatmap(self, dataset_file=None, dataset_name='simple_wikipedia'):
+        """Render the keyboard layout with automatic heatmap overlay.
+        
+        This method automatically loads frequency data and displays the keyboard with heatmap overlay.
+        
+        Args:
+            dataset_file: Path to frequency dataset file (optional)
+            dataset_name: Name of dataset to use for heatmap (default: 'simple_wikipedia')
+            
+        Returns:
+            Self for method chaining
+        """
+        return self.render_layout(show_heatmap=True, dataset_file=dataset_file, dataset_name=dataset_name)
 
     def load_dataset(self,
                      dataset_file='src/data/text/processed/frequency_analysis.pkl',

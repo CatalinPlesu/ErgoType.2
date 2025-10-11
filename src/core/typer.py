@@ -152,6 +152,41 @@ class Typer:
 
         return None
 
+    def get_altgr_key_for_char(self, char, key_id, altgr_keys):
+        """Get the appropriate AltGr key for a character"""
+        # Find layer 1 characters
+        layer1_chars = self.layout.get_altgr_symbols()
+
+        if char not in layer1_chars:
+            return None
+
+        # Find the base key for this character
+        base_key_for_char = self.layout.find_key_for_char(char)
+        if not base_key_for_char:
+            return None
+        
+        base_char_key_id = base_key_for_char[0]
+        base_key = self.keyboard.keys[base_char_key_id]
+        
+        # Find AltGr key - prefer opposite hand, but if not available, use same hand
+        for altgr_item in altgr_keys:
+            # altgr_item is ((key_id, layer_id), value)
+            altgr_key_tuple = altgr_item[0]  # Get (key_id, layer_id)
+            altgr_key_id = altgr_key_tuple[0]  # Get key_id
+            altgr_key = self.keyboard.keys[altgr_key_id]
+            
+            # Prefer opposite hand (like shift)
+            if base_key.hand != altgr_key.hand:
+                return altgr_key_id
+        
+        # If no opposite hand AltGr key found, use any available AltGr key
+        for altgr_item in altgr_keys:
+            altgr_key_tuple = altgr_item[0]  # Get (key_id, layer_id)
+            altgr_key_id = altgr_key_tuple[0]  # Get key_id
+            return altgr_key_id
+
+        return None
+
     def get_finger_for_key(self, key_id):
         """Get the finger name for a key"""
         fingername = enums_to_fingername(
@@ -162,7 +197,7 @@ class Typer:
             fingername = fingername[0]
         return fingername
 
-    def type_char_simple(self, char, shift_keys):
+    def type_char_simple(self, char, shift_keys, altgr_keys):
         """Type a single character without state tracking"""
         key_id, layer, qmk_key = self.layout.find_key_for_char(char)
         distance = 0
@@ -173,13 +208,21 @@ class Typer:
             shift_finger = self.get_finger_for_key(shift_key_id)
             distance += self.move_finger(shift_finger, shift_key_id)
 
+        # Handle AltGr if needed (layer 1)
+        altgr_key_id = None
+        if layer == 1:  # ALTGR_LAYER
+            altgr_key_id = self.get_altgr_key_for_char(char, key_id, altgr_keys)
+            if altgr_key_id is not None:
+                altgr_finger = self.get_finger_for_key(altgr_key_id)
+                distance += self.move_finger(altgr_finger, altgr_key_id)
+
         # Type the character
         finger = self.get_finger_for_key(key_id)
         distance += self.move_finger(finger, key_id)
 
         return distance
 
-    def type_char_fluid(self, char, shift_keys):
+    def type_char_fluid(self, char, shift_keys, altgr_keys):
         """Type a single character with fluid typing detection"""
         key_id, layer, qmk_key = self.layout.find_key_for_char(char)
         distance = 0
@@ -190,6 +233,14 @@ class Typer:
         if shift_key_id is not None:
             shift_finger = self.get_finger_for_key(shift_key_id)
             distance += self.move_finger(shift_finger, shift_key_id)
+
+        # Handle AltGr if needed (layer 1)
+        altgr_key_id = None
+        if layer == 1:  # ALTGR_LAYER
+            altgr_key_id = self.get_altgr_key_for_char(char, key_id, altgr_keys)
+            if altgr_key_id is not None:
+                altgr_finger = self.get_finger_for_key(altgr_key_id)
+                distance += self.move_finger(altgr_finger, altgr_key_id)
 
         # Type the character with fluid tracking
         finger = self.get_finger_for_key(key_id)
@@ -202,6 +253,9 @@ class Typer:
         """Scale character score to represent remaining typing after words"""
         shift_keys = self.layout.mapper.filter_data(
             lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
+        
+        altgr_keys = self.layout.mapper.filter_data(
+            lambda key_id, layer_id, value: value.key_type == KeyType.LAYER and value.value == 'AltGr')
 
         char_freq = self.dataset[Config.dataset.field_character_frequencies]
         words = self.dataset[Config.dataset.field_word_frequencies]
@@ -221,7 +275,7 @@ class Typer:
             percentage = value[Config.dataset.field_category_frequencies_relative] * 100
             total_char_percentage += percentage
 
-            distance = self.type_char_simple(char, shift_keys)
+            distance = self.type_char_simple(char, shift_keys, altgr_keys)
             # Weight the character distance by its frequency
             weighted_distance = distance * percentage
             total_char_score += weighted_distance
@@ -243,6 +297,9 @@ class Typer:
         """Calculate fitness for word frequencies with fluid typing detection"""
         shift_keys = self.layout.mapper.filter_data(
             lambda key_id, layer_id, value: value.key_type == KeyType.CONTROL and value.value == 'Shift')
+        
+        altgr_keys = self.layout.mapper.filter_data(
+            lambda key_id, layer_id, value: value.key_type == KeyType.LAYER and value.value == 'AltGr')
 
         words = self.dataset[Config.dataset.field_word_frequencies]
         total_percentage = 0
@@ -258,7 +315,7 @@ class Typer:
             self.reset_finger_position()
 
             for char in word:
-                distance, ngram = self.type_char_fluid(char, shift_keys)
+                distance, ngram = self.type_char_fluid(char, shift_keys, altgr_keys)
 
                 # Weight by the word's frequency
                 weighted_distance = distance * percentage
