@@ -24,7 +24,12 @@ def print_menu():
     print("-" * 60)
     print("1. Run Genetic Algorithm (Optimize Keyboard Layout)")
     print("2. Launch Keyboard Annotator GUI")
-    print("3. Exit")
+    print("3. Run Dataset Analysis")
+    print("4. Run Keyboard Evaluator")
+    print("5. Run Keyboard Genotypes Visualization")
+    print("6. Run Physical Keyboard Inspection")
+    print("7. Run All Analysis Options")
+    print("8. Exit")
     print("-" * 60)
 
 

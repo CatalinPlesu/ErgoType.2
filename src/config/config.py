@@ -94,8 +94,8 @@ class DatasetConfig:
 
 class ProcessorConfig:
     # Directory paths
-    raw_dir = '../src/data/text/raw'
-    processed_dir = '../src/data/text/processed'
+    raw_dir = 'src/data/text/raw'
+    processed_dir = 'src/data/text/processed'
 
 
 class FitnessConfig:

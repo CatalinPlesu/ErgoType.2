@@ -22,14 +22,22 @@ class Layout:
         symbols = string.ascii_letters+string.punctuation + string.digits
         for key in self.keyboard.keys:
             kl = key.get_labels()
+            if not kl or not kl[0]:
+                continue  # Skip keys with no labels
             if kl[0] in symbols:
                 if kl[0].isupper():
                     k = kl[0]
                     v = (k.lower(), k)
                     self.mapper[key.id, BASE_LAYER] = Key(KeyType.CHAR, v)
                 else:
-                    s, u = kl
-                    v = (u, s)
+                    # Handle case where kl has only one element or has shift/normal pairs
+                    if len(kl) >= 2:
+                        s, u = kl[0], kl[1]
+                        v = (u, s)
+                    else:
+                        # Single label - use it for both normal and shifted
+                        s = u = kl[0]
+                        v = (s, u)
                     self.mapper[key.id, BASE_LAYER] = Key(KeyType.CHAR, v)
             else:
                 k = kl[0]
