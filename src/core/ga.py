@@ -15,15 +15,22 @@ import time
 class Individual:
     _next_id = 0
 
-    def __init__(self, chromosome, fitness=None, parents=None):
+    def __init__(self, chromosome, fitness=None, parents=None, generation=0, name=None):
         self.chromosome = chromosome
         self.fitness = fitness
         self.id = Individual._next_id
         Individual._next_id += 1
         self.parents = parents or []
+        self.generation = generation
+        # Generate name if not provided
+        if name is None:
+            self.name = f"gen_{generation}-{self.id}"
+        else:
+            self.name = name
 
     def __repr__(self):
-        return f"Individual(id={self.id}, chromosome={''.join(self.chromosome)[:20]}..., fitness={self.fitness:.6f if self.fitness else None}, parents={self.parents})"
+        parent_names = [p if isinstance(p, str) else f"gen_{self.generation-1}-{p}" for p in self.parents] if self.parents else []
+        return f"Individual(name={self.name}, fitness={self.fitness:.6f if self.fitness else None}, parents={parent_names})"
 
 
 class GeneticAlgorithm:
@@ -49,6 +56,11 @@ class GeneticAlgorithm:
 
         print("Evaluator initialized successfully")
 
+        # Track current generation
+        self.current_generation = 0
+        # Map to track individual names by ID
+        self.individual_names = {}
+
         self.population_initialization()
 
         # Determine optimal number of processes
@@ -59,14 +71,18 @@ class GeneticAlgorithm:
         """Initialize population with heuristic layouts and random permutations"""
         self.population = []
 
-        # Add heuristic individuals
+        # Add heuristic individuals with their actual layout names
         for layout_name, genotype in LAYOUT_DATA.items():
-            individual = Individual(chromosome=list(genotype))
+            individual = Individual(
+                chromosome=list(genotype),
+                generation=0,
+                name=layout_name  # Use actual layout name
+            )
             self.population.append(individual)
+            self.individual_names[individual.id] = individual.name
             print(f"Added heuristic layout: {layout_name}")
 
-        print(f"""Population initialized with {
-              len(self.population)} heuristic individuals""")
+        print(f"Population initialized with {len(self.population)} heuristic individuals")
 
         # Add random individuals if needed
         if size > len(self.population):
@@ -78,8 +94,12 @@ class GeneticAlgorithm:
                 for _ in range(needed):
                     shuffled_clone = template_genotype.copy()
                     random.shuffle(shuffled_clone)
-                    individual = Individual(chromosome=shuffled_clone)
+                    individual = Individual(
+                        chromosome=shuffled_clone,
+                        generation=0
+                    )
                     self.population.append(individual)
+                    self.individual_names[individual.id] = individual.name
 
         self.previous_population_ids = self.get_current_population_ids()
         self.previous_population_iteration = 0
@@ -89,6 +109,10 @@ class GeneticAlgorithm:
     def get_current_population_ids(self):
         """Get list of current population IDs"""
         return [ind.id for ind in self.population]
+
+    def get_individual_name(self, individual_id):
+        """Get the name of an individual by ID"""
+        return self.individual_names.get(individual_id, f"unknown-{individual_id}")
 
     def evaluate_individual_fitness(self, individual):
         """Evaluate fitness for a single individual using process-based parallelism"""
@@ -119,12 +143,10 @@ class GeneticAlgorithm:
             homing = fitness_dict['homing_score']
 
             # Fitness formula: lower is better
-            # Penalize distance, reward high ngram and homing scores
             fitness = Config.fitness.distance_weight * distance + \
                 Config.fitness.n_gram_weight * distance * (1.0 - ngram) + \
                 Config.fitness.homerow_weight * distance * (1.0 - homing)
-            print(f"""Process {os.getpid()}: Evaluated individual {
-                  individual.id}, fitness = {fitness:.6f}""")
+            print(f"Process {os.getpid()}: Evaluated {individual.name}, fitness = {fitness:.6f}")
             
             # Add to evaluated individuals if not already there
             if individual not in self.evaluated_individuals:
@@ -133,8 +155,7 @@ class GeneticAlgorithm:
             return individual.id, fitness
 
         except Exception as e:
-            print(f"""Error evaluating individual {
-                  individual.id} in process {os.getpid()}: {e}""")
+            print(f"Error evaluating {individual.name} in process {os.getpid()}: {e}")
             return individual.id, float('inf')
 
     def fitness_function_calculation(self):
@@ -149,8 +170,7 @@ class GeneticAlgorithm:
         if not individuals_to_evaluate:
             return
 
-        print(f"""Evaluating {len(individuals_to_evaluate)} individuals in parallel using {
-              self.num_processes} processes...""")
+        print(f"Evaluating {len(individuals_to_evaluate)} individuals in parallel using {self.num_processes} processes...")
 
         # Use ProcessPoolExecutor for process-based parallel execution
         with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
@@ -176,8 +196,7 @@ class GeneticAlgorithm:
                     completed_count += 1
 
                     if completed_count % 10 == 0:
-                        print(f"""  Completed {
-                              completed_count}/{len(individuals_to_evaluate)} evaluations""")
+                        print(f"  Completed {completed_count}/{len(individuals_to_evaluate)} evaluations")
                 except Exception as e:
                     print(f"Error getting future result: {e}")
                     completed_count += 1
@@ -188,25 +207,25 @@ class GeneticAlgorithm:
         print("\n" + "="*100)
         print("ORDERED FITNESS VALUES (Best to Worst)")
         print("="*100)
-        print(f"""{'Rank':<6} {'ID':<6} {'Fitness':<18} {
-              'Parents':<20} {'Layout Preview':<30}""")
+        print(f"{'Rank':<6} {'Name':<20} {'Fitness':<18} {'Parents':<40}")
         print("-"*100)
 
-        display_population = sorted_population[:
-                                               10] if limited else sorted_population
+        display_population = sorted_population[:10] if limited else sorted_population
 
         for rank, individual in enumerate(display_population, 1):
-            layout_str = ''.join(individual.chromosome[:15]) + "..." if len(
-                individual.chromosome) > 15 else ''.join(individual.chromosome)
-            parents_str = str(
-                individual.parents) if individual.parents else "None"
-            print(f"""{rank:<6} {individual.id:<6} {individual.fitness:<18.6f} {
-                  parents_str:<20} {layout_str:<30}""")
+            # Get parent names
+            if individual.parents:
+                parent_names = [self.get_individual_name(p) for p in individual.parents]
+                parents_str = ", ".join(parent_names)
+            else:
+                parents_str = "Initial"
+            
+            print(f"{rank:<6} {individual.name:<20} {individual.fitness:<18.6f} {parents_str:<40}")
 
         print("="*100 + "\n")
 
     def tournament_selection(self, k=3):
-        """Tournament selection with replacement"""
+        """Tournament selection - just reference existing individuals, don't create copies"""
         self.parents = []
         temp_population = self.population.copy()
 
@@ -223,22 +242,15 @@ class GeneticAlgorithm:
                     best_fitness = temp_population[idx].fitness
                     best_candidate = temp_population[idx]
 
-            self.parents.append(Individual(
-                chromosome=best_candidate.chromosome.copy(),
-                fitness=best_candidate.fitness,
-                parents=best_candidate.parents.copy()
-            ))
+            # Just append the reference, don't create a new Individual
+            self.parents.append(best_candidate)
 
             for idx in sorted(k_candidates, reverse=True):
                 temp_population.pop(idx)
 
         while temp_population and len(self.parents) < len(self.population):
             remaining_individual = temp_population.pop()
-            self.parents.append(Individual(
-                chromosome=remaining_individual.chromosome.copy(),
-                fitness=remaining_individual.fitness,
-                parents=remaining_individual.parents.copy()
-            ))
+            self.parents.append(remaining_individual)
 
     def uniform_crossover(self, offsprings_per_pair=4):
         """Uniform crossover with uniqueness checking"""
@@ -297,9 +309,11 @@ class GeneticAlgorithm:
                         child = Individual(
                             chromosome=new_chromosome,
                             fitness=None,
-                            parents=[parent0.id, parent1.id]
+                            parents=[parent0.id, parent1.id],
+                            generation=self.current_generation + 1
                         )
                         self.children.append(child)
+                        self.individual_names[child.id] = child.name
                         break
                     else:
                         attempts += 1
@@ -313,9 +327,11 @@ class GeneticAlgorithm:
                         child = Individual(
                             chromosome=random_chromosome,
                             fitness=None,
-                            parents=[parent0.id, parent1.id]
+                            parents=[parent0.id, parent1.id],
+                            generation=self.current_generation + 1
                         )
                         self.children.append(child)
+                        self.individual_names[child.id] = child.name
 
         print(f"Created {len(self.children)} unique children")
 
@@ -365,14 +381,17 @@ class GeneticAlgorithm:
 
         while self.previous_population_iteration < stagnant and iteration < max_iterations:
             print(f"\n{'='*80}")
-            print(f"ITERATION {iteration + 1}")
-            print(f"""Stagnation count: {
-                  self.previous_population_iteration}/{stagnant}""")
+            print(f"ITERATION {iteration + 1} (Generation {self.current_generation + 1})")
+            print(f"Stagnation count: {self.previous_population_iteration}/{stagnant}")
             print(f"{'='*80}")
 
             self.tournament_selection()
             self.uniform_crossover()
             self.mutation()
+            
+            # Increment generation before survivor selection
+            self.current_generation += 1
+            
             self.survivor_selection()
 
             self.order_fitness_values(limited=True)
@@ -406,8 +425,9 @@ if __name__ == "__main__":
     print("\n" + "="*80)
     print("BEST INDIVIDUAL FOUND")
     print("="*80)
-    print(f"ID: {best_individual.id}")
+    print(f"Name: {best_individual.name}")
     print(f"Fitness: {best_individual.fitness:.6f}")
-    print(f"Parents: {best_individual.parents}")
+    parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ["Initial"]
+    print(f"Parents: {', '.join(parent_names)}")
     print(f"Layout: {''.join(best_individual.chromosome)}")
     print("="*80)
