@@ -86,11 +86,12 @@ def run_genetic_algorithm(
     top_3_individuals = sorted_population[:3]
 
     # Generate timestamp for file naming
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y-%m-%d--%H:%M:%S")
     
-    # Create output directory with GA run info
+    # Create output directory with GA run info (using new format)
     output_dir = Path("output/ga_results")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = output_dir / f"ga_run_{timestamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
     
     # Save GA run metadata
     ga_run_data = {
@@ -106,7 +107,7 @@ def run_genetic_algorithm(
         "total_individuals_evaluated": len(ga.evaluated_individuals)
     }
     
-    ga_run_path = output_dir / f"ga_run_{timestamp}.json"
+    ga_run_path = run_dir / "ga_run_metadata.json"
     with open(ga_run_path, 'w', encoding='utf-8') as f:
         json.dump(ga_run_data, f, indent=2, ensure_ascii=False)
     
@@ -140,7 +141,7 @@ def run_genetic_algorithm(
             "dataset_name": dataset_name
         }
         
-        json_path = output_dir / f"{rank_name}.json"
+        json_path = run_dir / f"{rank_name}.json"
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(json_data, f, indent=2, ensure_ascii=False)
         
@@ -196,7 +197,7 @@ def run_genetic_algorithm(
                     svg_content = str(keyboard_svg)
                 
                 # Save SVG file
-                svg_path = output_dir / f"{rank_name}_layer_{layer_idx}.svg"
+                svg_path = run_dir / f"{rank_name}_layer_{layer_idx}.svg"
                 with open(svg_path, 'w', encoding='utf-8') as f:
                     f.write(svg_content)
                 
@@ -205,7 +206,7 @@ def run_genetic_algorithm(
         except Exception as e:
             print(f"  Error generating SVG: {e}")
     
-    print(f"\nSaved {len(top_3_individuals)} layouts to {output_dir}")
+    print(f"\nSaved {len(top_3_individuals)} layouts to {run_dir}")
     print("="*80)
 
     # Compare with known layouts
