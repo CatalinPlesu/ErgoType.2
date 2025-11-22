@@ -80,6 +80,7 @@ def main():
         from src.core.evaluator import Evaluator
         from src.core.keyboard import Serial
         from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
+        from src.core.mapper import KeyType
     except ImportError as e:
         print(f"Error importing evaluator modules: {e}")
         print("Make sure you're running from the project root directory")
@@ -131,6 +132,27 @@ def main():
                     
                     # Apply the layout
                     ev_layout.layout.querty_based_remap(layout_value)
+                    
+                    # UPDATE KEYBOARD KEY LABELS - THIS IS THE FIX
+                    layer_idx = 0  # Base layer
+                    
+                    # Clear all labels first
+                    for key_obj in ev_layout.keyboard.keys:
+                        key_obj.clear_labels()
+                    
+                    # Set labels based on the layout mapping
+                    for key_obj in ev_layout.keyboard.keys:
+                        key_id = key_obj.id
+                        
+                        if (key_id, layer_idx) in ev_layout.layout.mapper.data:
+                            key_data = ev_layout.layout.mapper.data[(key_id, layer_idx)]
+                            if key_data.key_type == KeyType.CHAR:
+                                key_obj.set_labels(key_data.value)
+                            elif key_data.key_type in [KeyType.SPECIAL_CHAR, KeyType.CONTROL, KeyType.LAYER]:
+                                if isinstance(key_data.value, tuple):
+                                    key_obj.set_labels((key_data.value[1],) if len(key_data.value) > 1 else (key_data.value[0],))
+                                else:
+                                    key_obj.set_labels((key_data.value,))
                     
                     # Generate SVG visualization using renderer
                     from src.helpers.keyboards.renderer import render_keyboard
