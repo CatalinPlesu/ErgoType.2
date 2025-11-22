@@ -13,3 +13,4 @@ raw/
 **/processed/*.json
 src/data/distance/
 notebooks/src/data/distance/
+raport.txt
