@@ -224,7 +224,7 @@ def run_genetic_algorithm(
     # Re-evaluate some standard layouts for comparison
 
     comparison_layouts = LAYOUT_DATA
-    comparison_layouts[best_individual.name] = best_individual
+    comparison_layouts[best_individual.name] = best_individual.chromosome
 
     layout_scores = []
     for name, layout in comparison_layouts.items():
