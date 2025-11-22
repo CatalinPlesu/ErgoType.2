@@ -5,9 +5,15 @@ Run this to optimize keyboard layouts using the genetic algorithm
 
 from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
 from src.core.ga import GeneticAlgorithm
+from src.helpers.layouts.visualization import LayoutVisualization
+from src.helpers.keyboards.renderer import render_keyboard
+from src.core.mapper import KeyType
 import sys
 import os
 from datetime import datetime
+import json
+import pickle
+from pathlib import Path
 
 # Add parent directory to path if needed
 sys.path.insert(0, os.path.abspath(
@@ -75,6 +81,133 @@ def run_genetic_algorithm(
     print(''.join(best_individual.chromosome))
     print()
 
+    # Get the top 3 best individuals
+    sorted_population = sorted(ga.population, key=lambda x: x.fitness)
+    top_3_individuals = sorted_population[:3]
+
+    # Generate timestamp for file naming
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create output directory with GA run info
+    output_dir = Path("output/ga_results")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save GA run metadata
+    ga_run_data = {
+        "timestamp": timestamp,
+        "keyboard_file": keyboard_file,
+        "dataset_file": dataset_file,
+        "dataset_name": dataset_name,
+        "population_size": population_size,
+        "max_iterations": max_iterations,
+        "stagnant_limit": stagnant_limit,
+        "best_fitness": best_individual.fitness,
+        "best_layout": ''.join(best_individual.chromosome),
+        "total_individuals_evaluated": len(ga.evaluated_individuals)
+    }
+    
+    ga_run_path = output_dir / f"ga_run_{timestamp}.json"
+    with open(ga_run_path, 'w', encoding='utf-8') as f:
+        json.dump(ga_run_data, f, indent=2, ensure_ascii=False)
+    
+    print(f"Saved GA run metadata: {ga_run_path}")
+    
+    # Save best 3 layouts to JSON and SVG
+    print("="*80)
+    print("SAVING BEST 3 LAYOUTS")
+    print("="*80)
+    
+    for i, individual in enumerate(top_3_individuals, 1):
+        rank_name = f"layout_rank{i}"
+        item_n = individual.id
+        
+        print(f"\nProcessing Layout {i} (Item {item_n}):")
+        print(f"Fitness: {individual.fitness:.6f}")
+        print(f"Layout: {''.join(individual.chromosome)}")
+        
+        # Save JSON data
+        json_data = {
+            "timestamp": timestamp,
+            "rank": i,
+            "rank_name": rank_name,
+            "item_number": item_n,
+            "fitness": individual.fitness,
+            "chromosome": individual.chromosome,
+            "parents": individual.parents,
+            "layout_string": ''.join(individual.chromosome),
+            "keyboard_file": keyboard_file,
+            "dataset_file": dataset_file,
+            "dataset_name": dataset_name
+        }
+        
+        json_path = output_dir / f"{rank_name}.json"
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"  Saved JSON: {json_path}")
+        
+        # Generate and save SVG for each layer
+        try:
+            # Apply the optimized layout directly using remap method
+            from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
+            ga.evaluator.layout.remap(LAYOUT_DATA["qwerty"], individual.chromosome)
+            
+            # Get all layers
+            layers = []
+            for key_id, layer_idx in ga.evaluator.layout.mapper.data.keys():
+                if layer_idx not in layers:
+                    layers.append(layer_idx)
+            layers = sorted(layers) if layers else [0]
+            
+            # Save SVG for each layer
+            for layer_idx in layers:
+                # UPDATE KEYBOARD KEY LABELS FOR THIS LAYER
+                for key_obj in ga.evaluator.keyboard.keys:
+                    key_obj.clear_labels()
+                
+                for key_obj in ga.evaluator.keyboard.keys:
+                    key_id = key_obj.id
+                    
+                    if (key_id, layer_idx) in ga.evaluator.layout.mapper.data:
+                        key_data = ga.evaluator.layout.mapper.data[(key_id, layer_idx)]
+                        if key_data.key_type == KeyType.CHAR:
+                            key_obj.set_labels(key_data.value)
+                        elif key_data.key_type in [KeyType.SPECIAL_CHAR, KeyType.CONTROL, KeyType.LAYER]:
+                            if isinstance(key_data.value, tuple):
+                                key_obj.set_labels((key_data.value[1],) if len(key_data.value) > 1 else (key_data.value[0],))
+                            else:
+                                key_obj.set_labels((key_data.value,))
+                
+                # Use the renderer directly for better control
+                from src.helpers.keyboards.renderer import render_keyboard_with_heatmap
+                
+                # Generate SVG visualization (without heatmap for cleaner export)
+                keyboard_svg = render_keyboard_with_heatmap(
+                    ga.evaluator.keyboard, {}, layer_idx=layer_idx, freq_range=1.0, 
+                    min_freq=0.0, layout=ga.evaluator.layout
+                )
+                
+                # Extract SVG content from the IPython SVG object
+                if hasattr(keyboard_svg, 'data'):
+                    svg_content = keyboard_svg.data
+                elif hasattr(keyboard_svg, '_repr_svg_'):
+                    svg_content = keyboard_svg._repr_svg_()
+                else:
+                    svg_content = str(keyboard_svg)
+                
+                # Save SVG file
+                svg_path = output_dir / f"{rank_name}_layer_{layer_idx}.svg"
+                with open(svg_path, 'w', encoding='utf-8') as f:
+                    f.write(svg_content)
+                
+                print(f"  Saved Layer {layer_idx}: {svg_path}")
+                
+        except Exception as e:
+            print(f"  Error generating SVG: {e}")
+    
+    print(f"\nSaved {len(top_3_individuals)} layouts to {output_dir}")
+    print("="*80)
+
     # Compare with known layouts
     print("="*80)
     print("COMPARISON WITH STANDARD LAYOUTS")
@@ -90,7 +223,7 @@ def run_genetic_algorithm(
 
     layout_scores = []
     for name, layout in comparison_layouts.items():
-        ga.evaluator.layout.querty_based_remap(layout)
+        ga.evaluator.layout.remap(LAYOUT_DATA["qwerty"], layout)
         fitness_dict = ga.evaluator.typer.fitness()
         combined = fitness_dict['distance_score'] * (
             2.0 - fitness_dict['ngram_score']) * (2.0 - fitness_dict['homing_score'])

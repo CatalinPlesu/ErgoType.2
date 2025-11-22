@@ -83,6 +83,7 @@ class GeneticAlgorithm:
 
         self.previous_population_ids = self.get_current_population_ids()
         self.previous_population_iteration = 0
+        self.evaluated_individuals = []  # Track all evaluated individuals
         print(f"Total population size: {len(self.population)}")
 
     def get_current_population_ids(self):
@@ -104,7 +105,8 @@ class GeneticAlgorithm:
             evaluator.load_typer()
 
             # Remap layout to individual's chromosome
-            evaluator.layout.querty_based_remap(individual.chromosome)
+            from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
+            evaluator.layout.remap(LAYOUT_DATA["qwerty"], individual.chromosome)
 
             # Calculate fitness
             with open(os.devnull, 'w') as devnull:
@@ -123,6 +125,11 @@ class GeneticAlgorithm:
                 Config.fitness.homerow_weight * distance * (1.0 - homing)
             print(f"""Process {os.getpid()}: Evaluated individual {
                   individual.id}, fitness = {fitness:.6f}""")
+            
+            # Add to evaluated individuals if not already there
+            if individual not in self.evaluated_individuals:
+                self.evaluated_individuals.append(individual)
+            
             return individual.id, fitness
 
         except Exception as e:
@@ -162,6 +169,9 @@ class GeneticAlgorithm:
                     for ind in individuals_to_evaluate:
                         if ind.id == individual_id:
                             ind.fitness = fitness
+                            # Add to evaluated individuals if not already there
+                            if ind not in self.evaluated_individuals:
+                                self.evaluated_individuals.append(ind)
                             break
                     completed_count += 1
 
