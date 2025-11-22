@@ -6,6 +6,7 @@ from src.core.ga import GeneticAlgorithm
 from src.helpers.layouts.visualization import LayoutVisualization
 from src.helpers.keyboards.renderer import render_keyboard
 from src.core.mapper import KeyType
+from src.config.config import Config
 import sys
 import os
 from datetime import datetime
@@ -221,29 +222,43 @@ def run_genetic_algorithm(
     print("COMPARISON WITH STANDARD LAYOUTS")
     print("="*80)
 
-    # Re-evaluate some standard layouts for comparison
+    # Create a FRESH evaluator for comparison (no state pollution)
+    from src.core.evaluator import Evaluator
 
-    comparison_layouts = LAYOUT_DATA
+    comparison_evaluator = Evaluator(debug=False)
+    comparison_evaluator.load_keyoard(keyboard_file)
+    comparison_evaluator.load_distance()
+    comparison_evaluator.load_layout()
+    comparison_evaluator.load_dataset(dataset_file=dataset_file, dataset_name=dataset_name)
+    comparison_evaluator.load_typer()
+
+    # Add optimized layout to comparison
+    comparison_layouts = LAYOUT_DATA.copy()
     comparison_layouts[best_individual.name] = best_individual.chromosome
 
     layout_scores = []
     for name, layout in comparison_layouts.items():
-        ga.evaluator.layout.remap(LAYOUT_DATA["qwerty"], layout)
-        fitness_dict = ga.evaluator.typer.fitness()
-        combined = fitness_dict['distance_score'] * (
-            2.0 - fitness_dict['ngram_score']) * (2.0 - fitness_dict['homing_score'])
+        # Remap layout
+        comparison_evaluator.layout.remap(LAYOUT_DATA["qwerty"], layout)
+        
+        # Calculate fitness using Typer (fresh calculation)
+        fitness_dict = comparison_evaluator.typer.fitness()
+        
+        # Combine using same formula as GA
+        combined = Config.fitness.distance_weight * fitness_dict['distance_score'] + \
+            Config.fitness.n_gram_weight * fitness_dict['distance_score'] * (1.0 - fitness_dict['ngram_score']) + \
+            Config.fitness.homerow_weight * fitness_dict['distance_score'] * (1.0 - fitness_dict['homing_score'])
+        
         layout_scores.append((name, combined, fitness_dict))
 
-    # Sort by combined score
+    # Sort by combined score (lower is better)
     layout_scores.sort(key=lambda x: x[1])
 
     print(f"\n{'Rank':<6} {'Layout':<20} {'Combined':<15} {'Distance':<15} {'N-gram':<12} {'Homing':<12}")
     print("-"*90)
 
     for rank, (name, combined, fitness) in enumerate(layout_scores, 1):
-        display_name = best_individual.name if name == 'Optimized' else name
-        print(f"{rank:<6} {display_name:<20} {combined:<15.2f} {fitness['distance_score']:<15.2f} {fitness['ngram_score']:<12.4f} {fitness['homing_score']:<12.4f}")
-
+        print(f"{rank:<6} {name:<20} {combined:<15.2f} {fitness['distance_score']:<15.2f} {fitness['ngram_score']:<12.4f} {fitness['homing_score']:<12.4f}")
     print("="*80)
     print(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
