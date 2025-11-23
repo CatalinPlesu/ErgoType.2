@@ -4,11 +4,68 @@ Keyboard renderer module for displaying keyboard layouts in Jupyter notebooks.
 """
 
 import math
-import svgwrite
 from typing import List, Dict, Any
-from IPython.display import SVG, display
 from src.core.mapper import KeyType
 from src.core.typer import Typer
+
+# Handle optional dependencies
+try:
+    import svgwrite
+    SVGWRITE_AVAILABLE = True
+except ImportError:
+    SVGWRITE_AVAILABLE = False
+
+try:
+    from IPython.display import SVG, display
+    IPYTHON_AVAILABLE = True
+except ImportError:
+    IPYTHON_AVAILABLE = False
+
+# Mock implementations if dependencies not available
+if not SVGWRITE_AVAILABLE:
+    class MockContainer:
+        class Group:
+            def __init__(self):
+                self.elements = []
+            def add(self, element):
+                self.elements.append(element)
+    
+    class MockSvgwrite:
+        container = MockContainer()
+        
+        class Drawing:
+            def __init__(self, filename, size):
+                self.filename = filename
+                self.size = size
+                self.elements = []
+            def add(self, element):
+                self.elements.append(element)
+            def save(self):
+                print(f"SVG would be saved to {self.filename} with size {self.size}")
+        class Rectangle:
+            def __init__(self, insert, size, **kwargs):
+                self.insert = insert
+                self.size = size
+                self.kwargs = kwargs
+        class Text:
+            def __init__(self, text, insert, **kwargs):
+                self.text = text
+                self.insert = insert
+                self.kwargs = kwargs
+        class Circle:
+            def __init__(self, center, radius, **kwargs):
+                self.center = center
+                self.radius = radius
+                self.kwargs = kwargs
+    svgwrite = MockSvgwrite()
+
+if not IPYTHON_AVAILABLE:
+    class MockSVG:
+        def __init__(self, content):
+            self.content = content
+    def display(obj):
+        print(f"Display: {obj}")
+    SVG = MockSVG
 
 # Unit sizes configuration (similar to the JavaScript version)
 UNIT_SIZES = {

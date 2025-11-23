@@ -1,0 +1,6 @@
+/home/catalin/dev/ergotype.2/ErgoType.Core/obj/Debug/net8.0/ErgoType.Core.csproj.AssemblyReference.cache
+/home/catalin/dev/ergotype.2/ErgoType.Core/obj/Debug/net8.0/ErgoType.Core.GeneratedMSBuildEditorConfig.editorconfig
+/home/catalin/dev/ergotype.2/ErgoType.Core/obj/Debug/net8.0/ErgoType.Core.AssemblyInfoInputs.cache
+/home/catalin/dev/ergotype.2/ErgoType.Core/obj/Debug/net8.0/ErgoType.Core.AssemblyInfo.cs
+/home/catalin/dev/ergotype.2/ErgoType.Core/obj/Debug/net8.0/ErgoType.Core.csproj.CoreCompileInputs.cache
+/home/catalin/dev/ergotype.2/ErgoType.Core/obj/Debug/net8.0/ErgoType.Core.sourcelink.json

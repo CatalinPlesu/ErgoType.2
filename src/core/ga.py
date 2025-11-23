@@ -60,6 +60,12 @@ class GeneticAlgorithm:
         self.current_generation = 0
         # Map to track individual names by ID
         self.individual_names = {}
+        
+        # Track min/max values across all generations for normalization
+        self.min_distance = float('inf')
+        self.max_distance = float('-inf')
+        self.min_time = float('inf')
+        self.max_time = float('-inf')
 
         self.population_initialization()
 
@@ -117,6 +123,9 @@ class GeneticAlgorithm:
     def evaluate_individual_fitness(self, individual):
         """Evaluate fitness for a single individual using process-based parallelism"""
         try:
+            # Record start time for timing metadata
+            start_time = time.time()
+            
             # Create evaluator for this process
             evaluator = Evaluator(debug=False)
             evaluator.load_keyoard(self.keyboard_file)
@@ -131,32 +140,62 @@ class GeneticAlgorithm:
             # Remap layout to individual's chromosome
             from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
             evaluator.layout.remap(LAYOUT_DATA["qwerty"], individual.chromosome)
+            
+            # Recreate typer with the updated layout
+            evaluator.load_typer()
 
             # Calculate fitness
-            with open(os.devnull, 'w') as devnull:
-                with redirect_stdout(devnull):
-                    fitness_dict = evaluator.typer.fitness()
-
-            # Combined fitness score (lower is better)
-            distance = fitness_dict['distance_score']
-            ngram = fitness_dict['ngram_score']
-            homing = fitness_dict['homing_score']
-
-            # Fitness formula: lower is better
-            fitness = Config.fitness.distance_weight * distance + \
-                Config.fitness.n_gram_weight * distance * (1.0 - ngram) + \
-                Config.fitness.homerow_weight * distance * (1.0 - homing)
-            print(f"Process {os.getpid()}: Evaluated {individual.name}, fitness = {fitness:.6f}")
+            fitness_result = evaluator.get_fitness()
             
-            # Add to evaluated individuals if not already there
-            if individual not in self.evaluated_individuals:
-                self.evaluated_individuals.append(individual)
-            
-            return individual.id, fitness
+            # Handle different fitness result formats
+            if isinstance(fitness_result, dict):
+                # Legacy fitness format
+                distance = fitness_result.get('distance_score', 0)
+                time_component = fitness_result.get('ngram_score', 0) * 100  # Scale up
+                fitness = distance + time_component
+                
+            elif isinstance(fitness_result, tuple) and len(fitness_result) == 2:
+                # Simplified fitness format (distance, time)
+                distance, time_component = fitness_result
+                
+                # For now, just use raw values - normalization will be done later
+                fitness = distance + time_component
+            else:
+                # Fallback
+                fitness = float(fitness_result) if fitness_result is not None else float('inf')
+                distance = fitness
+                time_component = 0
 
+            # Check for cached result
+            cache_hit = hasattr(evaluator, 'fitness_cache') and evaluator.fitness_cache is not None
+            cached = False
+            if hasattr(evaluator, '_get_cached_fitness'):
+                # This would need to be implemented in evaluator to detect cache hits
+                pass
+
+            # Record timing metadata
+            calculation_time = time.time() - start_time
+            
+            # Return fitness result with metadata
+            return individual.id, {
+                'fitness': fitness,
+                'distance': distance,
+                'time': time_component,
+                'calculation_time': calculation_time,
+                'from_cache': cached,
+                'start_time': start_time
+            }
+            
         except Exception as e:
-            print(f"Error evaluating {individual.name} in process {os.getpid()}: {e}")
-            return individual.id, float('inf')
+            print(f"Error evaluating {individual.name}: {e}")
+            return individual.id, {
+                'fitness': float('inf'),
+                'distance': float('inf'),
+                'time': float('inf'),
+                'calculation_time': 0,
+                'from_cache': False,
+                'start_time': time.time()
+            }
 
     def fitness_function_calculation(self):
         """Calculate fitness for all individuals without fitness values using process-based parallelism"""
@@ -171,6 +210,9 @@ class GeneticAlgorithm:
             return
 
         print(f"Evaluating {len(individuals_to_evaluate)} individuals in parallel using {self.num_processes} processes...")
+        
+        # Start timing
+        start_time = time.time()
 
         # Use ProcessPoolExecutor for process-based parallel execution
         with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
@@ -182,24 +224,258 @@ class GeneticAlgorithm:
 
             # Process completed evaluations as they finish
             completed_count = 0
+            last_status_time = time.time()
+            last_progress_print = time.time()
+            
             for future in as_completed(future_to_individual):
                 try:
-                    individual_id, fitness = future.result()
+                    individual_id, result = future.result()
+                    
                     # Find the individual by ID and set its fitness
                     for ind in individuals_to_evaluate:
                         if ind.id == individual_id:
-                            ind.fitness = fitness
+                            # Set fitness value
+                            if isinstance(result, dict):
+                                ind.fitness = result['fitness']
+                                # Store timing metadata
+                                if not hasattr(ind, 'timing_metadata'):
+                                    ind.timing_metadata = {}
+                                ind.timing_metadata.update({
+                                    'calculation_time': result['calculation_time'],
+                                    'from_cache': result.get('from_cache', False),
+                                    'distance': result.get('distance', 0),
+                                    'time_component': result.get('time', 0),
+                                    'start_time': result.get('start_time', 0)
+                                })
+                            elif isinstance(result, tuple) and len(result) == 2:
+                                # Simplified fitness format: (distance, time)
+                                distance, time_component = result
+                                # Apply simplified fitness formula - just use raw values for now
+                                # Normalization will be done after all evaluations
+                                fitness = (Config.fitness.distance_weight * distance + 
+                                          Config.fitness.time_weight * time_component)
+                                ind.fitness = fitness
+                                
+                                # Store timing metadata
+                                if not hasattr(ind, 'timing_metadata'):
+                                    ind.timing_metadata = {}
+                                
+                                # Set start_time if not already set (for simplified fitness)
+                                current_time = time.time()
+                                if 'start_time' not in ind.timing_metadata:
+                                    ind.timing_metadata['start_time'] = current_time
+                                
+                                ind.timing_metadata.update({
+                                    'calculation_time': current_time - ind.timing_metadata['start_time'],
+                                    'from_cache': False,
+                                    'distance': distance,
+                                    'time_component': time_component
+                                })
+                            else:
+                                # Fallback for legacy format
+                                ind.fitness = result
+                                if not hasattr(ind, 'timing_metadata'):
+                                    ind.timing_metadata = {}
+                                ind.timing_metadata['calculation_time'] = time.time() - (ind.timing_metadata.get('start_time', time.time()))
+                            
                             # Add to evaluated individuals if not already there
                             if ind not in self.evaluated_individuals:
                                 self.evaluated_individuals.append(ind)
                             break
                     completed_count += 1
 
-                    if completed_count % 10 == 0:
-                        print(f"  Completed {completed_count}/{len(individuals_to_evaluate)} evaluations")
+                    # Print status updates only once per minute to avoid flicker
+                    current_time = time.time()
+                    time_since_last_print = current_time - last_progress_print
+                    
+                    # Only print when 20%, 40%, 60%, 80%, 100% complete, or every minute
+                    progress_milestones = [0.2, 0.4, 0.6, 0.8, 1.0]
+                    target_completed = [int(milestone * len(individuals_to_evaluate)) for milestone in progress_milestones]
+                    
+                    should_print = (time_since_last_print >= 60) or (completed_count in target_completed)
+                    
+                    if should_print:
+                        # No screen clearing - just print progress update
+                        
+                        elapsed = current_time - start_time
+                        avg_time_per_eval = elapsed / completed_count if completed_count > 0 else 0
+                        progress_pct = (completed_count / len(individuals_to_evaluate)) * 100
+                        
+                        # Estimate remaining time (accounting for parallel processing)
+                        if completed_count > 0:
+                            # Calculate effective throughput (individuals per second across all processes)
+                            effective_throughput = completed_count / elapsed
+                            
+                            # Remaining individuals to process
+                            remaining_individuals = len(individuals_to_evaluate) - completed_count
+                            
+                            # Time to process remaining individuals (with parallel processing)
+                            if effective_throughput > 0:
+                                remaining = remaining_individuals / effective_throughput
+                                total_estimated = len(individuals_to_evaluate) / effective_throughput
+                            else:
+                                remaining = float('inf')
+                                total_estimated = float('inf')
+                            
+                            # Calculate estimated time for all iterations
+                            total_generations = getattr(self, 'max_generations', 100)
+                            current_generation = getattr(self, 'current_generation', 0) + 1
+                            remaining_generations = total_generations - current_generation
+                            
+                            # For all iterations, assume similar timing per iteration
+                            estimated_time_per_iteration = total_estimated
+                            total_estimated_all_iterations = estimated_time_per_iteration * total_generations
+                            elapsed_all_iterations = elapsed * current_generation
+                            remaining_all_iterations = total_estimated_all_iterations - elapsed_all_iterations
+                        else:
+                            remaining = float('inf')
+                            total_estimated = float('inf')
+                            total_estimated_all_iterations = float('inf')
+                            elapsed_all_iterations = 0
+                            remaining_all_iterations = float('inf')
+                        
+                        # Format time nicely
+                        def format_time(seconds):
+                            if seconds >= 3600:
+                                hours = int(seconds // 3600)
+                                minutes = int((seconds % 3600) // 60)
+                                return f"{hours}h {minutes}m"
+                            elif seconds >= 60:
+                                minutes = int(seconds // 60)
+                                secs = int(seconds % 60)
+                                return f"{minutes}m {secs}s"
+                            else:
+                                return f"{seconds:.1f}s"
+                        
+                        # Create progress bar
+                        bar_length = 40
+                        filled_length = int(bar_length * progress_pct // 100)
+                        bar = '█' * filled_length + '-' * (bar_length - filled_length)
+                        
+                        print("=" * 60)
+                        print("GENETIC ALGORITHM - FITNESS EVALUATION")
+                        print("=" * 60)
+                        print(f"Iteration: {getattr(self, 'current_generation', 0) + 1}/{getattr(self, 'max_generations', 100)}")
+                        print(f"Population Size: {len(individuals_to_evaluate)}")
+                        print(f"Processes: {self.num_processes}")
+                        print()
+                        print(f"Progress: [{bar}] {progress_pct:.1f}%")
+                        print(f"Processed: {completed_count}/{len(individuals_to_evaluate)} individuals")
+                        print(f"Status: {'COMPLETED' if completed_count == len(individuals_to_evaluate) else 'RUNNING'}")
+                        print()
+                        print(f"Timing:")
+                        print(f"  This Iteration:")
+                        print(f"    Elapsed: {format_time(elapsed)}")
+                        print(f"    Remaining: {format_time(remaining)}")
+                        print(f"    Total Estimated: {format_time(total_estimated)}")
+                        print(f"    Per Individual: {avg_time_per_eval:.3f}s")
+                        if total_generations > 1:
+                            print(f"  All Iterations:")
+                            print(f"    Elapsed: {format_time(elapsed_all_iterations)}")
+                            print(f"    Remaining: {format_time(remaining_all_iterations)}")
+                            print(f"    Total Estimated: {format_time(total_estimated_all_iterations)}")
+                        print()
+                        
+                        # Show cache hit rate if available
+                        cache_hits = sum(1 for ind in individuals_to_evaluate if hasattr(ind, 'timing_metadata') and ind.timing_metadata.get('from_cache', False))
+                        if cache_hits > 0:
+                            cache_rate = (cache_hits / completed_count) * 100
+                            print(f"Cache Performance: {cache_rate:.1f}% ({cache_hits}/{completed_count})")
+                        
+                        print("=" * 60)
+                        
+                        last_progress_print = current_time
+                        last_status_time = current_time
+                        
                 except Exception as e:
                     print(f"Error getting future result: {e}")
                     completed_count += 1
+        
+        # Calculate and display timing statistics
+        total_time = time.time() - start_time
+        avg_time_per_individual = total_time / len(individuals_to_evaluate)
+        
+        # For simplified fitness, recalculate with proper normalization
+        if Config.fitness.use_simplified_fitness:
+            # Collect all distance and time values to calculate bounds
+            distances = []
+            times = []
+            
+            for ind in individuals_to_evaluate:
+                if hasattr(ind, 'timing_metadata') and 'distance' in ind.timing_metadata:
+                    distances.append(ind.timing_metadata['distance'])
+                    times.append(ind.timing_metadata['time_component'])
+            
+            if distances and times:
+                # Calculate min/max bounds
+                min_distance = min(distances)
+                max_distance = max(distances)
+                min_time = min(times)
+                max_time = max(times)
+                
+                print(f"\n=== Normalization Bounds (Fitness Function) ===")
+                print(f"Distance: {min_distance:.2f} (best) - {max_distance:.2f} (worst)")
+                print(f"Time: {min_time:.2f} (best) - {max_time:.2f} (worst)")
+                print(f"Normalization: value/max_value (0.0 = best, 1.0 = worst)")
+                print(f"Fitness: 1.0 - sickness (1.0 = best, 0.0 = worst)")
+                
+                # Avoid division by zero
+                distance_range = max_distance - min_distance
+                time_range = max_time - min_time
+                
+                if distance_range > 0 and time_range > 0:
+                    # Update global bounds for future iterations
+                    self.min_distance = min(self.min_distance, min_distance)
+                    self.max_distance = max(self.max_distance, max_distance)
+                    self.min_time = min(self.min_time, min_time)
+                    self.max_time = max(self.max_time, max_time)
+                    
+                    # Recalculate fitness with normalization
+                    distance_weight = Config.fitness.distance_weight
+                    time_weight = Config.fitness.time_weight
+                    
+                    for ind in individuals_to_evaluate:
+                        if hasattr(ind, 'timing_metadata'):
+                            distance = ind.timing_metadata['distance']
+                            time_component = ind.timing_metadata['time_component']
+                            
+                            # Normalize to 0-1 range for fitness using max as max and 0 as min
+                            # Then invert: fitness = 1 - normalized_value
+                            # This gives: 1.0 = best (minimum distance/time), 0.0 = worst (maximum distance/time)
+                            normalized_distance = distance / max_distance  # 0 = best, 1 = worst
+                            normalized_time = time_component / max_time    # 0 = best, 1 = worst
+                            
+                            # Apply weighted sickness function, then invert to get fitness
+                            sickness = (distance_weight * normalized_distance + 
+                                       time_weight * normalized_time)
+                            fitness = 1.0 - sickness  # Invert: 1.0 = best, 0.0 = worst
+                            
+                            ind.fitness = fitness
+                            
+                            if hasattr(Config, 'debug') and Config.debug:
+                                print(f"  {ind.name}: distance={distance:.2f}→{normalized_distance:.4f}, time={time_component:.2f}→{normalized_time:.4f}, sickness={sickness:.6f}, fitness={fitness:.6f}")
+                                print(f"    (normalized: 0.0 = best, 1.0 = worst | fitness: 1.0 = best, 0.0 = worst)")
+                else:
+                    print("⚠️  Warning: All individuals have identical distance/time values, using raw values")
+        
+        print(f"✅ Fitness evaluation completed:")
+        print(f"  Total time: {total_time:.2f}s")
+        print(f"  Average per individual: {avg_time_per_individual:.3f}s")
+        print(f"  Throughput: {len(individuals_to_evaluate)/total_time:.2f} individuals/second")
+        
+        # Store timing metadata for each individual
+        for ind in individuals_to_evaluate:
+            if hasattr(ind, 'timing_metadata'):
+                ind.timing_metadata['avg_calculation_time'] = avg_time_per_individual
+                ind.timing_metadata['total_evaluation_time'] = total_time
+                ind.timing_metadata['individual_count'] = len(individuals_to_evaluate)
+        
+        # Update typer with normalization bounds for simplified fitness
+        if Config.fitness.use_simplified_fitness:
+            self.evaluator.typer.set_normalization_bounds(
+                self.min_distance, self.max_distance, self.min_time, self.max_time
+            )
+            print(f"Updated typer normalization bounds: Distance {self.min_distance:.1f}-{self.max_distance:.1f}, Time {self.min_time:.2f}-{self.max_time:.2f}")
 
     def order_fitness_values(self, limited=False):
         """Print ordered fitness values"""
@@ -227,7 +503,14 @@ class GeneticAlgorithm:
     def tournament_selection(self, k=3):
         """Tournament selection - just reference existing individuals, don't create copies"""
         self.parents = []
-        temp_population = self.population.copy()
+        # Only select from individuals that have fitness values
+        temp_population = [ind for ind in self.population if ind.fitness is not None]
+        
+        if len(temp_population) < k:
+            print(f"Warning: Only {len(temp_population)} individuals have fitness values, need at least {k} for tournament selection")
+            return
+
+        print(f"Starting tournament selection with {len(temp_population)} individuals (out of {len(self.population)} total)")
 
         while len(temp_population) >= k:
             sample_size = min(k, len(temp_population))
@@ -238,9 +521,14 @@ class GeneticAlgorithm:
             best_fitness = float('inf')
 
             for idx in k_candidates:
-                if temp_population[idx].fitness < best_fitness:
-                    best_fitness = temp_population[idx].fitness
-                    best_candidate = temp_population[idx]
+                candidate = temp_population[idx]
+                # Skip individuals without fitness values
+                if candidate.fitness is None:
+                    continue
+                    
+                if candidate.fitness < best_fitness:
+                    best_fitness = candidate.fitness
+                    best_candidate = candidate
 
             # Just append the reference, don't create a new Individual
             self.parents.append(best_candidate)
@@ -265,6 +553,14 @@ class GeneticAlgorithm:
 
         for i in range(0, len(self.parents) - 1, 2):
             parent0, parent1 = self.parents[i], self.parents[i+1]
+
+            # Ensure both parents exist and have fitness values
+            if parent0 is None or parent0.fitness is None:
+                print(f"Warning: Parent {parent0.name if parent0 else 'None'} has no fitness, skipping")
+                continue
+            if parent1 is None or parent1.fitness is None:
+                print(f"Warning: Parent {parent1.name if parent1 else 'None'} has no fitness, skipping")
+                continue
 
             if parent1.fitness < parent0.fitness:
                 parent0, parent1 = parent1, parent0
@@ -376,6 +672,10 @@ class GeneticAlgorithm:
         """Run genetic algorithm"""
         iteration = 0
         print("Starting genetic algorithm...")
+        
+        # Start total runtime timing
+        total_start_time = time.time()
+        
         self.fitness_function_calculation()
         self.order_fitness_values(limited=True)
 
@@ -404,8 +704,14 @@ class GeneticAlgorithm:
 
             iteration += 1
 
+        # Calculate total runtime
+        total_runtime = time.time() - total_start_time
+        
         print(f"\nAlgorithm completed after {iteration} iterations")
         print(f"Final stagnation count: {self.previous_population_iteration}")
+        print(f"Total runtime: {total_runtime:.2f}s")
+        print(f"Average time per iteration: {total_runtime/iteration:.2f}s" if iteration > 0 else "")
+        
         self.order_fitness_values(limited=False)
 
         # Return best individual

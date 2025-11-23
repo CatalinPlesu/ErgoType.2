@@ -423,6 +423,16 @@ class Serial:
 
     @staticmethod
     def parse(json_str: str) -> Keyboard:
-        import json5
-        data = json5.loads(json_str)
+        try:
+            import json5
+            data = json5.loads(json_str)
+        except ImportError:
+            import json
+            # Try to parse with regular json (may fail on comments/trailing commas)
+            try:
+                data = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                print(f"Warning: json5 not available and JSON parsing failed: {e}")
+                print("Consider installing json5: pip install json5")
+                raise
         return Serial.deserialize(data)

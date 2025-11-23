@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "description": "Keyboard layout optimization system with genetic algorithms",
+  "authors": ["ErgoType Team"],
+  "frameworks": ["net8.0"],
+  "dependencies": {
+    "Microsoft.Extensions.Configuration": "8.0.0",
+    "Microsoft.Extensions.Configuration.Json": "8.0.0",
+    "Microsoft.Extensions.Logging": "8.0.0",
+    "Spectre.Console": "0.49.1"
+  }
+}

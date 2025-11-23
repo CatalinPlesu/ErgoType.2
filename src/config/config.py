@@ -2,6 +2,8 @@
 Configuration file for keyboard layout optimization
 """
 
+from src.core.keyboard import FingerName, Hand
+
 
 class DatasetConfig:
     # ROOT LEVEL FIELDS (top-level keys in JSON)
@@ -99,7 +101,42 @@ class ProcessorConfig:
 
 
 class FitnessConfig:
-    # Distance-based calculation config
+    # Simplified evaluation parameters
+    # Use simplified fitness function: fitness = weight1 * normalized_distance + weight2 * normalized_time
+    use_simplified_fitness = True
+    
+    # Fitness component weights for simplified formula
+    distance_weight = 0.5
+    time_weight = 0.5
+    
+    # Finger strength parameters for time calculation
+    # Base time constants for each finger (lower = faster)
+    finger_time_base = {
+        FingerName.LEFT_PINKY: 1.8,
+        FingerName.LEFT_RING: 1.5,
+        FingerName.LEFT_MIDDLE: 1.2,
+        FingerName.LEFT_INDEX: 1.0,
+        FingerName.LEFT_THUMB: 1.3,
+        FingerName.RIGHT_INDEX: 1.0,
+        FingerName.RIGHT_MIDDLE: 1.2,
+        FingerName.RIGHT_RING: 1.5,
+        FingerName.RIGHT_PINKY: 1.8,
+        FingerName.RIGHT_THUMB: 1.3
+    }
+    
+    # Parallel typing parameters
+    parallel_typing_enabled = True  # Allow parallel finger movements
+    synchronous_end = True  # Movements end synchronously for faster typing
+    
+    # 256-character window for distance simulation
+    simulation_window_size = 256
+    finger_state_persistence = True  # Finger state is kept within window
+    
+    # Fitts law parameters for time calculation (adjusted for 40 WPM = 200 chars/min)
+    fitts_a = 0.05  # Fitts law intercept - reduced for faster typing
+    fitts_b = 0.025  # Fitts law slope - reduced for faster typing
+    
+    # Distance-based calculation config (legacy)
     # use_words: simulate typing select_top_n_words, it will type at once biggest n-gram it can
     use_words = True
     # use_symbols: simulate pressing the rest of symbols not typed in a word, alternatively, only symbols when disabling words
@@ -116,8 +153,8 @@ class FitnessConfig:
     use_y_penality = False
     use_z_penality = False
 
-    # Fitness component weights
-    distance_weight = 0.3
+    # Legacy fitness component weights
+    legacy_distance_weight = 0.3
     # Prefer typing longer bigrams at once as opposed to shorter ones
     n_gram_weight = 0.2
     # Give higher score to higher ngrams: ngram_count * ngram_rank * bias
@@ -166,6 +203,7 @@ class KeyboardConfig:
 class CacheConfig:
     """Cache configuration"""
     distance_cache_enabled = True
+    fitness_cache_enabled = True
 
 
 class Config:

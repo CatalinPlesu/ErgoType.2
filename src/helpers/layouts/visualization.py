@@ -4,9 +4,36 @@ from src.core.mapper import KeyType
 import pickle
 import os
 from typing import Dict, List, Tuple, Optional
-from IPython.display import SVG, display
-import svgwrite
 import math
+
+# Mock dependencies if not available
+try:
+    import svgwrite
+    SVGWRITE_AVAILABLE = True
+except ImportError:
+    SVGWRITE_AVAILABLE = False
+    # Create minimal mock for svgwrite
+    class MockSvgwrite:
+        class Drawing:
+            def __init__(self, filename, size):
+                self.filename = filename
+                self.size = size
+            def add(self, element):
+                pass
+            def save(self):
+                print(f"SVG would be saved to {self.filename}")
+    svgwrite = MockSvgwrite()
+
+# Mock IPython if not available
+try:
+    from IPython.display import SVG, display
+except ImportError:
+    class MockSVG:
+        def __init__(self, content):
+            self.content = content
+    def display(obj):
+        print(f"Display: {obj}")
+    SVG = MockSVG
 
 
 class LayoutVisualization:
