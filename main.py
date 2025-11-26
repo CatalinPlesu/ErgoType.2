@@ -33,7 +33,7 @@ def item_run_genetic(show_title):
     print("=" * 60)
 
     CONFIG = {
-        'keyboard_file': 'src/data/keyboards/ansi_60_percent.json',
+        'keyboard_file': 'src/data/keyboards/dactyl_manuform_6x6_4.json',
         'dataset_file': 'src/data/text/processed/frequency_analysis.pkl',
         'dataset_name': 'simple_wikipedia',
         'population_size': 30,

@@ -160,6 +160,8 @@ class Layout:
                     special_set, display_val = key_obj.value
                     if target_char in special_set:
                         return key_id, layer_id, key_obj
+        # Return None if character not found
+        return None, None, None
 
     def get_unshifted_symbols(self):
         unshifted_symbols = []

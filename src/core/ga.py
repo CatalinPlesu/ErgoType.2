@@ -238,19 +238,25 @@ class GeneticAlgorithm:
             best_fitness = float('inf')
 
             for idx in k_candidates:
+                # Skip individuals with None fitness
+                if temp_population[idx].fitness is None:
+                    continue
                 if temp_population[idx].fitness < best_fitness:
                     best_fitness = temp_population[idx].fitness
                     best_candidate = temp_population[idx]
 
-            # Just append the reference, don't create a new Individual
-            self.parents.append(best_candidate)
+            # Only append if we found a valid candidate
+            if best_candidate is not None:
+                self.parents.append(best_candidate)
 
             for idx in sorted(k_candidates, reverse=True):
                 temp_population.pop(idx)
 
         while temp_population and len(self.parents) < len(self.population):
             remaining_individual = temp_population.pop()
-            self.parents.append(remaining_individual)
+            # Only add if fitness is not None
+            if remaining_individual.fitness is not None:
+                self.parents.append(remaining_individual)
 
     def uniform_crossover(self, offsprings_per_pair=4):
         """Uniform crossover with uniqueness checking"""
@@ -263,10 +269,18 @@ class GeneticAlgorithm:
                     return True
             return False
 
+        # Check if we have enough parents with valid fitness
+        if len(self.parents) < 2:
+            print(f"Warning: Not enough parents with valid fitness for crossover. Have {len(self.parents)} parents.")
+            return
+
         for i in range(0, len(self.parents) - 1, 2):
             parent0, parent1 = self.parents[i], self.parents[i+1]
 
-            if parent1.fitness < parent0.fitness:
+            # Safety check: ensure both parents have valid fitness
+            if parent0.fitness is None or parent1.fitness is None:
+                print(f"Warning: Skipping crossover due to None fitness values: parent0={parent0.name}, parent1={parent1.name}")
+                continue
                 parent0, parent1 = parent1, parent0
 
             for o in range(offsprings_per_pair):

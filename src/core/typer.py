@@ -200,6 +200,11 @@ class Typer:
     def type_char_simple(self, char, shift_keys, altgr_keys):
         """Type a single character without state tracking"""
         key_id, layer, qmk_key = self.layout.find_key_for_char(char)
+        
+        # If character not found in layout, return large distance penalty
+        if key_id is None:
+            return 1000.0
+        
         distance = 0
 
         # Handle shift if needed
@@ -225,6 +230,11 @@ class Typer:
     def type_char_fluid(self, char, shift_keys, altgr_keys):
         """Type a single character with fluid typing detection"""
         key_id, layer, qmk_key = self.layout.find_key_for_char(char)
+        
+        # If character not found in layout, return large distance penalty
+        if key_id is None:
+            return 1000.0, 0.0
+            
         distance = 0
         ngram = None
 
