@@ -185,7 +185,7 @@ def run_genetic_algorithm(
                                 key_obj.set_labels((key_data.value,))
 
                 # Use the renderer directly for better control
-                from src.helpers.keyboards.renderer import render_keyboard_with_heatmap
+                from src.helpers.keyboards.renderer import render_keyboard_with_heatmap, render_keyboard_heatmap_only
 
                 # Generate SVG visualization (without heatmap for cleaner export)
                 keyboard_svg = render_keyboard_with_heatmap(
@@ -211,8 +211,50 @@ def run_genetic_algorithm(
                     f.write(svg_content)
                 print(f"  Saved Layer {layer_idx}: {svg_path}")
 
+                # Generate separate heatmap visualization for this layer
+                print(f"  Generating heatmap for Layer {layer_idx}...")
+                
+                # Get character frequencies from the dataset
+                char_frequencies = ga.evaluator.dataset.get('character_frequencies', {})
+                
+                # Calculate frequency statistics for normalization
+                if char_frequencies:
+                    freq_values = [data.get('relative', 0) for data in char_frequencies.values() if isinstance(data, dict)]
+                    min_freq = min(freq_values) if freq_values else 0.0
+                    max_freq = max(freq_values) if freq_values else 1.0
+                    freq_range = max_freq - min_freq if max_freq > min_freq else 1.0
+                else:
+                    min_freq = 0.0
+                    freq_range = 1.0
+                
+                # Generate heatmap-only SVG
+                heatmap_svg = render_keyboard_heatmap_only(
+                    ga.evaluator.keyboard,
+                    char_frequencies,
+                    layer_idx=layer_idx,
+                    freq_range=freq_range,
+                    min_freq=min_freq,
+                    layout=ga.evaluator.layout
+                )
+                
+                # Extract SVG content from the IPython SVG object
+                if hasattr(heatmap_svg, 'data'):
+                    heatmap_svg_content = heatmap_svg.data
+                elif hasattr(heatmap_svg, '_repr_svg_'):
+                    heatmap_svg_content = heatmap_svg._repr_svg_()
+                else:
+                    heatmap_svg_content = str(heatmap_svg)
+                
+                # Save heatmap SVG file
+                heatmap_path = run_dir / f"{file_name}_layer_{layer_idx}_heatmap.svg"
+                with open(heatmap_path, 'w', encoding='utf-8') as f:
+                    f.write(heatmap_svg_content)
+                print(f"  Saved Heatmap Layer {layer_idx}: {heatmap_path}")
+
         except Exception as e:
+            import traceback
             print(f"  Error generating SVG: {e}")
+            print(f"  Full traceback: {traceback.format_exc()}")
 
     print(f"\nSaved {len(top_3_individuals)} layouts to {run_dir}")
     print("="*80)
@@ -250,6 +292,88 @@ def run_genetic_algorithm(
             Config.fitness.homerow_weight * fitness_dict['distance_score'] * (1.0 - fitness_dict['homing_score'])
         
         layout_scores.append((name, combined, fitness_dict))
+
+        # Generate heatmap visualizations for comparison layouts
+        try:
+            print(f"\nGenerating heatmap visualizations for {name}...")
+            
+            # Get character frequencies from the dataset
+            char_frequencies = comparison_evaluator.dataset.get('character_frequencies', {})
+            
+            # Calculate frequency statistics for normalization
+            if char_frequencies:
+                freq_values = [data.get('relative', 0) for data in char_frequencies.values() if isinstance(data, dict)]
+                min_freq = min(freq_values) if freq_values else 0.0
+                max_freq = max(freq_values) if freq_values else 1.0
+                freq_range = max_freq - min_freq if max_freq > min_freq else 1.0
+            else:
+                min_freq = 0.0
+                freq_range = 1.0
+            
+            # Create a fresh evaluator for this layout
+            layout_evaluator = comparison_evaluator.__class__(debug=False)
+            layout_evaluator.load_keyoard(keyboard_file)
+            layout_evaluator.load_distance()
+            layout_evaluator.load_layout()
+            layout_evaluator.load_dataset(dataset_file=dataset_file, dataset_name=dataset_name)
+            layout_evaluator.load_typer()
+            
+            # Remap the layout for this evaluator
+            layout_evaluator.layout.remap(LAYOUT_DATA["qwerty"], layout)
+            
+            # Get all layers
+            layers = []
+            for key_id, layer_idx in layout_evaluator.layout.mapper.data.keys():
+                if layer_idx not in layers:
+                    layers.append(layer_idx)
+            layers = sorted(layers) if layers else [0]
+            
+            # Generate heatmap for each layer
+            for layer_idx in layers:
+                # Update keyboard key labels for this layer
+                for key_obj in layout_evaluator.keyboard.keys:
+                    key_obj.clear_labels()
+                
+                for key_obj in layout_evaluator.keyboard.keys:
+                    key_id = key_obj.id
+                    if (key_id, layer_idx) in layout_evaluator.layout.mapper.data:
+                        key_data = layout_evaluator.layout.mapper.data[(key_id, layer_idx)]
+                        if key_data.key_type == KeyType.CHAR:
+                            key_obj.set_labels(key_data.value)
+                        elif key_data.key_type in [KeyType.SPECIAL_CHAR, KeyType.CONTROL, KeyType.LAYER]:
+                            if isinstance(key_data.value, tuple):
+                                key_obj.set_labels((key_data.value[1],) if len(key_data.value) > 1 else (key_data.value[0],))
+                            else:
+                                key_obj.set_labels((key_data.value,))
+                
+                # Generate heatmap-only SVG
+                heatmap_svg = render_keyboard_heatmap_only(
+                    layout_evaluator.keyboard,
+                    char_frequencies,
+                    layer_idx=layer_idx,
+                    freq_range=freq_range,
+                    min_freq=min_freq,
+                    layout=layout_evaluator.layout
+                )
+                
+                # Extract SVG content from the IPython SVG object
+                if hasattr(heatmap_svg, 'data'):
+                    heatmap_svg_content = heatmap_svg.data
+                elif hasattr(heatmap_svg, '_repr_svg_'):
+                    heatmap_svg_content = heatmap_svg._repr_svg_()
+                else:
+                    heatmap_svg_content = str(heatmap_svg)
+                
+                # Save heatmap SVG file
+                heatmap_path = run_dir / f"{name}_layer_{layer_idx}_heatmap.svg"
+                with open(heatmap_path, 'w', encoding='utf-8') as f:
+                    f.write(heatmap_svg_content)
+                print(f"  Saved {name} Layer {layer_idx} Heatmap: {heatmap_path}")
+                
+        except Exception as e:
+            import traceback
+            print(f"  Error generating heatmap for {name}: {e}")
+            print(f"  Full traceback: {traceback.format_exc()}")
 
     # Sort by combined score (lower is better)
     layout_scores.sort(key=lambda x: x[1])
