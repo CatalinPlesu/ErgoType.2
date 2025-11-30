@@ -23,6 +23,7 @@ dependencies = [
 	"ptpython",
 	"svgwrite",
 	"dearpygui",
+	"pythonnet",
 ]
 
 [build-system]

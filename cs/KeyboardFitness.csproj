@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>Library</OutputType>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <AssemblyName>KeyboardFitness</AssemblyName>
+    <RootNamespace>FitnessNet</RootNamespace>
   </PropertyGroup>
 </Project>
