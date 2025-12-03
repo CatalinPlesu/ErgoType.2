@@ -1,6 +1,7 @@
 from contextlib import redirect_stdout
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
+from src.core.map_json_exporter import CSharpFitnessConfig
 from src.core.keyboard import Serial
 from src.core.evaluator import Evaluator
 from src.config.config import Config
@@ -131,6 +132,17 @@ class GeneticAlgorithm:
             # Remap layout to individual's chromosome
             from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
             evaluator.layout.remap(LAYOUT_DATA["qwerty"], individual.chromosome)
+
+            config_gen = CSharpFitnessConfig(
+                keyboard=ev.keyboard,
+                layout=ev.layout
+            )
+
+            json_string = config_gen.generate_json_string(
+                text_file_path="path/to/your/text/file.txt",
+                fitts_a=0.0,
+                fitts_b=150.0
+            )
 
             # Calculate fitness
             with open(os.devnull, 'w') as devnull:
