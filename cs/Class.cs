@@ -150,7 +150,7 @@ public class Fitness
         return Array.Empty<KeyPress>();
     }
 
-    public (double TotalDistance, double TotalTime) FitnessComponents()
+    public (double TotalDistance, double TotalTime) Compute()
     {
         var distanceByFinger = GetDistancesByFinger(_fileContent, _charMappings);
         var totalDistance = distanceByFinger.SelectMany(d => d).Select(d => d.Distance).Sum();

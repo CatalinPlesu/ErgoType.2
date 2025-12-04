@@ -45,14 +45,14 @@ config_gen = CSharpFitnessConfig(
 
 # Generate JSON string to pass to C# library
 json_string = config_gen.generate_json_string(
-    text_file_path="src/data/text/raw/simple_wikipedia_dataset2.txt",
+    text_file_path="src/data/text/raw/simple_wikipedia_dataset.txt",
     fitts_a=0.5,
     fitts_b=0.3
 )
 
 # Now you can use your .NET classes in Python
 fitness_calculator = Fitness(json_string )
-result = fitness_calculator.FitnessComponents()
+result = fitness_calculator.Compute()
 print(f"total distance: {result.Item1} total time: {result.Item2}")
 
 
