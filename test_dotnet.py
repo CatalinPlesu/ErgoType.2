@@ -52,7 +52,15 @@ json_string = config_gen.generate_json_string(
 
 # Now you can use your .NET classes in Python
 fitness_calculator = Fitness(json_string )
+
+import time
+start_time = time.time()
 result = fitness_calculator.Compute()
+end_time = time.time()
+
+execution_time = end_time - start_time
+print(f"Execution time: {execution_time:.6f} seconds")
+
 print(f"total distance: {result.Item1} total time: {result.Item2}")
 
 
