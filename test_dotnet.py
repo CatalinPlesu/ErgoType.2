@@ -36,6 +36,19 @@ ev.load_keyoard('src/data/keyboards/ansi_60_percent.json')
 ev.load_layout()
 ev.layout.querty_based_remap(LAYOUT_DATA["qwerty"])
 
+custom_coefficients = [
+    0.07,  # Left pinky (slower)
+    0.06,  # Left ring
+    0.05,  # Left middle
+    0.05,  # Left index
+    0.05,  # Left thumb
+    0.05,  # Right thumb
+    0.05,  # Right index
+    0.05,  # Right middle
+    0.06,  # Right ring
+    0.07,  # Right pinky (slower)
+]
+    
 config_gen = CSharpFitnessConfig(
     keyboard=ev.keyboard,
     layout=ev.layout
@@ -43,6 +56,7 @@ config_gen = CSharpFitnessConfig(
 
 json_string = config_gen.generate_json_string(
     text_file_path="src/data/text/raw/simple_wikipedia_dataset.txt",
+    finger_coefficients=custom_coefficients,
     fitts_a=0.5,
     fitts_b=0.3
 )
