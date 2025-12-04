@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -38,11 +39,12 @@ public class Finger
 public class Fitness
 {
     private string _textFilePath;
+    private string _fileContent;
     private double _fittsA;
     private double _fittsB;
     private double[] _fingerCoefficients;
     private Point[] _homingPositions;
-    private KeyPress[][] _charMappings; // Array indexed by char code
+    private KeyPress[][] _charMappings;
     private int _maxCharCode;
 
     public Fitness(string jsonData)
@@ -52,6 +54,8 @@ public class Fitness
 
         // Parse text file path
         _textFilePath = root.GetProperty("text_file_path").GetString();
+
+        _fileContent = File.ReadAllText(_textFilePath);
 
         // Parse Fitts's Law parameters
         JsonElement fittsLaw = root.GetProperty("fitts_law");
@@ -143,14 +147,15 @@ public class Fitness
         {
             return _charMappings[charCode];
         }
-        return null;
+        return Array.Empty<KeyPress>();
     }
 
-    public (double TotalDistance, double TotalTime) FitnessComponents(string fullText, Dictionary<char, Point> charPositionMapper)
+    public (double TotalDistance, double TotalTime) FitnessComponents()
     {
-        var distanceByFinger = GetDistancesByFinger(fullText, charPositionMapper);
+        var distanceByFinger = GetDistancesByFinger(_fileContent, _charMappings);
         var totalDistance = distanceByFinger.SelectMany(d => d).Select(d => d.Distance).Sum();
-        return (totalDistance, 0);
+        var totalTime = GetTotalTime(distanceByFinger, _fingerCoefficients);
+        return (totalDistance, totalTime);
     }
 
     public double GetTotalTime(List<List<(double Distance, int Finger)>> distances, double[] TPS)
@@ -171,7 +176,7 @@ public class Fitness
         return fittsTime;
     }
 
-    public List<List<(double Distance, int Finger)>> GetDistancesByFinger(string fullText, Dictionary<char, Point> charPositionMapper)
+    public List<List<(double Distance, int Finger)>> GetDistancesByFinger(string fullText, KeyPress[][] charPositionMapper)
     {
         Finger[] fingers = InitializeFingers();
 
@@ -180,23 +185,25 @@ public class Fitness
 
         foreach (char c in fullText)
         {
-            if (charPositionMapper.TryGetValue(c, out Point keyPosition))
+            KeyPress[] presses = GetKeyPressesForChar(c);
+            foreach (var press in presses)
             {
-                int finger = DetermineFingerForCharacter(c);
-                var distance = fingers[finger].TapAndGetDistance(keyPosition);
-                currentGroup.Add((distance, finger));
+                var distance = fingers[press.Finger].TapAndGetDistance(press.Position);
+                if (currentGroup.Any(g => g.Finger == press.Finger))
+                {
+                    // If finger was already used commit current group and create new one.
+                    result.Add(currentGroup);
+                    currentGroup = new();
+                }
+                currentGroup.Add((distance, press.Finger));
             }
         }
+        if (currentGroup.Any())
+        {
+            result.Add(currentGroup);
+        }
 
-        result.Add(currentGroup);
         return result;
-    }
-
-    private int DetermineFingerForCharacter(char c)
-    {
-        // Implement your logic to determine which finger should press which character
-        // This is a simplified version - you'll need to implement proper finger assignment
-        return 0; // Placeholder
     }
 
     public string SayHay()

@@ -152,8 +152,8 @@ class CSharpFitnessConfig:
     def generate_json_string(self, 
                             text_file_path,
                             finger_coefficients=None,
-                            fitts_a=0.0,
-                            fitts_b=150.0):
+                            fitts_a=0.1,
+                            fitts_b=0.1):
         """
         Generate JSON string for C# library.
         
@@ -169,7 +169,7 @@ class CSharpFitnessConfig:
         """
         if finger_coefficients is None:
             # Default: 50ms press time for all fingers
-            finger_coefficients = [50.0] * 10
+            finger_coefficients = [0.25] * 10
         
         # Build character mapping
         char_map = {}
@@ -256,25 +256,27 @@ if __name__ == "__main__":
     
     # Generate JSON string to pass to C# library
     json_string = config_gen.generate_json_string(
-        text_file_path="path/to/your/text/file.txt",
-        fitts_a=0.0,
-        fitts_b=150.0
+        text_file_path="src/data/text/raw/simple_wikipedia_dataset.txt",
+        fitts_a=0.1,
+        fitts_b=0.1
     )
     
     # print("JSON string ready to pass to C#:")
     
+    print(json_string)
+
     # Example: Custom finger coefficients for different finger speeds
     custom_coefficients = [
-        70.0,  # Left pinky (slower)
-        60.0,  # Left ring
-        50.0,  # Left middle
-        50.0,  # Left index
-        55.0,  # Left thumb
-        55.0,  # Right thumb
-        50.0,  # Right index
-        50.0,  # Right middle
-        60.0,  # Right ring
-        70.0,  # Right pinky (slower)
+        0.7,  # Left pinky (slower)
+        0.6,  # Left ring
+        0.5,  # Left middle
+        0.5,  # Left index
+        0.5,  # Left thumb
+        0.5,  # Right thumb
+        0.5,  # Right index
+        0.5,  # Right middle
+        0.6,  # Right ring
+        0.7,  # Right pinky (slower)
     ]
     
     json_string = config_gen.generate_json_string(
@@ -283,7 +285,6 @@ if __name__ == "__main__":
         fitts_a=0.0,
         fitts_b=150.0
     )
-    print(json_string)
     
     # Now pass json_string to your C# library
     # result = csharp_lib.calculate_fitness(json_string)
