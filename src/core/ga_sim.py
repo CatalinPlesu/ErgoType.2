@@ -173,8 +173,13 @@ class GeneticAlgorithmSimulation:
         return (individual.id, individual.chromosome, individual.name)
 
     def normalize_and_calculate_fitness(self):
-        """Normalize toward 0 (better = closer to 0) with 1.2x max scaling"""
-        all_evaluated = [ind for ind in self.population + getattr(self, 'children', []) 
+        """Normalize toward 0 (better = closer to 0) with 1.2x max scaling
+        
+        IMPORTANT: Normalizes using global max across ALL evaluated individuals
+        to ensure fitness values are comparable across generations.
+        """
+        # Get ALL evaluated individuals (including from previous generations)
+        all_evaluated = [ind for ind in self.evaluated_individuals
                         if ind.distance is not None and ind.time_taken is not None 
                         and ind.distance != float('inf') and ind.time_taken != float('inf')]
         
@@ -182,24 +187,24 @@ class GeneticAlgorithmSimulation:
             print("Warning: No individuals with valid raw metrics to normalize")
             return
 
+        # Use GLOBAL max across all generations for consistent normalization
         distances = [ind.distance for ind in all_evaluated]
         times = [ind.time_taken for ind in all_evaluated]
 
-        # Use 0 as min (normalize toward 0) and extend max by 20%
         max_distance = max(distances) * 1.2
         max_time = max(times) * 1.2
 
-        print(f"\nNormalization ranges:")
+        print(f"\nNormalization ranges (global across all generations):")
         print(f"  Distance: [0, {max_distance:.2f}]")
         print(f"  Time: [0, {max_time:.2f}]")
 
+        # Re-normalize ALL evaluated individuals with global scale
         for ind in all_evaluated:
-            # Normalize toward 0: distance/max_distance gives 0-1 range
-            # Best individuals will be around 0.17 (1/1.2)
             normalized_distance = ind.distance / max_distance
             normalized_time = ind.time_taken / max_time
             ind.fitness = 0.5 * normalized_distance + 0.5 * normalized_time
         
+        # Handle invalid individuals
         for ind in self.population + getattr(self, 'children', []):
             if ind.distance == float('inf') or ind.time_taken == float('inf'):
                 ind.fitness = float('inf')
@@ -283,37 +288,33 @@ class GeneticAlgorithmSimulation:
         print("="*120 + "\n")
 
     def tournament_selection(self, k=3):
-        """Tournament selection"""
+        """Tournament selection - select exactly population_size parents"""
         self.parents = []
-        temp_population = self.population.copy()
-
-        while len(temp_population) >= k:
-            sample_size = min(k, len(temp_population))
-            k_candidates = random.sample(range(len(temp_population)), sample_size)
-
+        target_size = len(self.population)
+        
+        # Keep selecting until we have enough parents
+        while len(self.parents) < target_size:
+            # Select k random individuals from population
+            sample_size = min(k, len(self.population))
+            candidates = random.sample(self.population, sample_size)
+            
+            # Find best candidate (lowest fitness)
             best_candidate = None
             best_fitness = float('inf')
-
-            for idx in k_candidates:
-                if temp_population[idx].fitness is None:
-                    continue
-                if temp_population[idx].fitness < best_fitness:
-                    best_fitness = temp_population[idx].fitness
-                    best_candidate = temp_population[idx]
-
+            
+            for candidate in candidates:
+                if candidate.fitness is not None and candidate.fitness < best_fitness:
+                    best_fitness = candidate.fitness
+                    best_candidate = candidate
+            
+            # Add best candidate to parents (can be selected multiple times)
             if best_candidate is not None:
                 self.parents.append(best_candidate)
-
-            for idx in sorted(k_candidates, reverse=True):
-                temp_population.pop(idx)
-
-        while temp_population and len(self.parents) < len(self.population):
-            remaining_individual = temp_population.pop()
-            if remaining_individual.fitness is not None:
-                self.parents.append(remaining_individual)
+        
+        print(f"Selected {len(self.parents)} parents via tournament selection")
 
     def uniform_crossover(self, offsprings_per_pair=4):
-        """Uniform crossover"""
+        """Uniform crossover - create children from parent pairs, prioritizing fitter parents"""
         self.children = []
 
         def is_duplicate(chromosome, existing_individuals):
@@ -327,16 +328,28 @@ class GeneticAlgorithmSimulation:
             print(f"Warning: Not enough parents. Have {len(self.parents)} parents.")
             return
 
-        for i in range(0, len(self.parents) - 1, 2):
-            parent0, parent1 = self.parents[i], self.parents[i+1]
+        # Sort parents by fitness (best first) to prioritize fitter individuals
+        sorted_parents = sorted(self.parents, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
+        
+        # Create pairs from sorted parents - fittest individuals paired first
+        num_pairs = len(sorted_parents) // 2
+        target_children = len(self.population)  # Want to create as many children as population size
+        
+        for pair_idx in range(num_pairs):
+            parent0 = sorted_parents[pair_idx * 2]
+            parent1 = sorted_parents[pair_idx * 2 + 1]
 
             if parent0.fitness is None or parent1.fitness is None:
                 continue
 
+            # parent0 should already be fitter due to sorting, but double-check
             if parent0.fitness > parent1.fitness:
                 parent0, parent1 = parent1, parent0
 
             for o in range(offsprings_per_pair):
+                if len(self.children) >= target_children:
+                    break
+                    
                 attempts = 0
                 max_attempts = 10
 
@@ -380,8 +393,11 @@ class GeneticAlgorithmSimulation:
                         break
                     else:
                         attempts += 1
+            
+            if len(self.children) >= target_children:
+                break
 
-        print(f"Created {len(self.children)} unique children")
+        print(f"Created {len(self.children)} unique children (target: {target_children})")
 
     def mutation(self):
         """Mutate children"""
@@ -431,9 +447,47 @@ class GeneticAlgorithmSimulation:
         print(f"Survivors: {len(self.population)}, Discarded: {discarded_count}, Total populations saved: {len(self.all_populations)}")
 
 
-    def save_discarded_history(self, filename='discarded_history.pkl'):
-        """DEPRECATED - Save to JSON yourself from ga.all_populations"""
-        pass
+    def renormalize_all_populations(self):
+        """Re-normalize ALL saved populations using global max values"""
+        if not self.evaluated_individuals:
+            print("No evaluated individuals to use for renormalization")
+            return
+        
+        # Get global max from ALL evaluated individuals
+        all_evaluated = [ind for ind in self.evaluated_individuals
+                        if ind.distance is not None and ind.time_taken is not None 
+                        and ind.distance != float('inf') and ind.time_taken != float('inf')]
+        
+        if not all_evaluated:
+            return
+        
+        distances = [ind.distance for ind in all_evaluated]
+        times = [ind.time_taken for ind in all_evaluated]
+        
+        max_distance = max(distances) * 1.2
+        max_time = max(times) * 1.2
+        
+        print(f"\n{'='*80}")
+        print("RE-NORMALIZING ALL POPULATIONS WITH FINAL GLOBAL SCALE")
+        print(f"{'='*80}")
+        print(f"Final normalization scale:")
+        print(f"  Distance: [0, {max_distance:.2f}]")
+        print(f"  Time: [0, {max_time:.2f}]")
+        
+        # Re-normalize all individuals in all saved populations
+        total_renormalized = 0
+        for population in self.all_populations:
+            for ind_dict in population:
+                if ind_dict['distance'] != float('inf') and ind_dict['time_taken'] != float('inf'):
+                    normalized_distance = ind_dict['distance'] / max_distance
+                    normalized_time = ind_dict['time_taken'] / max_time
+                    ind_dict['fitness'] = 0.5 * normalized_distance + 0.5 * normalized_time
+                    total_renormalized += 1
+                else:
+                    ind_dict['fitness'] = float('inf')
+        
+        print(f"Re-normalized {total_renormalized} individuals across {len(self.all_populations)} populations")
+        print(f"{'='*80}\n")
 
     def plot_discarded_history(self):
         """Plot fitness progression from all populations"""
@@ -522,6 +576,9 @@ class GeneticAlgorithmSimulation:
         print(f"Total individuals evaluated: {len(self.evaluated_individuals)}")
         print(f"Total populations saved: {len(self.all_populations)}")
         
+        # Re-normalize all saved populations with final global scale
+        self.renormalize_all_populations()
+        
         self.order_fitness_values(limited=False)
 
         if save_history:
@@ -537,7 +594,7 @@ if __name__ == "__main__":
         text_file='src/data/text/raw/simple_wikipedia_dataset.txt',
         fitts_a=0.5,
         fitts_b=0.3,
-        max_concurrent_processes=7
+        max_concurrent_processes=6
     )
 
     # Run with history tracking enabled
