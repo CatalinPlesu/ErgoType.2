@@ -1,16 +1,16 @@
-"""
-Updated run_ga.py - Using the clean visualization module
-"""
 from data.layouts.keyboard_genotypes import LAYOUT_DATA
 from core.ga import GeneticAlgorithmSimulation
 from core.map_json_exporter import CSharpFitnessConfig
 from core.evaluator import Evaluator
+from core.layout import Layout
 from src.helpers.layouts.visualization import generate_all_visualizations
 import sys
 import os
 from datetime import datetime
 import json
 from pathlib import Path
+import matplotlib.pyplot as plt
+import numpy as np
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -99,12 +99,12 @@ def save_heuristic_layouts(ga, run_dir):
         
         try:
             # Remap to this heuristic layout
-            ga.evaluator.layout.remap(LAYOUT_DATA["qwerty"], list(genotype))
-            
+            layout = Layout(ga.evaluator.keyboard)
+            layout.remap(LAYOUT_DATA["qwerty"], list(genotype))
             # Generate C# configuration
             config_gen = CSharpFitnessConfig(
                 keyboard=ga.evaluator.keyboard,
-                layout=ga.evaluator.layout
+                layout=layout
             )
             
             json_string = config_gen.generate_json_string(
@@ -143,6 +143,117 @@ def save_heuristic_layouts(ga, run_dir):
     print(f"\n{'='*80}")
     print(f"✅ COMPLETE: Saved {len(LAYOUT_DATA)} heuristic layouts")
     print(f"{'='*80}")
+
+
+def save_fitness_evolution_plot(ga, run_dir):
+    """
+    Save matplotlib plot showing how fitness improves over generations
+    """
+    print("\n📊 Generating fitness evolution plot...")
+    
+    try:
+        # Check if ga.all_individuals is a list or dict
+        if isinstance(ga.all_individuals, dict):
+            individuals_list = list(ga.all_individuals.values())
+        elif isinstance(ga.all_individuals, list):
+            individuals_list = ga.all_individuals
+        else:
+            print(f"❌ Unexpected type for ga.all_individuals: {type(ga.all_individuals)}")
+            return
+        
+        print(f"Total individuals to process: {len(individuals_list)}")
+        
+        if not individuals_list:
+            print("❌ No individuals found to plot")
+            return
+        
+        # Prepare data for plotting
+        generation_fitness_data = {}
+        
+        # Group individuals by generation
+        for individual in individuals_list:
+            # Handle both dict and object formats
+            if isinstance(individual, dict):
+                gen = individual.get('generation')
+                fitness = individual.get('fitness')
+            else:
+                # Object format
+                if not hasattr(individual, 'generation') or not hasattr(individual, 'fitness'):
+                    print(f"⚠️ Individual missing required attributes")
+                    continue
+                gen = individual.generation
+                fitness = individual.fitness
+            
+            if gen is not None and fitness is not None:
+                if gen not in generation_fitness_data:
+                    generation_fitness_data[gen] = []
+                generation_fitness_data[gen].append(fitness)
+            else:
+                print(f"⚠️ Individual has None generation or fitness: gen={gen}, fitness={fitness}")
+        
+        if not generation_fitness_data:
+            print("❌ No valid generation data found")
+            return
+        
+        # Debug: Print generation data
+        print(f"Found generations: {sorted(generation_fitness_data.keys())}")
+        for gen, fitnesses in generation_fitness_data.items():
+            print(f"Generation {gen}: {len(fitnesses)} individuals")
+        
+        # Sort generations
+        generations = sorted(generation_fitness_data.keys())
+        avg_fitness_per_gen = []
+        min_fitness_per_gen = []
+        max_fitness_per_gen = []
+        p25_fitness_per_gen = []
+        p50_fitness_per_gen = []  # Median
+        p75_fitness_per_gen = []
+        
+        for gen in generations:
+            fitness_values = generation_fitness_data[gen]
+            if fitness_values:
+                avg_fitness_per_gen.append(np.mean(fitness_values))
+                min_fitness_per_gen.append(min(fitness_values))
+                max_fitness_per_gen.append(max(fitness_values))
+                p25_fitness_per_gen.append(np.percentile(fitness_values, 25))
+                p50_fitness_per_gen.append(np.percentile(fitness_values, 50))  # Median
+                p75_fitness_per_gen.append(np.percentile(fitness_values, 75))
+        
+        if not generations:
+            print("❌ No valid generations to plot")
+            return
+        
+        # Create the plot
+        plt.figure(figsize=(14, 10))
+        
+        # Plot different percentiles
+        plt.plot(generations, avg_fitness_per_gen, 'b-', label='Average Fitness', linewidth=2)
+        plt.plot(generations, p25_fitness_per_gen, 'g--', label='25th Percentile', linewidth=1.5)
+        plt.plot(generations, p50_fitness_per_gen, 'orange', label='Median (50th Percentile)', linewidth=1.5)
+        plt.plot(generations, p75_fitness_per_gen, 'r--', label='75th Percentile', linewidth=1.5)
+        plt.plot(generations, min_fitness_per_gen, 'k:', label='Best Fitness', linewidth=1.5)
+        plt.plot(generations, max_fitness_per_gen, 'k:', label='Worst Fitness', linewidth=1.5, linestyle=':')
+        
+        # Fill areas between percentiles
+        plt.fill_between(generations, p25_fitness_per_gen, p75_fitness_per_gen, alpha=0.2, color='gray', label='25th-75th Percentile Range')
+        
+        plt.xlabel('Generation', fontsize=12)
+        plt.ylabel('Fitness Score', fontsize=12)
+        plt.title('Fitness Evolution Over Generations\n(Showing Percentiles and Range)', fontsize=14)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Save the plot
+        plot_path = run_dir / 'fitness_evolution.png'
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"✅ Fitness evolution plot saved: {plot_path}")
+        
+    except Exception as e:
+        print(f"❌ Error generating fitness evolution plot: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def run_genetic_algorithm(
@@ -263,6 +374,9 @@ def run_genetic_algorithm(
             }
         }, f, indent=2)
     print(f"✅ Saved all unique individuals to {run_dir / 'ga_all_individuals.json'}")
+
+    # Save fitness evolution plot
+    save_fitness_evolution_plot(ga, run_dir)
 
     # Save best 3 layouts with visualizations
     print("\n" + "="*80)
