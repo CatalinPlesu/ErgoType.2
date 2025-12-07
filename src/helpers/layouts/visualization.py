@@ -25,16 +25,18 @@ def get_heatmap_color(normalized_freq: float, color_scheme: str = 'blue-red') ->
     freq = max(0.0, min(1.0, normalized_freq))
     
     if color_scheme == 'grey-green':
-        # Grey (low) → Green (high)
-        red = int(200 * (1 - freq))
-        green = int(100 + 155 * freq)  # 100 → 255
-        blue = int(200 * (1 - freq))
+        # Subtle grey (low) → green (high) with better visibility
+        base = 220
+        red = int(base * (1 - 0.3 * freq))
+        green = int(200 + 55 * freq)  # 200 → 255
+        blue = int(base * (1 - 0.3 * freq))
         return f"#{red:02x}{green:02x}{blue:02x}"
     else:  # blue-red
-        # Blue (low) → Purple → Red (high)
-        red = int(255 * freq)
-        blue = int(255 * (1 - freq))
-        green = int(50 * (1 - abs(freq - 0.5) * 2))
+        # Subtle blue (low) → red (high) with better visibility
+        base = 220
+        red = int(200 + 55 * freq)  # 200 → 255
+        blue = int(200 * (1 - freq))  # 200 → 0
+        green = int(180 * (1 - freq))  # 180 → 0
         return f"#{red:02x}{green:02x}{blue:02x}"
 
 
@@ -85,7 +87,7 @@ def render_keyboard_heatmap(
     
     # Add margins
     margin = 10
-    legend_height = 40
+    legend_height = 60
     bbox["x"] -= margin
     bbox["y"] -= margin
     bbox["x2"] += margin
@@ -229,7 +231,7 @@ def render_keyboard_heatmap(
         
         dwg.add(key_group)
     
-    # Add gradient legend
+    # Add gradient legend with key labels
     legend_x = bbox["x"] + margin
     legend_y = bbox["y2"] - legend_height + 10
     legend_width = width - 2 * margin
