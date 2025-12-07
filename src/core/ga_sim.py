@@ -125,8 +125,8 @@ class GeneticAlgorithmSimulation:
         self.current_generation = 0
         self.individual_names = {}
         
-        # NEW: Track all populations (before discarding)
-        self.all_populations = []
+        # NEW: Track all unique individuals as a dict (using ID as key for uniqueness)
+        self.all_individuals = {}
         
         self.population_initialization()
 
@@ -421,34 +421,34 @@ class GeneticAlgorithmSimulation:
         return mutated
 
     def survivor_selection(self):
-        """Elitist survivor selection with population tracking"""
+        """Elitist survivor selection with individual tracking"""
         self.fitness_function_calculation()
         combined = self.population + self.children
         sorted_combined = sorted(combined, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
         
-        # NEW: Save entire combined population before discarding
-        population_snapshot = []
+        # NEW: Save all individuals to the unique set (dict keyed by ID)
         for ind in sorted_combined:
-            population_snapshot.append({
-                'generation': self.current_generation,
-                'name': ind.name,
-                'distance': ind.distance,
-                'time_taken': ind.time_taken,
-                'fitness': ind.fitness,
-                'id': ind.id,
-                'chromosome': ''.join(ind.chromosome)
-            })
-        self.all_populations.append(population_snapshot)
+            if ind.id not in self.all_individuals:
+                self.all_individuals[ind.id] = {
+                    'id': ind.id,
+                    'name': ind.name,
+                    'generation': ind.generation,
+                    'chromosome': ''.join(ind.chromosome),
+                    'distance': ind.distance,
+                    'time_taken': ind.time_taken,
+                    'fitness': ind.fitness,
+                    'parents': ind.parents
+                }
         
         # Keep only survivors
         self.population = sorted_combined[:len(self.population)]
         
         discarded_count = len(sorted_combined) - len(self.population)
-        print(f"Survivors: {len(self.population)}, Discarded: {discarded_count}, Total populations saved: {len(self.all_populations)}")
+        print(f"Survivors: {len(self.population)}, Discarded: {discarded_count}, Total unique individuals: {len(self.all_individuals)}")
 
 
-    def renormalize_all_populations(self):
-        """Re-normalize ALL saved populations using global max values"""
+    def renormalize_all_individuals(self):
+        """Re-normalize ALL individuals using global max values"""
         if not self.evaluated_individuals:
             print("No evaluated individuals to use for renormalization")
             return
@@ -468,79 +468,28 @@ class GeneticAlgorithmSimulation:
         max_time = max(times) * 1.2
         
         print(f"\n{'='*80}")
-        print("RE-NORMALIZING ALL POPULATIONS WITH FINAL GLOBAL SCALE")
+        print("RE-NORMALIZING ALL INDIVIDUALS WITH FINAL GLOBAL SCALE")
         print(f"{'='*80}")
         print(f"Final normalization scale:")
         print(f"  Distance: [0, {max_distance:.2f}]")
         print(f"  Time: [0, {max_time:.2f}]")
         
-        # Re-normalize all individuals in all saved populations
+        # Re-normalize all individuals in the unique set
         total_renormalized = 0
-        for population in self.all_populations:
-            for ind_dict in population:
-                if ind_dict['distance'] != float('inf') and ind_dict['time_taken'] != float('inf'):
-                    normalized_distance = ind_dict['distance'] / max_distance
-                    normalized_time = ind_dict['time_taken'] / max_time
-                    ind_dict['fitness'] = 0.5 * normalized_distance + 0.5 * normalized_time
-                    total_renormalized += 1
-                else:
-                    ind_dict['fitness'] = float('inf')
+        for ind_id, ind_dict in self.all_individuals.items():
+            if ind_dict['distance'] != float('inf') and ind_dict['time_taken'] != float('inf'):
+                normalized_distance = ind_dict['distance'] / max_distance
+                normalized_time = ind_dict['time_taken'] / max_time
+                ind_dict['fitness'] = 0.5 * normalized_distance + 0.5 * normalized_time
+                total_renormalized += 1
+            else:
+                ind_dict['fitness'] = float('inf')
         
-        print(f"Re-normalized {total_renormalized} individuals across {len(self.all_populations)} populations")
+        print(f"Re-normalized {total_renormalized} unique individuals")
         print(f"{'='*80}\n")
 
-    def plot_discarded_history(self):
-        """Plot fitness progression from all populations"""
-        try:
-            import matplotlib.pyplot as plt
-            
-            if not self.all_populations:
-                print("No population history to plot")
-                return
-            
-            # Flatten all populations
-            all_individuals = []
-            for pop in self.all_populations:
-                all_individuals.extend(pop)
-            
-            generations = [ind['generation'] for ind in all_individuals]
-            fitnesses = [ind['fitness'] for ind in all_individuals if ind['fitness'] != float('inf')]
-            distances = [ind['distance'] for ind in all_individuals]
-            times = [ind['time_taken'] for ind in all_individuals]
-            
-            fig, axes = plt.subplots(3, 1, figsize=(12, 10))
-            
-            # Fitness over generations
-            axes[0].scatter(generations, fitnesses, alpha=0.5, s=10)
-            axes[0].set_xlabel('Generation')
-            axes[0].set_ylabel('Fitness (normalized)')
-            axes[0].set_title('All Individuals - Fitness over Generations')
-            axes[0].grid(True, alpha=0.3)
-            
-            # Distance over generations
-            axes[1].scatter(generations, distances, alpha=0.5, s=10, color='orange')
-            axes[1].set_xlabel('Generation')
-            axes[1].set_ylabel('Distance (raw)')
-            axes[1].set_title('All Individuals - Distance over Generations')
-            axes[1].grid(True, alpha=0.3)
-            
-            # Time over generations
-            axes[2].scatter(generations, times, alpha=0.5, s=10, color='green')
-            axes[2].set_xlabel('Generation')
-            axes[2].set_ylabel('Time (raw)')
-            axes[2].set_title('All Individuals - Time over Generations')
-            axes[2].grid(True, alpha=0.3)
-            
-            plt.tight_layout()
-            plt.savefig('population_history.png', dpi=150)
-            print("\nSaved plot to population_history.png")
-            plt.show()
-            
-        except ImportError:
-            print("matplotlib not available for plotting")
-
-    def run(self, max_iterations=100, stagnant=15, save_history=True):
-        """Run genetic algorithm with optional history saving"""
+    def run(self, max_iterations=100, stagnant=15):
+        """Run genetic algorithm"""
         iteration = 0
         print("Starting genetic algorithm...")
         self.fitness_function_calculation()
@@ -574,15 +523,12 @@ class GeneticAlgorithmSimulation:
         print(f"\nAlgorithm completed after {iteration} iterations")
         print(f"Final stagnation count: {self.previous_population_iteration}")
         print(f"Total individuals evaluated: {len(self.evaluated_individuals)}")
-        print(f"Total populations saved: {len(self.all_populations)}")
+        print(f"Total unique individuals: {len(self.all_individuals)}")
         
-        # Re-normalize all saved populations with final global scale
-        self.renormalize_all_populations()
+        # Re-normalize all saved individuals with final global scale
+        self.renormalize_all_individuals()
         
         self.order_fitness_values(limited=False)
-
-        if save_history:
-            self.plot_discarded_history()
 
         best = min(self.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
         return best
@@ -594,11 +540,11 @@ if __name__ == "__main__":
         text_file='src/data/text/raw/simple_wikipedia_dataset.txt',
         fitts_a=0.5,
         fitts_b=0.3,
-        max_concurrent_processes=6
+        max_concurrent_processes=4
     )
 
-    # Run with history tracking enabled
-    best_individual = ga.run(max_iterations=50, stagnant=10, save_history=True)
+    # Run without auto-saving
+    best_individual = ga.run(max_iterations=50, stagnant=10)
 
     print("\n" + "="*80)
     print("BEST INDIVIDUAL FOUND")
@@ -617,31 +563,29 @@ if __name__ == "__main__":
     print("RUN STATISTICS")
     print("="*80)
     print(f"Total individuals evaluated: {len(ga.evaluated_individuals)}")
-    print(f"Total populations saved: {len(ga.all_populations)}")
+    print(f"Total unique individuals tracked: {len(ga.all_individuals)}")
     print(f"Final population size: {len(ga.population)}")
-    
-    # Calculate total individuals across all populations
-    total_individuals = sum(len(pop) for pop in ga.all_populations)
-    print(f"Total individual records: {total_individuals}")
-    
-    if ga.all_populations:
-        # Show which generation had most individuals
-        gen_sizes = [(i, len(pop)) for i, pop in enumerate(ga.all_populations)]
-        max_gen_idx, max_size = max(gen_sizes, key=lambda x: x[1])
-        print(f"Generation with most individuals: {max_gen_idx} ({max_size} individuals)")
     print("="*80)
     
-    # Save to JSON (example)
+    # NOW you can save to JSON yourself
+    # ga.all_individuals is a dict where keys are IDs and values are individual dicts
+    # Each individual dict contains: id, name, generation, chromosome, distance, time_taken, fitness, parents
+    
+    # Example: Save all individuals to JSON
     import json
-    with open('ga_history.json', 'w') as f:
+    with open('ga_all_individuals.json', 'w') as f:
         json.dump({
-            'all_populations': ga.all_populations,
+            'all_individuals': list(ga.all_individuals.values()),  # Convert dict to list for JSON
             'best_individual': {
+                'id': best_individual.id,
                 'name': best_individual.name,
                 'fitness': best_individual.fitness,
                 'distance': best_individual.distance,
                 'time_taken': best_individual.time_taken,
-                'chromosome': ''.join(best_individual.chromosome)
+                'chromosome': ''.join(best_individual.chromosome),
+                'generation': best_individual.generation,
+                'parents': best_individual.parents
             }
         }, f, indent=2)
-    print("\nSaved complete history to ga_history.json")
+    print("\nSaved all unique individuals to ga_all_individuals.json")
+    
