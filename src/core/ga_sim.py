@@ -100,7 +100,7 @@ class GeneticAlgorithmSimulation:
                  fitts_a=0.5,
                  fitts_b=0.3,
                  finger_coefficients=None,
-                 max_concurrent_processes=mp.cpu_count()):  # Lower default for memory
+                 max_concurrent_processes=mp.cpu_count()):
         """Initialize GA with C# fitness calculator"""
         print("Initializing Genetic Algorithm...")
 
@@ -124,10 +124,14 @@ class GeneticAlgorithmSimulation:
 
         self.current_generation = 0
         self.individual_names = {}
+        
+        # NEW: Track all populations (before discarding)
+        self.all_populations = []
+        
         self.population_initialization()
 
         self.max_processes = max_concurrent_processes
-        print(f"Using up to {self.max_processes} concurrent processes (each process handles 1 task then exits)")
+        print(f"Using up to {self.max_processes} concurrent processes")
 
     def population_initialization(self, size=50):
         """Initialize population"""
@@ -169,7 +173,7 @@ class GeneticAlgorithmSimulation:
         return (individual.id, individual.chromosome, individual.name)
 
     def normalize_and_calculate_fitness(self):
-        """Normalize and calculate fitness"""
+        """Normalize toward 0 (better = closer to 0) with 1.2x max scaling"""
         all_evaluated = [ind for ind in self.population + getattr(self, 'children', []) 
                         if ind.distance is not None and ind.time_taken is not None 
                         and ind.distance != float('inf') and ind.time_taken != float('inf')]
@@ -181,21 +185,19 @@ class GeneticAlgorithmSimulation:
         distances = [ind.distance for ind in all_evaluated]
         times = [ind.time_taken for ind in all_evaluated]
 
-        min_distance = min(distances)
-        max_distance = max(distances)
-        min_time = min(times)
-        max_time = max(times)
-
-        distance_range = max_distance - min_distance if max_distance != min_distance else 1.0
-        time_range = max_time - min_time if max_time != min_time else 1.0
+        # Use 0 as min (normalize toward 0) and extend max by 20%
+        max_distance = max(distances) * 1.2
+        max_time = max(times) * 1.2
 
         print(f"\nNormalization ranges:")
-        print(f"  Distance: [{min_distance:.2f}, {max_distance:.2f}] (range: {distance_range:.2f})")
-        print(f"  Time: [{min_time:.2f}, {max_time:.2f}] (range: {time_range:.2f})")
+        print(f"  Distance: [0, {max_distance:.2f}]")
+        print(f"  Time: [0, {max_time:.2f}]")
 
         for ind in all_evaluated:
-            normalized_distance = (ind.distance - min_distance) / distance_range
-            normalized_time = (ind.time_taken - min_time) / time_range
+            # Normalize toward 0: distance/max_distance gives 0-1 range
+            # Best individuals will be around 0.17 (1/1.2)
+            normalized_distance = ind.distance / max_distance
+            normalized_time = ind.time_taken / max_time
             ind.fitness = 0.5 * normalized_distance + 0.5 * normalized_time
         
         for ind in self.population + getattr(self, 'children', []):
@@ -403,14 +405,88 @@ class GeneticAlgorithmSimulation:
         return mutated
 
     def survivor_selection(self):
-        """Elitist survivor selection"""
+        """Elitist survivor selection with population tracking"""
         self.fitness_function_calculation()
         combined = self.population + self.children
         sorted_combined = sorted(combined, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
+        
+        # NEW: Save entire combined population before discarding
+        population_snapshot = []
+        for ind in sorted_combined:
+            population_snapshot.append({
+                'generation': self.current_generation,
+                'name': ind.name,
+                'distance': ind.distance,
+                'time_taken': ind.time_taken,
+                'fitness': ind.fitness,
+                'id': ind.id,
+                'chromosome': ''.join(ind.chromosome)
+            })
+        self.all_populations.append(population_snapshot)
+        
+        # Keep only survivors
         self.population = sorted_combined[:len(self.population)]
+        
+        discarded_count = len(sorted_combined) - len(self.population)
+        print(f"Survivors: {len(self.population)}, Discarded: {discarded_count}, Total populations saved: {len(self.all_populations)}")
 
-    def run(self, max_iterations=100, stagnant=15):
-        """Run genetic algorithm"""
+
+    def save_discarded_history(self, filename='discarded_history.pkl'):
+        """DEPRECATED - Save to JSON yourself from ga.all_populations"""
+        pass
+
+    def plot_discarded_history(self):
+        """Plot fitness progression from all populations"""
+        try:
+            import matplotlib.pyplot as plt
+            
+            if not self.all_populations:
+                print("No population history to plot")
+                return
+            
+            # Flatten all populations
+            all_individuals = []
+            for pop in self.all_populations:
+                all_individuals.extend(pop)
+            
+            generations = [ind['generation'] for ind in all_individuals]
+            fitnesses = [ind['fitness'] for ind in all_individuals if ind['fitness'] != float('inf')]
+            distances = [ind['distance'] for ind in all_individuals]
+            times = [ind['time_taken'] for ind in all_individuals]
+            
+            fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+            
+            # Fitness over generations
+            axes[0].scatter(generations, fitnesses, alpha=0.5, s=10)
+            axes[0].set_xlabel('Generation')
+            axes[0].set_ylabel('Fitness (normalized)')
+            axes[0].set_title('All Individuals - Fitness over Generations')
+            axes[0].grid(True, alpha=0.3)
+            
+            # Distance over generations
+            axes[1].scatter(generations, distances, alpha=0.5, s=10, color='orange')
+            axes[1].set_xlabel('Generation')
+            axes[1].set_ylabel('Distance (raw)')
+            axes[1].set_title('All Individuals - Distance over Generations')
+            axes[1].grid(True, alpha=0.3)
+            
+            # Time over generations
+            axes[2].scatter(generations, times, alpha=0.5, s=10, color='green')
+            axes[2].set_xlabel('Generation')
+            axes[2].set_ylabel('Time (raw)')
+            axes[2].set_title('All Individuals - Time over Generations')
+            axes[2].grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.savefig('population_history.png', dpi=150)
+            print("\nSaved plot to population_history.png")
+            plt.show()
+            
+        except ImportError:
+            print("matplotlib not available for plotting")
+
+    def run(self, max_iterations=100, stagnant=15, save_history=True):
+        """Run genetic algorithm with optional history saving"""
         iteration = 0
         print("Starting genetic algorithm...")
         self.fitness_function_calculation()
@@ -443,7 +519,13 @@ class GeneticAlgorithmSimulation:
 
         print(f"\nAlgorithm completed after {iteration} iterations")
         print(f"Final stagnation count: {self.previous_population_iteration}")
+        print(f"Total individuals evaluated: {len(self.evaluated_individuals)}")
+        print(f"Total populations saved: {len(self.all_populations)}")
+        
         self.order_fitness_values(limited=False)
+
+        if save_history:
+            self.plot_discarded_history()
 
         best = min(self.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
         return best
@@ -455,10 +537,11 @@ if __name__ == "__main__":
         text_file='src/data/text/raw/simple_wikipedia_dataset.txt',
         fitts_a=0.5,
         fitts_b=0.3,
-        max_concurrent_processes=4  # Lower to control memory
+        max_concurrent_processes=7
     )
 
-    best_individual = ga.run(max_iterations=50, stagnant=10)
+    # Run with history tracking enabled
+    best_individual = ga.run(max_iterations=50, stagnant=10, save_history=True)
 
     print("\n" + "="*80)
     print("BEST INDIVIDUAL FOUND")
@@ -471,3 +554,37 @@ if __name__ == "__main__":
     print(f"Parents: {', '.join(parent_names)}")
     print(f"Layout: {''.join(best_individual.chromosome)}")
     print("="*80)
+    
+    # Additional statistics
+    print("\n" + "="*80)
+    print("RUN STATISTICS")
+    print("="*80)
+    print(f"Total individuals evaluated: {len(ga.evaluated_individuals)}")
+    print(f"Total populations saved: {len(ga.all_populations)}")
+    print(f"Final population size: {len(ga.population)}")
+    
+    # Calculate total individuals across all populations
+    total_individuals = sum(len(pop) for pop in ga.all_populations)
+    print(f"Total individual records: {total_individuals}")
+    
+    if ga.all_populations:
+        # Show which generation had most individuals
+        gen_sizes = [(i, len(pop)) for i, pop in enumerate(ga.all_populations)]
+        max_gen_idx, max_size = max(gen_sizes, key=lambda x: x[1])
+        print(f"Generation with most individuals: {max_gen_idx} ({max_size} individuals)")
+    print("="*80)
+    
+    # Save to JSON (example)
+    import json
+    with open('ga_history.json', 'w') as f:
+        json.dump({
+            'all_populations': ga.all_populations,
+            'best_individual': {
+                'name': best_individual.name,
+                'fitness': best_individual.fitness,
+                'distance': best_individual.distance,
+                'time_taken': best_individual.time_taken,
+                'chromosome': ''.join(best_individual.chromosome)
+            }
+        }, f, indent=2)
+    print("\nSaved complete history to ga_history.json")
