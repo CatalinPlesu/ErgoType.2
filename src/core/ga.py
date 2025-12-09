@@ -22,6 +22,9 @@ def _evaluate_individual_worker(individual_data, keyboard_file, text_file, finge
     try:
         individual_id, chromosome, name = individual_data
         
+        # DEBUG: Print what we received
+        # print(f"Worker {os.getpid()}: Processing {name}, chromosome type: {type(chromosome)}, length: {len(chromosome)}")
+        
         # Initialize C# in this process
         from pythonnet import set_runtime
         from clr_loader import get_coreclr
@@ -34,13 +37,23 @@ def _evaluate_individual_worker(individual_data, keyboard_file, text_file, finge
         clr.AddReference("KeyboardFitness")
         from FitnessNet import Fitness
         
-        # Create evaluator
+        # Create evaluator - CRITICAL: Use absolute path
         evaluator = Evaluator(debug=False)
         evaluator.load_keyoard(keyboard_file)
         evaluator.load_layout()
 
+        # CRITICAL: Ensure chromosome is a list
+        if isinstance(chromosome, str):
+            chromosome = list(chromosome)
+        elif not isinstance(chromosome, list):
+            chromosome = list(chromosome)
+        
         # Remap layout
-        evaluator.layout.remap(LAYOUT_DATA["qwerty"], chromosome)
+        qwerty_base = list(LAYOUT_DATA["qwerty"])
+        evaluator.layout.remap(qwerty_base, chromosome)
+        
+        # DEBUG: Check if char_mappings would be generated
+        # print(f"Worker {os.getpid()}: Layout mapper has {len(evaluator.layout.mapper.data)} keys")
 
         # Generate C# configuration JSON
         config_gen = CSharpFitnessConfig(
@@ -54,6 +67,19 @@ def _evaluate_individual_worker(individual_data, keyboard_file, text_file, finge
             fitts_a=fitts_a,
             fitts_b=fitts_b
         )
+        
+        # DEBUG: Verify JSON has char_mappings
+        import json as json_module
+        try:
+            config_check = json_module.loads(json_string)
+            if 'char_mappings' not in config_check:
+                raise ValueError(f"Missing char_mappings in JSON for {name}")
+            if len(config_check['char_mappings']) == 0:
+                raise ValueError(f"Empty char_mappings in JSON for {name}")
+            # print(f"Worker {os.getpid()}: JSON has {len(config_check['char_mappings'])} characters")
+        except Exception as json_err:
+            print(f"JSON validation error for {name}: {json_err}")
+            raise
 
         # Calculate fitness
         fitness_calculator = Fitness(json_string)
