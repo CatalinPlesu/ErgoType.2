@@ -24,6 +24,7 @@ dependencies = [
 	"svgwrite",
 	"dearpygui",
 	"pythonnet",
+	"pika",
 ]
 
 [build-system]

@@ -2,6 +2,7 @@
 """
 Main entry point for the Keyboard Layout Optimization project.
 Uses simulation-based genetic algorithm with C# fitness calculation.
+Supports distributed processing via RabbitMQ.
 """
 
 import sys
@@ -21,7 +22,6 @@ def get_available_keyboards():
     
     for file in keyboards_dir.glob("*.json"):
         if file.name != "readme.md":
-            # Create a nice display name from filename
             name = file.stem.replace('_', ' ').title()
             keyboard_files.append((name, str(file.relative_to(Path(__file__).parent))))
     
@@ -34,7 +34,6 @@ def get_available_text_files():
     text_files = []
     
     for file in text_dir.glob("*.txt"):
-        # Create a nice display name from filename
         name = file.stem.replace('_', ' ').title()
         size_mb = file.stat().st_size / (1024 * 1024)
         text_files.append((name, str(file.relative_to(Path(__file__).parent)), size_mb))
@@ -45,7 +44,7 @@ def get_available_text_files():
 def print_header():
     print("\n" + "=" * 60)
     print("  KEYBOARD LAYOUT OPTIMIZATION SYSTEM")
-    print("  (Simulation-Based with C# Fitness)")
+    print("  (Distributed Simulation-Based with C# Fitness)")
     print("=" * 60)
 
 
@@ -55,11 +54,11 @@ def print_header():
 
 def item_run_genetic(show_title):
     if show_title:
-        return "Run Genetic Algorithm (Optimize Keyboard Layout)"
+        return "Run Genetic Algorithm (Master Mode)"
 
     from core.run_ga import run_genetic_algorithm
 
-    print("\n[Starting Genetic Algorithm...]")
+    print("\n[Starting Genetic Algorithm in Master Mode...]")
     print("=" * 60)
 
     # Interactive keyboard selection
@@ -152,6 +151,11 @@ def item_run_genetic(show_title):
     stagnant_limit = get_valid_int("Stagnation limit", 10, 1, 100)
     max_processes = get_valid_int("Max parallel processes", 4, 1, 32)
     
+    # RabbitMQ option
+    print("\nDistributed Processing:")
+    use_rabbitmq_input = input("Use RabbitMQ for distributed processing? (Y/n) [Y]: ").lower().strip()
+    use_rabbitmq = use_rabbitmq_input != 'n'
+    
     # Advanced parameters (optional)
     print("\nAdvanced Parameters (press Enter to use defaults):")
     fitts_a = get_valid_float("Fitts's Law constant 'a'", 0.5, 0.0, 5.0)
@@ -166,7 +170,8 @@ def item_run_genetic(show_title):
         'max_concurrent_processes': max_processes,
         'fitts_a': fitts_a,
         'fitts_b': fitts_b,
-        'finger_coefficients': None  # Use defaults
+        'finger_coefficients': None,  # Use defaults
+        'use_rabbitmq': use_rabbitmq
     }
 
     print("\n" + "=" * 60)
@@ -195,6 +200,82 @@ def item_run_genetic(show_title):
         traceback.print_exc()
 
 
+def item_run_worker(show_title):
+    """Run as worker node - processes jobs from queue"""
+    if show_title:
+        return "Run as Worker Node (Distributed Processing)"
+    
+    print("\n[Starting Worker Node...]")
+    print("=" * 60)
+    
+    # RabbitMQ option
+    print("\nWorker Configuration:")
+    use_rabbitmq_input = input("Use RabbitMQ? (Y/n) [Y]: ").lower().strip()
+    use_rabbitmq = use_rabbitmq_input != 'n'
+    
+    if not use_rabbitmq:
+        print("⚠️  Worker mode requires RabbitMQ or will use in-memory queue (only useful for testing)")
+        confirm = input("Continue anyway? (y/N): ").lower().strip()
+        if confirm not in ['y', 'yes']:
+            print("Cancelled.")
+            return
+    
+    # Get max processes
+    import multiprocessing as mp
+    default_processes = mp.cpu_count()
+    
+    def get_valid_int(prompt, default, min_val=1, max_val=64):
+        while True:
+            try:
+                value = input(f"{prompt} [{default}]: ") or str(default)
+                num = int(value)
+                if min_val <= num <= max_val:
+                    return num
+                else:
+                    print(f"Please enter a value between {min_val} and {max_val}.")
+            except ValueError:
+                print("Please enter a valid number.")
+    
+    max_processes = get_valid_int(f"Max parallel processes", default_processes, 1, 64)
+    
+    print("\n" + "=" * 60)
+    print("WORKER CONFIGURATION:")
+    print("=" * 60)
+    print(f"  use_rabbitmq: {use_rabbitmq}")
+    print(f"  max_processes: {max_processes}")
+    print("=" * 60)
+    
+    confirm = input("\nStart Worker Node? This will run indefinitely until stopped. (y/N): ").lower().strip()
+    if confirm not in ['y', 'yes']:
+        print("Cancelled.")
+        return
+    
+    try:
+        print("\n🔧 Starting Worker Node...")
+        print("⏳ Worker will wait for jobs from master...")
+        print("💡 Press Ctrl+C to stop the worker\n")
+        
+        from core.ga import GeneticAlgorithmSimulation
+        
+        # Initialize in worker mode - this will block and process jobs
+        worker = GeneticAlgorithmSimulation(
+            keyboard_file='src/data/keyboards/ansi_60_percent.json',  # Will be overridden by config from master
+            text_file='src/data/text/raw/simple_wikipedia_dataset.txt',  # Will be overridden
+            max_concurrent_processes=max_processes,
+            use_rabbitmq=use_rabbitmq,
+            is_worker=True  # This makes it run in worker mode
+        )
+        
+        # Worker runs indefinitely in __init__, won't reach here unless interrupted
+        
+    except KeyboardInterrupt:
+        print("\n\n🛑 Worker stopped by user")
+    except Exception as e:
+        print(f"\n❌ ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def item_annotator(show_title):
     if show_title:
         return "Launch Keyboard Annotator GUI"
@@ -202,7 +283,6 @@ def item_annotator(show_title):
     print("\n[Launching Keyboard Annotator GUI...]")
     print("=" * 60)
 
-    # Interactive keyboard selection
     print("\nAvailable Physical Keyboards:")
     keyboards = get_available_keyboards()
     if not keyboards:
@@ -242,7 +322,6 @@ def item_text_analysis(show_title):
     print("\n[Text File Analysis]")
     print("=" * 60)
     
-    # Interactive text file selection
     print("\nAvailable Text Files:")
     text_files = get_available_text_files()
     if not text_files:
@@ -285,7 +364,6 @@ def item_keyboard_evaluator(show_title):
     print("\n[Keyboard Layout Evaluator]")
     print("=" * 60)
     
-    # Interactive keyboard selection
     print("\nAvailable Physical Keyboards:")
     keyboards = get_available_keyboards()
     if not keyboards:
@@ -315,7 +393,6 @@ def item_keyboard_evaluator(show_title):
         except ValueError:
             print("Invalid input. Please enter a number or 'q' to quit.")
     
-    # Interactive text file selection
     print("\nAvailable Text Files:")
     text_files = get_available_text_files()
     if not text_files:
@@ -384,6 +461,7 @@ def main():
 
     # Register all menu item functions
     menu.add_item(item_run_genetic)
+    menu.add_item(item_run_worker)  # NEW: Worker mode
     menu.add_item(item_keyboard_evaluator)
     menu.add_item(item_layout_comparison)
     menu.add_item(item_text_analysis)

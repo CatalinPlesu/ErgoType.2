@@ -3,6 +3,7 @@ from data.layouts.keyboard_genotypes import LAYOUT_DATA
 from core.map_json_exporter import CSharpFitnessConfig
 from core.keyboard import Serial
 from core.evaluator import Evaluator
+from core.job_queue import JobQueue
 from config.config import Config
 import os
 import pickle
@@ -95,16 +96,34 @@ class Individual:
 
 
 class GeneticAlgorithmSimulation:
-    def __init__(self, keyboard_file='data/keyboards/ansi_60_percent.json',
+    def __init__(self, 
+                 keyboard_file='data/keyboards/ansi_60_percent.json',
                  text_file='data/text/raw/simple_wikipedia_dataset.txt',
                  population_size=50,
                  fitts_a=0.5,
                  fitts_b=0.3,
                  finger_coefficients=None,
-                 max_concurrent_processes=mp.cpu_count()):
-        """Initialize GA with C# fitness calculator"""
-        print("Initializing Genetic Algorithm...")
-
+                 max_concurrent_processes=None,
+                 use_rabbitmq=True,
+                 is_worker=False):
+        """
+        Initialize GA with C# fitness calculator.
+        
+        Args:
+            is_worker: If True, runs in worker mode (processes jobs from queue)
+                      If False, runs as master (coordinates GA and also processes jobs)
+        """
+        self.is_worker = is_worker
+        
+        if is_worker:
+            print("="*80)
+            print("🔧 WORKER MODE - Waiting for jobs from master...")
+            print("="*80)
+        else:
+            print("="*80)
+            print("👑 MASTER MODE - Coordinating GA and processing jobs...")
+            print("="*80)
+        
         # Store configuration
         self.keyboard_file = os.path.join(PROJECT_ROOT, keyboard_file) if not os.path.isabs(keyboard_file) else keyboard_file
         self.text_file = os.path.join(PROJECT_ROOT, text_file) if not os.path.isabs(text_file) else text_file
@@ -123,20 +142,134 @@ class GeneticAlgorithmSimulation:
 
         print("Evaluator initialized successfully")
 
-        self.current_generation = 0
-        self.individual_names = {}
+        # Process pool configuration
+        if max_concurrent_processes is None:
+            self.max_processes = mp.cpu_count()
+        else:
+            self.max_processes = max_concurrent_processes
         
-        # Track all unique individuals as a dict (using ID as key for uniqueness)
-        self.all_individuals = {}
-        
-        self.population_size = population_size
-        self.population_initialization(self.population_size)
+        print(f"Using up to {self.max_processes} local concurrent processes")
 
-        self.max_processes = max_concurrent_processes
-        print(f"Using up to {self.max_processes} concurrent processes")
+        # Initialize distributed queue
+        self.job_queue = JobQueue(use_rabbitmq=use_rabbitmq)
+        
+        if is_worker:
+            # Worker mode: just run the worker loop
+            self._run_worker()
+        else:
+            # Master mode: initialize GA state
+            self.current_generation = 0
+            self.individual_names = {}
+            self.all_individuals = {}
+            self.population_size = population_size
+            self.population_initialization(self.population_size)
+            self.previous_population_ids = self.get_current_population_ids()
+            self.previous_population_iteration = 0
+            self.evaluated_individuals = []
+
+    def _run_worker(self):
+        """Worker mode: continuously process jobs from queue"""
+        print(f"\n🔧 Worker starting with {self.max_processes} local processes")
+        print("⏳ Waiting for jobs...")
+        
+        # Initialize C# once at worker startup
+        try:
+            from pythonnet import set_runtime
+            from clr_loader import get_coreclr
+            set_runtime(get_coreclr())
+            print("✅ C# runtime initialized")
+        except Exception as e:
+            print(f"⚠️  Warning: C# runtime init: {e}")
+        
+        current_config = None
+        last_job_time = time.time()
+        
+        while True:
+            try:
+                # Check if jobs queue has items
+                jobs_count = self.job_queue.get_jobs_queue_size()
+                
+                # If queue just got populated, fetch fresh config
+                if jobs_count > 0 and current_config is None:
+                    print(f"\n📋 Jobs detected ({jobs_count} pending), fetching configuration...")
+                    current_config = self.job_queue.get_config(timeout=5)
+                    if current_config:
+                        # Update local config
+                        self.keyboard_file = current_config.get('keyboard_file', self.keyboard_file)
+                        self.text_file = current_config.get('text_file', self.text_file)
+                        self.fitts_a = current_config.get('fitts_a', self.fitts_a)
+                        self.fitts_b = current_config.get('fitts_b', self.fitts_b)
+                        self.finger_coefficients = current_config.get('finger_coefficients', self.finger_coefficients)
+                        print(f"✅ Configuration loaded:")
+                        print(f"   Fitts: a={self.fitts_a}, b={self.fitts_b}")
+                        print(f"   Text: {os.path.basename(self.text_file)}")
+                
+                # Pull a job
+                job_data, delivery_tag = self.job_queue.pull_job(timeout=1)
+                
+                if job_data:
+                    last_job_time = time.time()
+                    individual_id = job_data['individual_id']
+                    chromosome = job_data['chromosome']
+                    name = job_data['name']
+                    
+                    print(f"🔨 Processing job: {name} (ID: {individual_id})")
+                    
+                    try:
+                        # Evaluate using local process pool
+                        individual_data = (individual_id, chromosome, name)
+                        result_id, distance, time_taken = _evaluate_individual_worker(
+                            individual_data,
+                            self.keyboard_file,
+                            self.text_file,
+                            self.finger_coefficients,
+                            self.fitts_a,
+                            self.fitts_b
+                        )
+                        
+                        # Push result
+                        result = {
+                            'individual_id': result_id,
+                            'distance': distance,
+                            'time_taken': time_taken
+                        }
+                        self.job_queue.push_result(result)
+                        self.job_queue.ack_job(delivery_tag)
+                        
+                        print(f"✅ Completed: {name}")
+                        
+                    except Exception as e:
+                        print(f"❌ Error processing {name}: {e}")
+                        self.job_queue.nack_job(delivery_tag, requeue=True)
+                
+                else:
+                    # No jobs available
+                    time_since_last = time.time() - last_job_time
+                    
+                    # If queue was active but now empty for a while, reset config
+                    if current_config is not None and time_since_last > 10:
+                        jobs_remaining = self.job_queue.get_jobs_queue_size()
+                        if jobs_remaining == 0:
+                            print(f"\n💤 No jobs for 10s, waiting for next batch...")
+                            current_config = None
+                    
+                    time.sleep(0.5)  # Short sleep when idle
+                    
+            except KeyboardInterrupt:
+                print("\n\n🛑 Worker stopped by user")
+                self.job_queue.close()
+                sys.exit(0)
+            except Exception as e:
+                print(f"⚠️  Worker error: {e}")
+                import traceback
+                traceback.print_exc()
+                time.sleep(1)
 
     def population_initialization(self, size=50):
-        """Initialize population"""
+        """Initialize population (master only)"""
+        if self.is_worker:
+            return
+            
         self.population = []
 
         for layout_name, genotype in LAYOUT_DATA.items():
@@ -160,9 +293,6 @@ class GeneticAlgorithmSimulation:
                     self.population.append(individual)
                     self.individual_names[individual.id] = individual.name
 
-        self.previous_population_ids = self.get_current_population_ids()
-        self.previous_population_iteration = 0
-        self.evaluated_individuals = []
         print(f"Total population size: {len(self.population)}")
 
     def get_current_population_ids(self):
@@ -175,12 +305,7 @@ class GeneticAlgorithmSimulation:
         return (individual.id, individual.chromosome, individual.name)
 
     def normalize_and_calculate_fitness(self):
-        """Normalize toward 0 (better = closer to 0) with 1.2x max scaling
-        
-        IMPORTANT: Normalizes using global max across ALL evaluated individuals
-        to ensure fitness values are comparable across generations.
-        """
-        # Get ALL evaluated individuals (including from previous generations)
+        """Normalize toward 0 (better = closer to 0) with 1.2x max scaling"""
         all_evaluated = [ind for ind in self.evaluated_individuals
                         if ind.distance is not None and ind.time_taken is not None 
                         and ind.distance != float('inf') and ind.time_taken != float('inf')]
@@ -189,7 +314,6 @@ class GeneticAlgorithmSimulation:
             print("Warning: No individuals with valid raw metrics to normalize")
             return
 
-        # Use GLOBAL max across all generations for consistent normalization
         distances = [ind.distance for ind in all_evaluated]
         times = [ind.time_taken for ind in all_evaluated]
 
@@ -200,67 +324,170 @@ class GeneticAlgorithmSimulation:
         print(f"  Distance: [0, {max_distance:.2f}]")
         print(f"  Time: [0, {max_time:.2f}]")
 
-        # Re-normalize ALL evaluated individuals with global scale
         for ind in all_evaluated:
             normalized_distance = ind.distance / max_distance
             normalized_time = ind.time_taken / max_time
             ind.fitness = 0.5 * normalized_distance + 0.5 * normalized_time
         
-        # Handle invalid individuals
         for ind in self.population + getattr(self, 'children', []):
             if ind.distance == float('inf') or ind.time_taken == float('inf'):
                 ind.fitness = float('inf')
 
     def fitness_function_calculation(self):
-        """Calculate fitness using fresh processes (max_tasks_per_child=1)"""
+        """
+        Calculate fitness using distributed queue system.
+        Master acts as both coordinator and worker.
+        """
+        if self.is_worker:
+            return  # Workers don't call this
+            
         individuals_to_evaluate = [ind for ind in self.population if ind.distance is None]
 
         if hasattr(self, 'children'):
             individuals_to_evaluate.extend([child for child in self.children if child.distance is None])
 
-        if individuals_to_evaluate:
-            print(f"Evaluating {len(individuals_to_evaluate)} individuals in parallel...")
+        if not individuals_to_evaluate:
+            self.normalize_and_calculate_fitness()
+            return
 
-            individual_data_list = [self.prepare_individual_data(ind) for ind in individuals_to_evaluate]
+        print(f"\n{'='*80}")
+        print(f"📤 DISTRIBUTING {len(individuals_to_evaluate)} JOBS")
+        print(f"{'='*80}")
+
+        # Push configuration
+        config = {
+            'keyboard_file': self.keyboard_file,
+            'text_file': self.text_file,
+            'fitts_a': self.fitts_a,
+            'fitts_b': self.fitts_b,
+            'finger_coefficients': self.finger_coefficients
+        }
+        self.job_queue.push_config(config)
+        print("✅ Configuration pushed to queue")
+
+        # Push all jobs
+        for ind in individuals_to_evaluate:
+            job = {
+                'individual_id': ind.id,
+                'chromosome': ind.chromosome,
+                'name': ind.name
+            }
+            self.job_queue.push_job(job)
+        
+        print(f"✅ Pushed {len(individuals_to_evaluate)} jobs to queue")
+
+        # Master also acts as worker - process jobs using ProcessPoolExecutor
+        print(f"\n🔨 Master processing jobs with {self.max_processes} local workers...")
+        
+        # Prepare data for workers
+        jobs_to_process = []
+        while True:
+            job_data, delivery_tag = self.job_queue.pull_job(timeout=0.1)
+            if not job_data:
+                break
+            jobs_to_process.append((job_data, delivery_tag))
+        
+        # Process using ProcessPoolExecutor
+        with ProcessPoolExecutor(max_workers=self.max_processes, max_tasks_per_child=1) as executor:
+            futures = {}
             
-            # KEY FIX: max_tasks_per_child=1 means each process handles ONE task then exits
-            # This prevents memory buildup
-            with ProcessPoolExecutor(max_workers=self.max_processes, max_tasks_per_child=1) as executor:
-                future_to_individual = {
-                    executor.submit(
-                        _evaluate_individual_worker,
-                        ind_data,
-                        self.keyboard_file,
-                        self.text_file,
-                        self.finger_coefficients,
-                        self.fitts_a,
-                        self.fitts_b
-                    ): ind
-                    for ind, ind_data in zip(individuals_to_evaluate, individual_data_list)
-                }
+            for job_data, delivery_tag in jobs_to_process:
+                individual_data = (
+                    job_data['individual_id'],
+                    job_data['chromosome'],
+                    job_data['name']
+                )
+                
+                future = executor.submit(
+                    _evaluate_individual_worker,
+                    individual_data,
+                    self.keyboard_file,
+                    self.text_file,
+                    self.finger_coefficients,
+                    self.fitts_a,
+                    self.fitts_b
+                )
+                futures[future] = (job_data, delivery_tag)
+            
+            # Collect results as they complete
+            for future in as_completed(futures):
+                job_data, delivery_tag = futures[future]
+                try:
+                    result_id, distance, time_taken = future.result()
+                    
+                    # Push result
+                    result = {
+                        'individual_id': result_id,
+                        'distance': distance,
+                        'time_taken': time_taken
+                    }
+                    self.job_queue.push_result(result)
+                    self.job_queue.ack_job(delivery_tag)
+                    
+                except Exception as e:
+                    print(f"❌ Local processing error: {e}")
+                    self.job_queue.nack_job(delivery_tag, requeue=True)
 
-                completed_count = 0
-                for future in as_completed(future_to_individual):
-                    try:
-                        individual_id, distance, time_taken = future.result()
+        print(f"✅ Master completed local processing")
+
+        # Collect results
+        print(f"\n📥 COLLECTING RESULTS")
+        print(f"{'='*80}")
+        
+        results_collected = 0
+        expected_results = len(individuals_to_evaluate)
+        timeout_start = None
+        
+        while results_collected < expected_results:
+            result = self.job_queue.pull_result(timeout=0.5)
+            
+            if result:
+                timeout_start = None  # Reset timeout
+                individual_id = result['individual_id']
+                distance = result['distance']
+                time_taken = result['time_taken']
+                
+                # Find and update individual
+                for ind in individuals_to_evaluate:
+                    if ind.id == individual_id:
+                        ind.distance = distance
+                        ind.time_taken = time_taken
+                        if ind not in self.evaluated_individuals:
+                            self.evaluated_individuals.append(ind)
+                        results_collected += 1
+                        break
+                
+                if results_collected % 10 == 0 or results_collected == expected_results:
+                    print(f"  📊 Progress: {results_collected}/{expected_results} results collected")
+            
+            else:
+                # No result available
+                jobs_remaining = self.job_queue.get_jobs_queue_size()
+                
+                if jobs_remaining == 0:
+                    # Queue is empty, start timeout
+                    if timeout_start is None:
+                        timeout_start = time.time()
+                        print(f"  ⏳ Job queue empty, waiting up to 30s for remaining {expected_results - results_collected} results...")
+                    
+                    elif time.time() - timeout_start > 30:
+                        # Timeout - mark missing as failed
+                        missing = expected_results - results_collected
+                        print(f"  ⚠️  TIMEOUT: Marking {missing} missing individuals as failed (fitness=inf)")
+                        
                         for ind in individuals_to_evaluate:
-                            if ind.id == individual_id:
-                                ind.distance = distance
-                                ind.time_taken = time_taken
-                                if ind not in self.evaluated_individuals:
-                                    self.evaluated_individuals.append(ind)
-                                break
-                        completed_count += 1
+                            if ind.distance is None:
+                                ind.distance = float('inf')
+                                ind.time_taken = float('inf')
+                                results_collected += 1
+                        break
+                
+                time.sleep(0.5)
 
-                        if completed_count % 10 == 0:
-                            print(f"  Completed {completed_count}/{len(individuals_to_evaluate)} evaluations")
-                    except Exception as e:
-                        print(f"Error getting future result: {e}")
-                        completed_count += 1
-
-            print(f"All {len(individuals_to_evaluate)} evaluations completed")
-            gc.collect()  # Force garbage collection
-
+        print(f"✅ Collection complete: {results_collected}/{expected_results} results")
+        print(f"{'='*80}\n")
+        
+        gc.collect()
         self.normalize_and_calculate_fitness()
 
     def order_fitness_values(self, limited=False):
@@ -294,13 +521,10 @@ class GeneticAlgorithmSimulation:
         self.parents = []
         target_size = len(self.population)
         
-        # Keep selecting until we have enough parents
         while len(self.parents) < target_size:
-            # Select k random individuals from population
             sample_size = min(k, len(self.population))
             candidates = random.sample(self.population, sample_size)
             
-            # Find best candidate (lowest fitness)
             best_candidate = None
             best_fitness = float('inf')
             
@@ -309,14 +533,13 @@ class GeneticAlgorithmSimulation:
                     best_fitness = candidate.fitness
                     best_candidate = candidate
             
-            # Add best candidate to parents (can be selected multiple times)
             if best_candidate is not None:
                 self.parents.append(best_candidate)
         
         print(f"Selected {len(self.parents)} parents via tournament selection")
 
     def uniform_crossover(self, offsprings_per_pair=4):
-        """Uniform crossover - create children from parent pairs, prioritizing fitter parents"""
+        """Uniform crossover - create children from parent pairs"""
         self.children = []
 
         def is_duplicate(chromosome, existing_individuals):
@@ -330,12 +553,9 @@ class GeneticAlgorithmSimulation:
             print(f"Warning: Not enough parents. Have {len(self.parents)} parents.")
             return
 
-        # Sort parents by fitness (best first) to prioritize fitter individuals
         sorted_parents = sorted(self.parents, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
-        
-        # Create pairs from sorted parents - fittest individuals paired first
         num_pairs = len(sorted_parents) // 2
-        target_children = len(self.population)  # Want to create as many children as population size
+        target_children = len(self.population)
         
         for pair_idx in range(num_pairs):
             parent0 = sorted_parents[pair_idx * 2]
@@ -344,7 +564,6 @@ class GeneticAlgorithmSimulation:
             if parent0.fitness is None or parent1.fitness is None:
                 continue
 
-            # parent0 should already be fitter due to sorting, but double-check
             if parent0.fitness > parent1.fitness:
                 parent0, parent1 = parent1, parent0
 
@@ -428,7 +647,6 @@ class GeneticAlgorithmSimulation:
         combined = self.population + self.children
         sorted_combined = sorted(combined, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
         
-        # Save all individuals to the unique set (dict keyed by ID)
         for ind in sorted_combined:
             if ind.id not in self.all_individuals:
                 self.all_individuals[ind.id] = {
@@ -442,7 +660,6 @@ class GeneticAlgorithmSimulation:
                     'parents': ind.parents
                 }
         
-        # Keep only survivors
         self.population = sorted_combined[:len(self.population)]
         
         discarded_count = len(sorted_combined) - len(self.population)
@@ -454,7 +671,6 @@ class GeneticAlgorithmSimulation:
             print("No evaluated individuals to use for renormalization")
             return
         
-        # Get global max from ALL evaluated individuals
         all_evaluated = [ind for ind in self.evaluated_individuals
                         if ind.distance is not None and ind.time_taken is not None 
                         and ind.distance != float('inf') and ind.time_taken != float('inf')]
@@ -475,7 +691,6 @@ class GeneticAlgorithmSimulation:
         print(f"  Distance: [0, {max_distance:.2f}]")
         print(f"  Time: [0, {max_time:.2f}]")
         
-        # Re-normalize all individuals in the unique set
         total_renormalized = 0
         for ind_id, ind_dict in self.all_individuals.items():
             if ind_dict['distance'] != float('inf') and ind_dict['time_taken'] != float('inf'):
@@ -490,7 +705,14 @@ class GeneticAlgorithmSimulation:
         print(f"{'='*80}\n")
 
     def run(self, max_iterations=100, stagnant=15):
-        """Run genetic algorithm"""
+        """Run genetic algorithm (master only)"""
+        if self.is_worker:
+            return None
+            
+        # Purge queues on startup
+        print("\n🧹 Purging all queues...")
+        self.job_queue.purge_all()
+        
         iteration = 0
         print("Starting genetic algorithm...")
         self.fitness_function_calculation()
@@ -519,19 +741,21 @@ class GeneticAlgorithmSimulation:
                 iteration += 1
 
         except KeyboardInterrupt:
-            print("\n\nInterrupted by user!")
+            print("\n\n🛑 Interrupted by user!")
 
         print(f"\nAlgorithm completed after {iteration} iterations")
         print(f"Final stagnation count: {self.previous_population_iteration}")
         print(f"Total individuals evaluated: {len(self.evaluated_individuals)}")
         print(f"Total unique individuals: {len(self.all_individuals)}")
         
-        # Re-normalize all saved individuals with final global scale
         self.renormalize_all_individuals()
-        
         self.order_fitness_values(limited=False)
 
         best = min(self.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
+        
+        # Close queue connection
+        self.job_queue.close()
+        
         return best
 
 
@@ -541,47 +765,47 @@ if __name__ == "__main__":
         text_file='data/text/raw/simple_wikipedia_dataset.txt',
         fitts_a=0.5,
         fitts_b=0.3,
-        max_concurrent_processes=4
+        max_concurrent_processes=4,
+        use_rabbitmq=True,
+        is_worker=False
     )
 
-    # Run without auto-saving
-    best_individual = ga.run(max_iterations=50, stagnant=10)
+    if not ga.is_worker:
+        best_individual = ga.run(max_iterations=50, stagnant=10)
 
-    print("\n" + "="*80)
-    print("BEST INDIVIDUAL FOUND")
-    print("="*80)
-    print(f"Name: {best_individual.name}")
-    print(f"Fitness: {best_individual.fitness:.6f}")
-    print(f"Raw Distance: {best_individual.distance:.2f}")
-    print(f"Raw Time: {best_individual.time_taken:.2f}")
-    parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ["Initial"]
-    print(f"Parents: {', '.join(parent_names)}")
-    print(f"Layout: {''.join(best_individual.chromosome)}")
-    print("="*80)
-    
-    # Additional statistics
-    print("\n" + "="*80)
-    print("RUN STATISTICS")
-    print("="*80)
-    print(f"Total individuals evaluated: {len(ga.evaluated_individuals)}")
-    print(f"Total unique individuals tracked: {len(ga.all_individuals)}")
-    print(f"Final population size: {len(ga.population)}")
-    print("="*80)
-    
-    # Save all individuals to JSON
-    import json
-    with open('ga_all_individuals.json', 'w') as f:
-        json.dump({
-            'all_individuals': list(ga.all_individuals.values()),
-            'best_individual': {
-                'id': best_individual.id,
-                'name': best_individual.name,
-                'fitness': best_individual.fitness,
-                'distance': best_individual.distance,
-                'time_taken': best_individual.time_taken,
-                'chromosome': ''.join(best_individual.chromosome),
-                'generation': best_individual.generation,
-                'parents': best_individual.parents
-            }
-        }, f, indent=2)
-    print("\nSaved all unique individuals to ga_all_individuals.json")
+        print("\n" + "="*80)
+        print("BEST INDIVIDUAL FOUND")
+        print("="*80)
+        print(f"Name: {best_individual.name}")
+        print(f"Fitness: {best_individual.fitness:.6f}")
+        print(f"Raw Distance: {best_individual.distance:.2f}")
+        print(f"Raw Time: {best_individual.time_taken:.2f}")
+        parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ["Initial"]
+        print(f"Parents: {', '.join(parent_names)}")
+        print(f"Layout: {''.join(best_individual.chromosome)}")
+        print("="*80)
+        
+        print("\n" + "="*80)
+        print("RUN STATISTICS")
+        print("="*80)
+        print(f"Total individuals evaluated: {len(ga.evaluated_individuals)}")
+        print(f"Total unique individuals tracked: {len(ga.all_individuals)}")
+        print(f"Final population size: {len(ga.population)}")
+        print("="*80)
+        
+        import json
+        with open('ga_all_individuals.json', 'w') as f:
+            json.dump({
+                'all_individuals': list(ga.all_individuals.values()),
+                'best_individual': {
+                    'id': best_individual.id,
+                    'name': best_individual.name,
+                    'fitness': best_individual.fitness,
+                    'distance': best_individual.distance,
+                    'time_taken': best_individual.time_taken,
+                    'chromosome': ''.join(best_individual.chromosome),
+                    'generation': best_individual.generation,
+                    'parents': best_individual.parents
+                }
+            }, f, indent=2)
+        print("\nSaved all unique individuals to ga_all_individuals.json")
