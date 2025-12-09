@@ -210,41 +210,51 @@ class GeneticAlgorithmSimulation:
         current_config = None
         last_job_time = time.time()
         
-        while True:
-            try:
-                # Check if jobs queue has items
-                jobs_count = self.job_queue.get_jobs_queue_size()
-                
-                # If queue just got populated, fetch fresh config
-                if jobs_count > 0 and current_config is None:
-                    print(f"\n📋 Jobs detected ({jobs_count} pending), fetching configuration...")
-                    current_config = self.job_queue.get_config(timeout=5)
-                    if current_config:
-                        # Update local config
-                        self.keyboard_file = current_config.get('keyboard_file', self.keyboard_file)
-                        self.text_file = current_config.get('text_file', self.text_file)
-                        self.fitts_a = current_config.get('fitts_a', self.fitts_a)
-                        self.fitts_b = current_config.get('fitts_b', self.fitts_b)
-                        self.finger_coefficients = current_config.get('finger_coefficients', self.finger_coefficients)
-                        print(f"✅ Configuration loaded:")
-                        print(f"   Fitts: a={self.fitts_a}, b={self.fitts_b}")
-                        print(f"   Text: {os.path.basename(self.text_file)}")
-                
-                # Pull a job
-                job_data, delivery_tag = self.job_queue.pull_job(timeout=1)
-                
-                if job_data:
-                    last_job_time = time.time()
-                    individual_id = job_data['individual_id']
-                    chromosome = job_data['chromosome']
-                    name = job_data['name']
+        # Use ProcessPoolExecutor for parallel processing
+        with ProcessPoolExecutor(max_workers=self.max_processes, max_tasks_per_child=1) as executor:
+            futures = {}
+            
+            while True:
+                try:
+                    # Check if jobs queue has items
+                    jobs_count = self.job_queue.get_jobs_queue_size()
                     
-                    print(f"🔨 Processing job: {name} (ID: {individual_id})")
+                    # If queue just got populated, fetch fresh config
+                    if jobs_count > 0 and current_config is None:
+                        print(f"\n📋 Jobs detected ({jobs_count} pending), fetching configuration...")
+                        current_config = self.job_queue.get_config(timeout=5)
+                        if current_config:
+                            # Update local config
+                            self.keyboard_file = current_config.get('keyboard_file', self.keyboard_file)
+                            self.text_file = current_config.get('text_file', self.text_file)
+                            self.fitts_a = current_config.get('fitts_a', self.fitts_a)
+                            self.fitts_b = current_config.get('fitts_b', self.fitts_b)
+                            self.finger_coefficients = current_config.get('finger_coefficients', self.finger_coefficients)
+                            print(f"✅ Configuration loaded:")
+                            print(f"   Fitts: a={self.fitts_a}, b={self.fitts_b}")
+                            print(f"   Text: {os.path.basename(self.text_file)}")
                     
-                    try:
-                        # Evaluate using local process pool
+                    # Pull jobs while we have available workers
+                    active_jobs = len(futures)
+                    
+                    while active_jobs < self.max_processes:
+                        job_data, delivery_tag = self.job_queue.pull_job(timeout=0.1)
+                        
+                        if not job_data:
+                            # No jobs available right now
+                            break
+                        
+                        last_job_time = time.time()
+                        individual_id = job_data['individual_id']
+                        chromosome = job_data['chromosome']
+                        name = job_data['name']
+                        
+                        print(f"🔨 Processing job: {name} (ID: {individual_id}) [active: {active_jobs+1}/{self.max_processes}]")
+                        
+                        # Submit to process pool
                         individual_data = (individual_id, chromosome, name)
-                        result_id, distance, time_taken = _evaluate_individual_worker(
+                        future = executor.submit(
+                            _evaluate_individual_worker,
                             individual_data,
                             self.keyboard_file,
                             self.text_file,
@@ -252,44 +262,61 @@ class GeneticAlgorithmSimulation:
                             self.fitts_a,
                             self.fitts_b
                         )
-                        
-                        # Push result
-                        result = {
-                            'individual_id': result_id,
-                            'distance': distance,
-                            'time_taken': time_taken
-                        }
-                        self.job_queue.push_result(result)
-                        self.job_queue.ack_job(delivery_tag)
-                        
-                        print(f"✅ Completed: {name}")
-                        
-                    except Exception as e:
-                        print(f"❌ Error processing {name}: {e}")
-                        self.job_queue.nack_job(delivery_tag, requeue=True)
-                
-                else:
-                    # No jobs available
-                    time_since_last = time.time() - last_job_time
+                        futures[future] = (job_data, delivery_tag)
+                        active_jobs = len(futures)
                     
-                    # If queue was active but now empty for a while, reset config
-                    if current_config is not None and time_since_last > 10:
-                        jobs_remaining = self.job_queue.get_jobs_queue_size()
-                        if jobs_remaining == 0:
-                            print(f"\n💤 No jobs for 10s, waiting for next batch...")
-                            current_config = None
+                    # Check for completed jobs
+                    if futures:
+                        for future in list(futures.keys()):
+                            if future.done():
+                                job_data, delivery_tag = futures.pop(future)
+                                
+                                try:
+                                    result_id, distance, time_taken = future.result()
+                                    
+                                    # Push result
+                                    result = {
+                                        'individual_id': result_id,
+                                        'distance': distance,
+                                        'time_taken': time_taken
+                                    }
+                                    self.job_queue.push_result(result)
+                                    self.job_queue.ack_job(delivery_tag)
+                                    
+                                    print(f"✅ Completed: {job_data['name']}")
+                                    
+                                except Exception as e:
+                                    print(f"❌ Error processing {job_data['name']}: {e}")
+                                    import traceback
+                                    traceback.print_exc()
+                                    self.job_queue.nack_job(delivery_tag, requeue=True)
                     
-                    time.sleep(0.5)  # Short sleep when idle
+                    # Check if we should reset config (idle for a while)
+                    active_jobs = len(futures)
                     
-            except KeyboardInterrupt:
-                print("\n\n🛑 Worker stopped by user")
-                self.job_queue.close()
-                sys.exit(0)
-            except Exception as e:
-                print(f"⚠️  Worker error: {e}")
-                import traceback
-                traceback.print_exc()
-                time.sleep(1)
+                    if active_jobs == 0:
+                        time_since_last = time.time() - last_job_time
+                        
+                        # If queue was active but now empty for a while, reset config
+                        if current_config is not None and time_since_last > 10:
+                            jobs_remaining = self.job_queue.get_jobs_queue_size()
+                            if jobs_remaining == 0:
+                                print(f"\n💤 No jobs for 10s, waiting for next batch...")
+                                current_config = None
+                        
+                        time.sleep(0.5)  # Short sleep when idle
+                    else:
+                        time.sleep(0.1)  # Very short sleep when processing
+                            
+                except KeyboardInterrupt:
+                    print("\n\n🛑 Worker stopped by user")
+                    self.job_queue.close()
+                    sys.exit(0)
+                except Exception as e:
+                    print(f"⚠️  Worker error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    time.sleep(1)
 
     def population_initialization(self, size=50):
         """Initialize population (master only)"""
@@ -402,57 +429,90 @@ class GeneticAlgorithmSimulation:
         
         print(f"✅ Pushed {len(individuals_to_evaluate)} jobs to queue")
 
-        # Master also acts as worker - process jobs using ProcessPoolExecutor
+        # ========================================================================
+        # FIXED: Master competes fairly with workers
+        # ========================================================================
         print(f"\n🔨 Master processing jobs with {self.max_processes} local workers...")
+        print(f"💡 Master will compete with remote workers for jobs (fair distribution)")
         
-        # Prepare data for workers
-        jobs_to_process = []
-        while True:
-            job_data, delivery_tag = self.job_queue.pull_job(timeout=0.1)
-            if not job_data:
-                break
-            jobs_to_process.append((job_data, delivery_tag))
-        
-        # Process using ProcessPoolExecutor
+        # Process using ProcessPoolExecutor - pull jobs one at a time
         with ProcessPoolExecutor(max_workers=self.max_processes, max_tasks_per_child=1) as executor:
             futures = {}
+            no_job_cycles = 0
             
-            for job_data, delivery_tag in jobs_to_process:
-                individual_data = (
-                    job_data['individual_id'],
-                    job_data['chromosome'],
-                    job_data['name']
-                )
+            # Keep pulling and submitting jobs as workers become available
+            while True:
+                active_jobs = len(futures)
                 
-                future = executor.submit(
-                    _evaluate_individual_worker,
-                    individual_data,
-                    self.keyboard_file,
-                    self.text_file,
-                    self.finger_coefficients,
-                    self.fitts_a,
-                    self.fitts_b
-                )
-                futures[future] = (job_data, delivery_tag)
-            
-            # Collect results as they complete
-            for future in as_completed(futures):
-                job_data, delivery_tag = futures[future]
-                try:
-                    result_id, distance, time_taken = future.result()
+                # Try to keep all workers busy - pull jobs up to max_processes
+                while active_jobs < self.max_processes:
+                    job_data, delivery_tag = self.job_queue.pull_job(timeout=0.1)
                     
-                    # Push result
-                    result = {
-                        'individual_id': result_id,
-                        'distance': distance,
-                        'time_taken': time_taken
-                    }
-                    self.job_queue.push_result(result)
-                    self.job_queue.ack_job(delivery_tag)
+                    if not job_data:
+                        # No more jobs available right now
+                        break
                     
-                except Exception as e:
-                    print(f"❌ Local processing error: {e}")
-                    self.job_queue.nack_job(delivery_tag, requeue=True)
+                    no_job_cycles = 0  # Reset counter when we get a job
+                    
+                    # Submit job to local worker
+                    individual_data = (
+                        job_data['individual_id'],
+                        job_data['chromosome'],
+                        job_data['name']
+                    )
+                    
+                    future = executor.submit(
+                        _evaluate_individual_worker,
+                        individual_data,
+                        self.keyboard_file,
+                        self.text_file,
+                        self.finger_coefficients,
+                        self.fitts_a,
+                        self.fitts_b
+                    )
+                    futures[future] = (job_data, delivery_tag)
+                    active_jobs = len(futures)
+                    print(f"  🔨 Master pulled job: {job_data['name']} (active: {active_jobs}/{self.max_processes})")
+                
+                # Check if any jobs completed
+                if futures:
+                    for future in list(futures.keys()):
+                        if future.done():
+                            job_data, delivery_tag = futures.pop(future)
+                            
+                            try:
+                                result_id, distance, time_taken = future.result()
+                                
+                                # Push result
+                                result = {
+                                    'individual_id': result_id,
+                                    'distance': distance,
+                                    'time_taken': time_taken
+                                }
+                                self.job_queue.push_result(result)
+                                self.job_queue.ack_job(delivery_tag)
+                                print(f"  ✅ Master completed: {job_data['name']}")
+                                
+                            except Exception as e:
+                                print(f"  ❌ Master processing error: {e}")
+                                self.job_queue.nack_job(delivery_tag, requeue=True)
+                
+                # Check termination conditions
+                active_jobs = len(futures)
+                jobs_remaining = self.job_queue.get_jobs_queue_size()
+                
+                if active_jobs == 0 and jobs_remaining == 0:
+                    # No active jobs and no jobs in queue
+                    no_job_cycles += 1
+                    if no_job_cycles > 5:
+                        # Give it a few cycles to make sure no jobs coming
+                        print(f"  ℹ️  Master: No jobs available, exiting processing loop")
+                        break
+                else:
+                    no_job_cycles = 0
+                
+                # Small sleep to avoid busy waiting
+                time.sleep(0.2)
 
         print(f"✅ Master completed local processing")
 
