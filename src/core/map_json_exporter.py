@@ -85,7 +85,8 @@ class CSharpFitnessConfig:
         return {
             "x": float(center[0]),
             "y": float(center[1]),
-            "finger": self._get_finger_int(key_id, prefer_finger)
+            "finger": self._get_finger_int(key_id, prefer_finger),
+            "key_id": key_id
         }
     
     def _get_char_key_sequence(self, char):

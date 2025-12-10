@@ -8,7 +8,7 @@ using System.Runtime.CompilerServices;
 namespace FitnessNet;
 
 public record Point(double X, double Y);
-public record KeyPress(Point Position, int Finger);
+public record KeyPress(Point Position, int Finger, int KeyId);
 
 public struct CharStats
 {
@@ -137,8 +137,9 @@ public class Fitness
                 double x = keyPress.GetProperty("x").GetDouble();
                 double y = keyPress.GetProperty("y").GetDouble();
                 int finger = keyPress.GetProperty("finger").GetInt32();
+                int keyId = keyPress.GetProperty("key_id").GetInt32();
 
-                keyPresses[i++] = new KeyPress(new Point(x, y), finger);
+                keyPresses[i++] = new KeyPress(new Point(x, y), finger, keyId);
             }
 
             _charMappings[charCode] = keyPresses;
@@ -345,7 +346,8 @@ public class Fitness
                     {
                         ["x"] = kp.Position.X,
                         ["y"] = kp.Position.Y,
-                        ["finger"] = kp.Finger
+                        ["finger"] = kp.Finger,
+                        ["key_id"] = kp.KeyId
                     });
                 }
                 charData["key_presses"] = keyPressesArray;

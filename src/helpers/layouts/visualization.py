@@ -46,7 +46,8 @@ def render_keyboard_heatmap(
     layer_idx: int = 0,
     layout=None,
     heatmap_type: str = "press",
-    exclude_space: bool = True
+    exclude_space: bool = True,
+    key_id_to_freq: Dict = None
 ) -> SVG:
     """
     Render keyboard with heatmap overlay.
@@ -59,6 +60,7 @@ def render_keyboard_heatmap(
         layout: Layout object (for getting key characters)
         heatmap_type: "press" (blue-red) or "hover" (grey-green)
         exclude_space: Whether to exclude spacebar from normalization
+        key_id_to_freq: Optional dict mapping key_id to frequency (from ComputeStats)
     
     Returns:
         IPython SVG display object
@@ -141,28 +143,41 @@ def render_keyboard_heatmap(
         
         parms = get_render_params(key, key_sizes)
         
-        # Get key character(s) for this layer
-        key_chars = []
-        if layout and hasattr(layout, 'mapper'):
-            if (key.id, layer_idx) in layout.mapper.data:
-                key_data = layout.mapper.data[(key.id, layer_idx)]
-                if key_data.key_type == KeyType.CHAR:
-                    if isinstance(key_data.value, tuple):
-                        key_chars = [key_data.value[0]]  # Unshifted char
-                    else:
-                        key_chars = [key_data.value]
-        
         # Calculate frequency for this key
         max_char_freq = 0.0
         is_spacebar = False
-        for char in key_chars:
-            if char == ' ':
-                is_spacebar = True
-            if char in char_frequencies:
-                freq_data = char_frequencies[char]
-                relative_freq = freq_data.get('relative', 0.0) if isinstance(freq_data, dict) else freq_data
-                if relative_freq > max_char_freq:
-                    max_char_freq = relative_freq
+        
+        # Use key_id_to_freq if available (from ComputeStats with key_id)
+        if key_id_to_freq is not None and key.id in key_id_to_freq:
+            max_char_freq = key_id_to_freq[key.id]
+            # Check if this is spacebar for exclusion
+            if layout and hasattr(layout, 'mapper'):
+                if (key.id, layer_idx) in layout.mapper.data:
+                    key_data = layout.mapper.data[(key.id, layer_idx)]
+                    if key_data.key_type == KeyType.CHAR:
+                        char = key_data.value[0] if isinstance(key_data.value, tuple) else key_data.value
+                        if char == ' ':
+                            is_spacebar = True
+        else:
+            # Fallback: use character-based lookup
+            key_chars = []
+            if layout and hasattr(layout, 'mapper'):
+                if (key.id, layer_idx) in layout.mapper.data:
+                    key_data = layout.mapper.data[(key.id, layer_idx)]
+                    if key_data.key_type == KeyType.CHAR:
+                        if isinstance(key_data.value, tuple):
+                            key_chars = [key_data.value[0]]  # Unshifted char
+                        else:
+                            key_chars = [key_data.value]
+            
+            for char in key_chars:
+                if char == ' ':
+                    is_spacebar = True
+                if char in char_frequencies:
+                    freq_data = char_frequencies[char]
+                    relative_freq = freq_data.get('relative', 0.0) if isinstance(freq_data, dict) else freq_data
+                    if relative_freq > max_char_freq:
+                        max_char_freq = relative_freq
         
         # Skip spacebar if exclude_space is True
         if exclude_space and is_spacebar:
@@ -320,26 +335,42 @@ def generate_all_visualizations(
     total_presses = stats.get('total_presses', 0)
     total_chars = stats.get('total_chars_processed', total_presses)
     
-    # Build frequency dicts
+    # Build frequency dicts (both char-based and key_id-based)
     press_frequencies = {}
     hover_frequencies = {}
+    key_id_to_press_freq = {}
+    key_id_to_hover_freq = {}
     
     for char, char_data in char_mappings.items():
         press_count = char_data.get('press_count', 0)
         hover_count = char_data.get('hover_count', 0)
         
-        if press_count > 0:
-            press_frequencies[char] = {
-                'count': press_count,
-                'relative': press_count / total_presses if total_presses > 0 else 0
-            }
-        
-        if hover_count > 0:
-            total_hover_samples = total_chars  # Each char = 1 hover sample
-            hover_frequencies[char] = {
-                'count': hover_count,
-                'relative': hover_count / total_hover_samples if total_hover_samples > 0 else 0
-            }
+        # Get key_id from first key press (the actual character key, not modifiers)
+        key_presses = char_data.get('key_presses', [])
+        if key_presses:
+            # The last key press is the actual character key (modifiers come first)
+            char_key_id = key_presses[-1].get('key_id', None)
+            
+            if press_count > 0:
+                press_freq = press_count / total_presses if total_presses > 0 else 0
+                press_frequencies[char] = {
+                    'count': press_count,
+                    'relative': press_freq
+                }
+                # Accumulate press frequency by key_id
+                if char_key_id is not None:
+                    key_id_to_press_freq[char_key_id] = key_id_to_press_freq.get(char_key_id, 0) + press_freq
+            
+            if hover_count > 0:
+                total_hover_samples = total_chars  # Each char = 1 hover sample
+                hover_freq = hover_count / total_hover_samples if total_hover_samples > 0 else 0
+                hover_frequencies[char] = {
+                    'count': hover_count,
+                    'relative': hover_freq
+                }
+                # Accumulate hover frequency by key_id
+                if char_key_id is not None:
+                    key_id_to_hover_freq[char_key_id] = key_id_to_hover_freq.get(char_key_id, 0) + hover_freq
     
     # Update keyboard labels for this layer
     for key_obj in keyboard.keys:
@@ -367,7 +398,8 @@ def generate_all_visualizations(
         layer_idx=layer_idx,
         layout=layout,
         heatmap_type="press",
-        exclude_space=True
+        exclude_space=True,
+        key_id_to_freq=key_id_to_press_freq
     )
     
     # Generate hover heatmap (grey-green)
@@ -377,7 +409,8 @@ def generate_all_visualizations(
         layer_idx=layer_idx,
         layout=layout,
         heatmap_type="hover",
-        exclude_space=True
+        exclude_space=True,
+        key_id_to_freq=key_id_to_hover_freq
     )
     
     # Save to files if directory provided
