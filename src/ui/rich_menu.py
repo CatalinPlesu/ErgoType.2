@@ -4,6 +4,7 @@ Provides a nicer user interface with colors, tables, and panels.
 """
 
 import sys
+import logging
 from typing import List, Callable, Optional, Any, Dict, Tuple
 from rich.console import Console
 from rich.panel import Panel
@@ -14,6 +15,13 @@ from rich import box
 from rich.layout import Layout
 from rich.live import Live
 from pathlib import Path
+
+# Import preferences at module level for efficiency
+try:
+    from ui.preferences import Preferences
+    PREFERENCES_AVAILABLE = True
+except ImportError:
+    PREFERENCES_AVAILABLE = False
 
 
 # Create a module-level console for convenience functions
@@ -36,16 +44,16 @@ class RichMenu:
     def __init__(self, title: str = "Menu", use_preferences: bool = True):
         self.title = title
         self.items: List[Tuple[str, Callable]] = []
-        self.selected = 0
-        self.use_preferences = use_preferences
+        self.selected = 1  # Default to option 1
+        self.use_preferences = use_preferences and PREFERENCES_AVAILABLE
         
         # Load last selection if preferences enabled
         if self.use_preferences:
             try:
-                from ui.preferences import Preferences
                 prefs = Preferences()
                 self.selected = prefs.get_last_menu_selection()
-            except Exception:
+            except (IOError, ValueError, KeyError):
+                # If preferences can't be loaded, default to option 1
                 self.selected = 1
     
     def add_item(self, title: str, func: Callable) -> None:
@@ -161,12 +169,13 @@ class RichMenu:
                         # Save selection if not Exit (0)
                         if self.use_preferences:
                             try:
-                                from ui.preferences import Preferences
                                 prefs = Preferences()
                                 prefs.set_last_menu_selection(self.selected)
                                 prefs.save()
-                            except Exception:
-                                pass
+                            except (IOError, OSError) as e:
+                                # If preferences can't be saved, continue without error
+                                # (menu functionality should not be blocked by preference saving)
+                                logging.debug(f"Could not save menu selection preference: {e}")
                         
                         # Execute menu item function
                         _, func = self.items[self.selected - 1]
