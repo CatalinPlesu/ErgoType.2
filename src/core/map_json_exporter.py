@@ -215,7 +215,8 @@ class CSharpFitnessConfig:
                 homing_positions.append({
                     "x": 6.5,
                     "y": 2.5,
-                    "finger": finger_int
+                    "finger": finger_int,
+                    "key_id": -1  # Use -1 to indicate no specific key
                 })
         
         # Verify we have exactly 10 positions
