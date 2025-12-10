@@ -70,16 +70,8 @@ def save_heuristic_layouts(ga, run_dir):
     print("="*80)
     
     try:
-        from pythonnet import set_runtime
-        from clr_loader import get_coreclr
-        set_runtime(get_coreclr())
-        import clr
-        
-        dll_dir = os.path.join(PROJECT_ROOT, "cs", "bin", "Release", "net9.0")
-        if dll_dir not in sys.path:
-            sys.path.insert(0, dll_dir)
-        clr.AddReference("KeyboardFitness")
-        from FitnessNet import Fitness
+        from core.clr_loader_helper import load_csharp_fitness_library
+        Fitness, _ = load_csharp_fitness_library(PROJECT_ROOT)
     except Exception as e:
         print(f"❌ Error loading C# library: {e}")
         return
@@ -418,8 +410,6 @@ def run_genetic_algorithm(
     print("="*80)
 
     try:
-        import clr
-        
         dll_dir = os.path.join(PROJECT_ROOT, "cs", "bin", "Release", "net9.0")
         dll_path = os.path.join(dll_dir, "KeyboardFitness.dll")
         
@@ -431,11 +421,8 @@ def run_genetic_algorithm(
             print("\nSkipping visualization generation")
             return best_individual
         
-        if dll_dir not in sys.path:
-            sys.path.insert(0, dll_dir)
-        
-        clr.AddReference("KeyboardFitness")
-        from FitnessNet import Fitness
+        from core.clr_loader_helper import load_csharp_fitness_library
+        Fitness, _ = load_csharp_fitness_library(PROJECT_ROOT)
         
         print(f"✅ C# fitness library components loaded/reused")
     except Exception as e:
