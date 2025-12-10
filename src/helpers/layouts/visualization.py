@@ -418,10 +418,10 @@ def generate_all_visualizations(
     if save_dir:
         save_dir = Path(save_dir)
         
-        # Create subdirectories
-        (save_dir / "layouts").mkdir(exist_ok=True)
-        (save_dir / "heatmaps_press").mkdir(exist_ok=True)
-        (save_dir / "heatmaps_hover").mkdir(exist_ok=True)
+        # Create subdirectories (parents=True to create parent directories too)
+        (save_dir / "layouts").mkdir(parents=True, exist_ok=True)
+        (save_dir / "heatmaps_press").mkdir(parents=True, exist_ok=True)
+        (save_dir / "heatmaps_hover").mkdir(parents=True, exist_ok=True)
         
         # Extract SVG content and save
         for svg_obj, subdir, name_suffix in [
