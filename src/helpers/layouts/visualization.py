@@ -14,6 +14,7 @@ import json
 def get_heatmap_color(normalized_freq: float, color_scheme: str = 'blue-red') -> str:
     """
     Get color based on normalized frequency (0-1).
+    Gradient from white (0%) to full color (100%).
     
     Args:
         normalized_freq: Frequency value normalized to 0-1 range (0=min, 1=max)
@@ -25,18 +26,16 @@ def get_heatmap_color(normalized_freq: float, color_scheme: str = 'blue-red') ->
     freq = max(0.0, min(1.0, normalized_freq))
     
     if color_scheme == 'grey-green':
-        # Subtle grey (low) → green (high) with better visibility
-        base = 220
-        red = int(base * (1 - 0.3 * freq))
-        green = int(200 + 55 * freq)  # 200 → 255
-        blue = int(base * (1 - 0.3 * freq))
+        # White (low) → green (high)
+        red = int(255 - 55 * freq)    # 255 → 200
+        green = 255                    # Always 255
+        blue = int(255 - 55 * freq)    # 255 → 200
         return f"#{red:02x}{green:02x}{blue:02x}"
     else:  # blue-red
-        # Subtle blue (low) → red (high) with better visibility
-        base = 220
-        red = int(200 + 55 * freq)  # 200 → 255
-        blue = int(200 * (1 - freq))  # 200 → 0
-        green = int(180 * (1 - freq))  # 180 → 0
+        # White (low) → red (high)
+        red = 255                      # Always 255
+        green = int(255 * (1 - freq))  # 255 → 0
+        blue = int(255 * (1 - freq))   # 255 → 0
         return f"#{red:02x}{green:02x}{blue:02x}"
 
 
@@ -109,24 +108,36 @@ def render_keyboard_heatmap(
         stroke='none'
     ))
     
-    # Identify spacebar key_id (usually the widest key or labeled "Space")
-    spacebar_key_id = None
+    # Identify modifier keys (Space, Shift, Tab) that should be at 100%
+    # These are excluded from normalization so alphanumeric keys can be compared
+    modifier_key_ids = set()
+    
+    # Find spacebar (widest key)
     max_width = 0
+    spacebar_key_id = None
     for key in keyboard.keys:
         if key.width > max_width:
             max_width = key.width
             spacebar_key_id = key.id
+    if spacebar_key_id:
+        modifier_key_ids.add(spacebar_key_id)
     
-    # Calculate frequency range excluding spacebar
-    spacebar_freq = key_frequencies.get(spacebar_key_id, 0.0) if spacebar_key_id else 0.0
-    non_space_freqs = [
+    # Find Shift and Tab keys by label
+    for key_obj in keyboard.keys:
+        if hasattr(key_obj, 'labels') and key_obj.labels:
+            label = str(key_obj.labels[0]).lower() if key_obj.labels else ''
+            if label in ['shift', 'tab']:
+                modifier_key_ids.add(key_obj.id)
+    
+    # Calculate frequency range excluding modifiers
+    non_modifier_freqs = [
         freq for key_id, freq in key_frequencies.items() 
-        if freq > 0 and key_id != spacebar_key_id
+        if freq > 0 and key_id not in modifier_key_ids
     ]
     
-    if non_space_freqs:
-        min_freq = min(non_space_freqs)
-        max_freq = max(non_space_freqs)
+    if non_modifier_freqs:
+        min_freq = min(non_modifier_freqs)
+        max_freq = max(non_modifier_freqs)
         freq_range = max_freq - min_freq if max_freq > min_freq else 1.0
     else:
         min_freq = 0.0
@@ -149,11 +160,11 @@ def render_keyboard_heatmap(
         
         # Normalize frequency
         normalized_freq = 0.0
-        if key.id == spacebar_key_id:
-            # Spacebar always at 100% (max intensity)
+        if key.id in modifier_key_ids:
+            # Modifiers (Space, Shift, Tab) always at 100% (max intensity)
             normalized_freq = 1.0 if key_freq > 0 else 0.0
         elif freq_range > 0 and key_freq > 0:
-            # Scale other keys to 0-90% range for better distinction
+            # Scale alphanumeric keys to 0-90% range for better distinction
             normalized_freq = ((key_freq - min_freq) / freq_range) * 0.9
         
         # Get color based on frequency
