@@ -18,7 +18,7 @@ def get_heatmap_color(normalized_freq: float, color_scheme: str = 'blue-red') ->
     
     Args:
         normalized_freq: Frequency value normalized to 0-1 range (0=min, 1=max)
-        color_scheme: 'blue-red' (default) or 'grey-green'
+        color_scheme: 'blue-red' (default), 'grey-green', or 'white-blue'
     
     Returns:
         Hex color string
@@ -30,6 +30,12 @@ def get_heatmap_color(normalized_freq: float, color_scheme: str = 'blue-red') ->
         red = int(255 - 55 * freq)    # 255 → 200
         green = 255                    # Always 255
         blue = int(255 - 55 * freq)    # 255 → 200
+        return f"#{red:02x}{green:02x}{blue:02x}"
+    elif color_scheme == 'white-blue':
+        # White (low) → blue (high) - for non-ASCII keys
+        red = int(255 * (1 - freq))    # 255 → 0
+        green = int(255 * (1 - freq))  # 255 → 0
+        blue = 255                      # Always 255
         return f"#{red:02x}{green:02x}{blue:02x}"
     else:  # blue-red
         # White (low) → red (high)
@@ -108,11 +114,21 @@ def render_keyboard_heatmap(
         stroke='none'
     ))
     
-    # Identify modifier keys (Space, Shift, Tab) that should be at 100%
-    # These are excluded from normalization so alphanumeric keys can be compared
-    modifier_key_ids = set()
+    # Identify non-ASCII keys (control/modifier keys) vs alphanumeric keys
+    # Non-ASCII keys: Space, Shift, Tab, Enter, Ctrl, Alt, Backspace, etc.
+    # These will be scaled separately with blue color
+    non_ascii_key_ids = set()
+    ascii_key_ids = set()
     
-    # Find spacebar (widest key)
+    # Common non-ASCII key labels
+    non_ascii_labels = {
+        'shift', 'tab', 'enter', 'backspace', 'ctrl', 'alt', 'altgr',
+        'caps lock', 'win', 'menu', 'esc', 'escape', 'delete', 'del',
+        'home', 'end', 'page up', 'page down', 'insert', 'ins',
+        'print screen', 'scroll lock', 'pause', 'break'
+    }
+    
+    # Find spacebar (widest key) - also non-ASCII
     max_width = 0
     spacebar_key_id = None
     for key in keyboard.keys:
@@ -120,28 +136,46 @@ def render_keyboard_heatmap(
             max_width = key.width
             spacebar_key_id = key.id
     if spacebar_key_id:
-        modifier_key_ids.add(spacebar_key_id)
+        non_ascii_key_ids.add(spacebar_key_id)
     
-    # Find Shift and Tab keys by label
+    # Categorize keys by label
     for key_obj in keyboard.keys:
         if hasattr(key_obj, 'labels') and key_obj.labels:
             label = str(key_obj.labels[0]).lower() if key_obj.labels else ''
-            if label in ['shift', 'tab']:
-                modifier_key_ids.add(key_obj.id)
+            # Check if it's a non-ASCII key
+            if label in non_ascii_labels or len(label) > 1:  # Multi-char labels are typically special keys
+                non_ascii_key_ids.add(key_obj.id)
+            else:
+                ascii_key_ids.add(key_obj.id)
     
-    # Calculate frequency range excluding modifiers
-    non_modifier_freqs = [
+    # Calculate frequency ranges for each group
+    # Alphanumeric keys (ASCII) - scale 0-90%
+    ascii_freqs = [
         freq for key_id, freq in key_frequencies.items() 
-        if freq > 0 and key_id not in modifier_key_ids
+        if freq > 0 and key_id in ascii_key_ids
     ]
     
-    if non_modifier_freqs:
-        min_freq = min(non_modifier_freqs)
-        max_freq = max(non_modifier_freqs)
-        freq_range = max_freq - min_freq if max_freq > min_freq else 1.0
+    if ascii_freqs:
+        ascii_min_freq = min(ascii_freqs)
+        ascii_max_freq = max(ascii_freqs)
+        ascii_freq_range = ascii_max_freq - ascii_min_freq if ascii_max_freq > ascii_min_freq else 1.0
     else:
-        min_freq = 0.0
-        freq_range = 1.0
+        ascii_min_freq = 0.0
+        ascii_freq_range = 1.0
+    
+    # Non-ASCII keys - scale 0-100%
+    non_ascii_freqs = [
+        freq for key_id, freq in key_frequencies.items() 
+        if freq > 0 and key_id in non_ascii_key_ids
+    ]
+    
+    if non_ascii_freqs:
+        non_ascii_min_freq = min(non_ascii_freqs)
+        non_ascii_max_freq = max(non_ascii_freqs)
+        non_ascii_freq_range = non_ascii_max_freq - non_ascii_min_freq if non_ascii_max_freq > non_ascii_min_freq else 1.0
+    else:
+        non_ascii_min_freq = 0.0
+        non_ascii_freq_range = 1.0
     
     # Choose color scheme based on heatmap type
     color_scheme = 'grey-green' if heatmap_type == 'hover' else 'blue-red'
@@ -158,17 +192,25 @@ def render_keyboard_heatmap(
         # Get frequency for this key directly using key_id
         key_freq = key_frequencies.get(key.id, 0.0)
         
-        # Normalize frequency
+        # Normalize frequency and choose color scheme
         normalized_freq = 0.0
-        if key.id in modifier_key_ids:
-            # Modifiers (Space, Shift, Tab) always at 100% (max intensity)
-            normalized_freq = 1.0 if key_freq > 0 else 0.0
-        elif freq_range > 0 and key_freq > 0:
-            # Scale alphanumeric keys to 0-90% range for better distinction
-            normalized_freq = ((key_freq - min_freq) / freq_range) * 0.9
+        key_color_scheme = color_scheme
         
-        # Get color based on frequency
-        fill_color = get_heatmap_color(normalized_freq, color_scheme) if normalized_freq > 0 else '#e0e0e0'
+        if key.id in non_ascii_key_ids:
+            # Non-ASCII keys (Space, Shift, Tab, Enter, etc.) - separate scale with blue color
+            if non_ascii_freq_range > 0 and key_freq > 0:
+                normalized_freq = (key_freq - non_ascii_min_freq) / non_ascii_freq_range
+            # Use blue color scheme for non-ASCII keys
+            key_color_scheme = 'white-blue'
+        elif key.id in ascii_key_ids:
+            # ASCII keys (alphanumeric, symbols) - scale to 0-90%
+            if ascii_freq_range > 0 and key_freq > 0:
+                normalized_freq = ((key_freq - ascii_min_freq) / ascii_freq_range) * 0.9
+            # Use red/green color scheme for ASCII keys
+            key_color_scheme = color_scheme
+        
+        # Get color based on frequency and scheme
+        fill_color = get_heatmap_color(normalized_freq, key_color_scheme) if normalized_freq > 0 else '#e0e0e0'
         
         # Create key group
         key_group = dwg.g(id=f"key-{i}")
