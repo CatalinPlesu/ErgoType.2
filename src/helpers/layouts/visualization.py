@@ -47,7 +47,7 @@ def render_keyboard_heatmap(
     layout=None,
     heatmap_type: str = "press",
     exclude_space: bool = True,
-    key_id_to_freq: Dict = None
+    key_id_to_freq: Optional[Dict[int, float]] = None
 ) -> SVG:
     """
     Render keyboard with heatmap overlay.
@@ -345,7 +345,8 @@ def generate_all_visualizations(
         press_count = char_data.get('press_count', 0)
         hover_count = char_data.get('hover_count', 0)
         
-        # Get key_id from first key press (the actual character key, not modifiers)
+        # Get key_id from the last key press (the actual character key, not modifiers)
+        # Modifiers (shift, altgr) come first in the sequence, base character key is last
         key_presses = char_data.get('key_presses', [])
         if key_presses:
             # The last key press is the actual character key (modifiers come first)
