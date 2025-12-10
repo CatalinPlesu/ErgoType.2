@@ -105,69 +105,68 @@ def item_run_genetic():
     console.print("[bold]Step 3: Configure GA Parameters[/bold]\n")
     saved_params = prefs.get_ga_params()
     
-    console.print("[dim]Press Tab/Enter to use saved values or type new values[/dim]\n")
+    # Import the new function
+    from ui.rich_menu import get_parameter_group
     
-    population_size = get_parameter(
-        "Population size",
-        saved_params.get('population_size', 30),
-        param_type="int",
-        min_val=1,
-        max_val=500
+    # Group 1: Main GA Parameters
+    ga_params = get_parameter_group(
+        "Main GA Parameters",
+        [
+            {'name': 'Population size', 'default': 30, 'param_type': 'int', 'min_val': 1, 'max_val': 500},
+            {'name': 'Max iterations', 'default': 50, 'param_type': 'int', 'min_val': 1, 'max_val': 1000},
+            {'name': 'Stagnation limit', 'default': 10, 'param_type': 'int', 'min_val': 1, 'max_val': 100},
+            {'name': 'Max parallel processes', 'default': 4, 'param_type': 'int', 'min_val': 1, 'max_val': 32},
+        ],
+        saved_params
     )
     
-    max_iterations = get_parameter(
-        "Max iterations",
-        saved_params.get('max_iterations', 50),
-        param_type="int",
-        min_val=1,
-        max_val=1000
+    population_size = ga_params['Population size']
+    max_iterations = ga_params['Max iterations']
+    stagnant_limit = ga_params['Stagnation limit']
+    max_processes = ga_params['Max parallel processes']
+    
+    # Group 2: Fitts's Law Parameters
+    fitts_params = get_parameter_group(
+        "Fitts's Law Parameters",
+        [
+            {'name': "Fitts's Law constant 'a'", 'default': 0.5, 'param_type': 'float', 'min_val': 0.0, 'max_val': 5.0},
+            {'name': "Fitts's Law constant 'b'", 'default': 0.3, 'param_type': 'float', 'min_val': 0.0, 'max_val': 5.0},
+        ],
+        saved_params
     )
     
-    stagnant_limit = get_parameter(
-        "Stagnation limit",
-        saved_params.get('stagnant_limit', 10),
-        param_type="int",
-        min_val=1,
-        max_val=100
+    fitts_a = fitts_params["Fitts's Law constant 'a'"]
+    fitts_b = fitts_params["Fitts's Law constant 'b'"]
+    
+    # Group 3: Finger Coefficients
+    # Default finger coefficients for 10 fingers
+    default_finger_coeffs = [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07]
+    saved_finger_coeffs = saved_params.get('finger_coefficients', default_finger_coeffs)
+    
+    finger_params = get_parameter_group(
+        "Finger Coefficients (10 fingers: left pinky to right pinky)",
+        [
+            {'name': f'Finger {i+1}', 'default': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i], 
+             'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0}
+            for i in range(10)
+        ],
+        {f'Finger {i+1}': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i] for i in range(10)}
     )
     
-    max_processes = get_parameter(
-        "Max parallel processes",
-        saved_params.get('max_processes', 4),
-        param_type="int",
-        min_val=1,
-        max_val=32
-    )
+    finger_coefficients = [finger_params[f'Finger {i+1}'] for i in range(10)]
     
     # Simply use rabbitmq if it is on
     use_rabbitmq = True
-    
-    # Advanced parameters
-    console.print("\n[bold]Advanced Parameters[/bold]\n")
-    fitts_a = get_parameter(
-        "Fitts's Law constant 'a'",
-        saved_params.get('fitts_a', 0.5),
-        param_type="float",
-        min_val=0.0,
-        max_val=5.0
-    )
-    
-    fitts_b = get_parameter(
-        "Fitts's Law constant 'b'",
-        saved_params.get('fitts_b', 0.3),
-        param_type="float",
-        min_val=0.0,
-        max_val=5.0
-    )
 
     # Save parameters for next time
     prefs.set_ga_params({
-        'population_size': population_size,
-        'max_iterations': max_iterations,
-        'stagnant_limit': stagnant_limit,
-        'max_processes': max_processes,
-        'fitts_a': fitts_a,
-        'fitts_b': fitts_b
+        'Population size': population_size,
+        'Max iterations': max_iterations,
+        'Stagnation limit': stagnant_limit,
+        'Max parallel processes': max_processes,
+        "Fitts's Law constant 'a'": fitts_a,
+        "Fitts's Law constant 'b'": fitts_b,
+        'finger_coefficients': finger_coefficients
     })
     prefs.save()
     
@@ -180,7 +179,7 @@ def item_run_genetic():
         'max_concurrent_processes': max_processes,
         'fitts_a': fitts_a,
         'fitts_b': fitts_b,
-        'finger_coefficients': None,  # Use defaults
+        'finger_coefficients': finger_coefficients,
         'use_rabbitmq': use_rabbitmq
     }
     

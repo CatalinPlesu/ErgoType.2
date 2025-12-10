@@ -339,6 +339,100 @@ def get_parameter(
             console.print(f"[red]Invalid input: {e}[/red]")
 
 
+def get_parameter_group(
+    group_name: str,
+    parameters: List[Dict[str, Any]],
+    saved_values: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Get a group of parameters with ability to skip all (Enter) or edit them (Tab).
+    
+    Args:
+        group_name: Name of the parameter group
+        parameters: List of parameter definitions, each with:
+            - name: Parameter name
+            - default: Default value
+            - param_type: Type ("int", "float", "bool", "str")
+            - min_val: Optional minimum value
+            - max_val: Optional maximum value
+            - description: Optional description
+        saved_values: Dictionary of saved values
+    
+    Returns:
+        Dictionary mapping parameter names to values
+    """
+    # Show current values
+    console.print(f"\n[bold cyan]{group_name}[/bold cyan]")
+    
+    # Display current values in a table
+    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 1))
+    table.add_column("Parameter", style="cyan", width=30)
+    table.add_column("Current Value", style="yellow")
+    
+    for param in parameters:
+        name = param['name']
+        default = saved_values.get(name, param.get('default'))
+        range_info = ""
+        if 'min_val' in param and 'max_val' in param:
+            range_info = f" [{param['min_val']}-{param['max_val']}]"
+        table.add_row(f"{name}{range_info}", str(default))
+    
+    console.print(table)
+    console.print()
+    
+    # Ask if user wants to edit
+    console.print("[dim]Press [bold]Enter[/bold] to use these values, or [bold]Tab[/bold] then [bold]Enter[/bold] to edit them[/dim]")
+    
+    # Get a single keypress
+    import tty
+    import termios
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    
+    try:
+        tty.setraw(fd)
+        k = sys.stdin.read(1)
+        
+        # Check if Tab (ASCII 9) or Enter (ASCII 10/13)
+        should_edit = ord(k) == 9  # Tab key
+        
+        # If not tab, check for enter to accept defaults
+        if not should_edit and ord(k) not in (10, 13):
+            # For any other key, treat as wanting to edit
+            should_edit = True
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    
+    console.print()
+    
+    if not should_edit:
+        # Use saved values
+        console.print("[green]✓[/green] Using saved values")
+        result = {}
+        for param in parameters:
+            name = param['name']
+            result[name] = saved_values.get(name, param.get('default'))
+        return result
+    else:
+        # Edit values
+        console.print("[yellow]✏[/yellow] Editing values...")
+        console.print()
+        result = {}
+        for param in parameters:
+            name = param['name']
+            default = saved_values.get(name, param.get('default'))
+            value = get_parameter(
+                name,
+                default,
+                param_type=param.get('param_type', 'int'),
+                min_val=param.get('min_val'),
+                max_val=param.get('max_val'),
+                description=param.get('description')
+            )
+            result[name] = value
+        return result
+
+
 def display_config(title: str, config: Dict[str, Any]) -> None:
     """Display configuration in a nice panel"""
     table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
