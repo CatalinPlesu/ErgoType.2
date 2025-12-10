@@ -191,26 +191,27 @@ def render_keyboard_heatmap(
         )
         key_group.add(inner_rect)
         
-        # Draw key labels
+        # Draw key labels (only first label to avoid overlap)
         if hasattr(key, 'labels') and key.labels:
-            for label in key.labels:
-                if label:
-                    text_x = parms["textcapx"] + parms["textcapwidth"] / 2
-                    text_y = parms["textcapy"] + parms["textcapheight"] / 2
-                    
-                    # Choose text color based on background brightness
-                    text_color = '#ffffff' if normalized_freq > 0.5 else '#000000'
-                    
-                    key_group.add(dwg.text(
-                        str(label),
-                        insert=(text_x, text_y),
-                        text_anchor='middle',
-                        dominant_baseline='middle',
-                        font_size='12px',
-                        font_family='monospace',
-                        fill=text_color,
-                        font_weight='bold'
-                    ))
+            # Only show the first label (lowercase letter) to avoid overlap
+            label = key.labels[0] if key.labels else None
+            if label:
+                text_x = parms["textcapx"] + parms["textcapwidth"] / 2
+                text_y = parms["textcapy"] + parms["textcapheight"] / 2
+                
+                # Always use black text for better visibility on heatmap
+                text_color = '#000000'
+                
+                key_group.add(dwg.text(
+                    str(label),
+                    insert=(text_x, text_y),
+                    text_anchor='middle',
+                    dominant_baseline='middle',
+                    font_size='12px',
+                    font_family='monospace',
+                    fill=text_color,
+                    font_weight='bold'
+                ))
         
         dwg.add(key_group)
     
