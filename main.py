@@ -138,22 +138,35 @@ def item_run_genetic():
     fitts_a = fitts_params["Fitts's Law constant 'a'"]
     fitts_b = fitts_params["Fitts's Law constant 'b'"]
     
-    # Group 3: Finger Coefficients
+    # Group 3: Finger Coefficients - Left Hand (fingers 1-5)
     # Default finger coefficients for 10 fingers
     default_finger_coeffs = [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07]
     saved_finger_coeffs = saved_params.get('finger_coefficients', default_finger_coeffs)
     
-    finger_params = get_parameter_group(
-        "Finger Coefficients (10 fingers: left pinky to right pinky)",
+    finger_left_params = get_parameter_group(
+        "Left Hand Finger Coefficients (fingers 1-5: pinky to thumb)",
         [
-            {'name': f'Finger {i+1}', 'default': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i], 
+            {'name': f'Left Finger {i+1}', 'default': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i], 
              'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0}
-            for i in range(10)
+            for i in range(5)
         ],
-        {f'Finger {i+1}': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i] for i in range(10)}
+        {f'Left Finger {i+1}': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i] for i in range(5)}
     )
     
-    finger_coefficients = [finger_params[f'Finger {i+1}'] for i in range(10)]
+    # Group 4: Finger Coefficients - Right Hand (fingers 6-10)
+    finger_right_params = get_parameter_group(
+        "Right Hand Finger Coefficients (fingers 6-10: thumb to pinky)",
+        [
+            {'name': f'Right Finger {i+1}', 'default': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i], 
+             'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0}
+            for i in range(5, 10)
+        ],
+        {f'Right Finger {i+1}': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i] for i in range(5, 10)}
+    )
+    
+    # Combine both hands
+    finger_coefficients = [finger_left_params[f'Left Finger {i+1}'] for i in range(5)] + \
+                          [finger_right_params[f'Right Finger {i+1}'] for i in range(5, 10)]
     
     # Simply use rabbitmq if it is on
     use_rabbitmq = True

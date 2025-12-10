@@ -381,7 +381,7 @@ def get_parameter_group(
     console.print()
     
     # Ask if user wants to edit
-    console.print("[dim]Press [bold]Enter[/bold] to use these values, or [bold]Tab[/bold] then [bold]Enter[/bold] to edit them[/dim]")
+    console.print("[dim]Press [bold]Enter[/bold] to use these values, [bold]Tab[/bold] to edit, or [bold]Backspace[/bold] to reset to defaults[/dim]")
     
     # Get a single keypress
     import tty
@@ -393,11 +393,14 @@ def get_parameter_group(
         tty.setraw(fd)
         k = sys.stdin.read(1)
         
-        # Check if Tab (ASCII 9) or Enter (ASCII 10/13)
-        should_edit = ord(k) == 9  # Tab key
+        key_code = ord(k)
         
-        # If not tab, check for enter to accept defaults
-        if not should_edit and ord(k) not in (10, 13):
+        # Check if Tab (ASCII 9), Enter (ASCII 10/13), or Backspace (ASCII 127 or 8)
+        should_edit = key_code == 9  # Tab key
+        should_reset = key_code in (127, 8)  # Backspace or Delete
+        
+        # If not tab or backspace, check for enter to accept defaults
+        if not should_edit and not should_reset and key_code not in (10, 13):
             # For any other key, treat as wanting to edit
             should_edit = True
     finally:
@@ -405,7 +408,16 @@ def get_parameter_group(
     
     console.print()
     
-    if not should_edit:
+    if should_reset:
+        # Reset to defaults
+        console.print("[yellow]↺[/yellow] Resetting to default values...")
+        console.print()
+        result = {}
+        for param in parameters:
+            name = param['name']
+            result[name] = param.get('default')
+        return result
+    elif not should_edit:
         # Use saved values
         console.print("[green]✓[/green] Using saved values")
         result = {}
