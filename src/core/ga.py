@@ -25,17 +25,9 @@ def _evaluate_individual_worker(individual_data, keyboard_file, text_file, finge
         # DEBUG: Print what we received
         # print(f"Worker {os.getpid()}: Processing {name}, chromosome type: {type(chromosome)}, length: {len(chromosome)}")
         
-        # Initialize C# in this process
-        from pythonnet import set_runtime
-        from clr_loader import get_coreclr
-        set_runtime(get_coreclr())
-        import clr
-        
-        dll_dir = os.path.join(PROJECT_ROOT, "cs", "bin", "Release", "net9.0")
-        if dll_dir not in sys.path:
-            sys.path.insert(0, dll_dir)
-        clr.AddReference("KeyboardFitness")
-        from FitnessNet import Fitness
+        # Initialize C# in this process using the safe helper
+        from core.clr_loader_helper import load_csharp_fitness_library
+        Fitness, _ = load_csharp_fitness_library(PROJECT_ROOT)
         
         # Create evaluator - CRITICAL: Use absolute path
         evaluator = Evaluator(debug=False)
@@ -198,12 +190,14 @@ class GeneticAlgorithmSimulation:
         print(f"\n🔧 Worker starting with {self.max_processes} local processes")
         print("⏳ Waiting for jobs...")
         
-        # Initialize C# once at worker startup
+        # Initialize C# once at worker startup using the safe helper
         try:
-            from pythonnet import set_runtime
-            from clr_loader import get_coreclr
-            set_runtime(get_coreclr())
-            print("✅ C# runtime initialized")
+            from core.clr_loader_helper import initialize_clr_runtime
+            was_initialized = initialize_clr_runtime()
+            if was_initialized:
+                print("✅ C# runtime initialized")
+            else:
+                print("✅ C# runtime already initialized")
         except Exception as e:
             print(f"⚠️  Warning: C# runtime init: {e}")
         
