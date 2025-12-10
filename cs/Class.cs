@@ -8,7 +8,7 @@ using System.Runtime.CompilerServices;
 namespace FitnessNet;
 
 public record Point(double X, double Y);
-public record KeyPress(Point Position, int Finger);
+public record KeyPress(Point Position, int Finger, int KeyId);
 
 public struct CharStats
 {
@@ -70,7 +70,7 @@ public class Fitness
     private KeyPress[][] _charMappings;
     private int _maxCharCode;
     private CharStats[] _charStats;
-    private (int CharCode, Point Pos)[] _reprKeys;
+    private (int CharCode, Point Pos, int KeyId)[] _reprKeys;
 
     public Fitness(string jsonData)
     {
@@ -137,8 +137,9 @@ public class Fitness
                 double x = keyPress.GetProperty("x").GetDouble();
                 double y = keyPress.GetProperty("y").GetDouble();
                 int finger = keyPress.GetProperty("finger").GetInt32();
+                int keyId = keyPress.GetProperty("key_id").GetInt32();
 
-                keyPresses[i++] = new KeyPress(new Point(x, y), finger);
+                keyPresses[i++] = new KeyPress(new Point(x, y), finger, keyId);
             }
 
             _charMappings[charCode] = keyPresses;
@@ -146,12 +147,12 @@ public class Fitness
 
         _charStats = new CharStats[_maxCharCode + 1];
 
-        var reprList = new List<(int, Point)>();
+        var reprList = new List<(int, Point, int)>();
         for (int code = 0; code <= _maxCharCode; code++)
         {
             if (_charMappings[code] != null && _charMappings[code].Length > 0)
             {
-                reprList.Add((code, _charMappings[code][0].Position));
+                reprList.Add((code, _charMappings[code][0].Position, _charMappings[code][0].KeyId));
             }
         }
         _reprKeys = reprList.ToArray();
@@ -345,7 +346,8 @@ public class Fitness
                     {
                         ["x"] = kp.Position.X,
                         ["y"] = kp.Position.Y,
-                        ["finger"] = kp.Finger
+                        ["finger"] = kp.Finger,
+                        ["key_id"] = kp.KeyId
                     });
                 }
                 charData["key_presses"] = keyPressesArray;
