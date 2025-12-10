@@ -16,7 +16,18 @@ from rich.live import Live
 from pathlib import Path
 
 
-console = Console()
+# Create a module-level console for convenience functions
+# Individual classes and functions can create their own instances if needed
+_console = Console()
+
+
+def get_console() -> Console:
+    """Get the module-level console instance"""
+    return _console
+
+
+# Export console for backward compatibility
+console = _console
 
 
 class RichMenu:
@@ -72,8 +83,7 @@ class RichMenu:
                         console.print("\n[yellow]Operation cancelled[/yellow]")
                     except Exception as e:
                         console.print(f"[red]Error: {e}[/red]")
-                        import traceback
-                        traceback.print_exc()
+                        console.print_exception()
                     
                     console.print()
                     Prompt.ask("[dim]Press Enter to continue[/dim]", default="")

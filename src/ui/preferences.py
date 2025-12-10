@@ -4,8 +4,11 @@ Saves and loads user choices to/from JSON file.
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class Preferences:
@@ -32,7 +35,7 @@ class Preferences:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(self.data, f, indent=2, ensure_ascii=False)
         except IOError as e:
-            print(f"Warning: Could not save preferences: {e}")
+            logger.warning(f"Could not save preferences: {e}")
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get a preference value"""
