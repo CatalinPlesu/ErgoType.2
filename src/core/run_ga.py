@@ -251,21 +251,51 @@ def run_genetic_algorithm(
     save_heuristics=True
 ):
     """Run the genetic algorithm with C# simulation and distributed processing"""
-    print("="*80)
-    print("KEYBOARD LAYOUT GENETIC ALGORITHM (DISTRIBUTED C# SIMULATION)")
-    print("="*80)
-    print(f"Keyboard: {keyboard_file}")
-    print(f"Text file: {text_file}")
-    print(f"Fitts's Law: a={fitts_a}, b={fitts_b}")
-    print(f"Population size: {population_size}")
-    print(f"Max iterations: {max_iterations}")
-    print(f"Stagnation limit: {stagnant_limit}")
-    print(f"Max processes: {max_concurrent_processes}")
-    print(f"Use RabbitMQ: {use_rabbitmq}")
-    print(f"Save heuristics: {save_heuristics}")
-    print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
-    print()
+    try:
+        from rich.console import Console
+        from rich.table import Table
+        from rich import box
+        console = Console()
+        use_rich = True
+    except ImportError:
+        use_rich = False
+    
+    if use_rich:
+        console.rule("[bold cyan]KEYBOARD LAYOUT GENETIC ALGORITHM[/bold cyan]", style="cyan")
+        console.print("[dim]Distributed C# Simulation[/dim]", justify="center")
+        console.print()
+        
+        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        table.add_column("Parameter", style="cyan")
+        table.add_column("Value", style="yellow")
+        table.add_row("Keyboard", keyboard_file)
+        table.add_row("Text file", text_file)
+        table.add_row("Fitts's Law", f"a={fitts_a}, b={fitts_b}")
+        table.add_row("Population size", str(population_size))
+        table.add_row("Max iterations", str(max_iterations))
+        table.add_row("Stagnation limit", str(stagnant_limit))
+        table.add_row("Max processes", str(max_concurrent_processes))
+        table.add_row("Use RabbitMQ", str(use_rabbitmq))
+        table.add_row("Save heuristics", str(save_heuristics))
+        table.add_row("Start time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        console.print(table)
+        console.print()
+    else:
+        print("="*80)
+        print("KEYBOARD LAYOUT GENETIC ALGORITHM (DISTRIBUTED C# SIMULATION)")
+        print("="*80)
+        print(f"Keyboard: {keyboard_file}")
+        print(f"Text file: {text_file}")
+        print(f"Fitts's Law: a={fitts_a}, b={fitts_b}")
+        print(f"Population size: {population_size}")
+        print(f"Max iterations: {max_iterations}")
+        print(f"Stagnation limit: {stagnant_limit}")
+        print(f"Max processes: {max_concurrent_processes}")
+        print(f"Use RabbitMQ: {use_rabbitmq}")
+        print(f"Save heuristics: {save_heuristics}")
+        print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("="*80)
+        print()
 
     # Initialize GA with simulation
     ga = GeneticAlgorithmSimulation(
@@ -301,18 +331,38 @@ def run_genetic_algorithm(
     )
 
     # Print final results
-    print("\n" + "="*80)
-    print("OPTIMIZATION COMPLETE")
-    print("="*80)
-    print(f"Best Individual Name: {best_individual.name}")
-    print(f"Fitness Score: {best_individual.fitness:.6f}")
-    print(f"Raw Distance: {best_individual.distance:.2f}")
-    print(f"Raw Time: {best_individual.time_taken:.2f}")
-    parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ['Initial Population']
-    print(f"Parent Names: {', '.join(parent_names)}")
-    print(f"\nOptimized Layout:")
-    print(''.join(best_individual.chromosome))
-    print()
+    if use_rich:
+        console.print()
+        console.rule("[bold green]OPTIMIZATION COMPLETE[/bold green]", style="green")
+        console.print()
+        
+        result_table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        result_table.add_column("Metric", style="cyan")
+        result_table.add_column("Value", style="yellow")
+        result_table.add_row("Best Individual", best_individual.name)
+        result_table.add_row("Fitness Score", f"{best_individual.fitness:.6f}")
+        result_table.add_row("Raw Distance", f"{best_individual.distance:.2f}")
+        result_table.add_row("Raw Time", f"{best_individual.time_taken:.2f}")
+        parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ['Initial Population']
+        result_table.add_row("Parents", ', '.join(parent_names))
+        console.print(result_table)
+        console.print()
+        console.print("[bold]Optimized Layout:[/bold]")
+        console.print(f"[green]{''.join(best_individual.chromosome)}[/green]")
+        console.print()
+    else:
+        print("\n" + "="*80)
+        print("OPTIMIZATION COMPLETE")
+        print("="*80)
+        print(f"Best Individual Name: {best_individual.name}")
+        print(f"Fitness Score: {best_individual.fitness:.6f}")
+        print(f"Raw Distance: {best_individual.distance:.2f}")
+        print(f"Raw Time: {best_individual.time_taken:.2f}")
+        parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ['Initial Population']
+        print(f"Parent Names: {', '.join(parent_names)}")
+        print(f"\nOptimized Layout:")
+        print(''.join(best_individual.chromosome))
+        print()
 
     # Get the top 3 best individuals
     sorted_population = sorted(ga.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))

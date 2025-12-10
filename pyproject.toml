@@ -25,6 +25,7 @@ dependencies = [
 	"dearpygui",
 	"pythonnet",
 	"pika",
+	"rich>=13.0.0",
 ]
 
 [build-system]
