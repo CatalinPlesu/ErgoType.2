@@ -31,71 +31,165 @@ console = _console
 
 
 class RichMenu:
-    """Interactive menu using Rich library for better UI"""
+    """Interactive menu using Rich library for better UI with keyboard navigation"""
     
-    def __init__(self, title: str = "Menu"):
+    def __init__(self, title: str = "Menu", use_preferences: bool = True):
         self.title = title
         self.items: List[Tuple[str, Callable]] = []
+        self.selected = 0
+        self.use_preferences = use_preferences
+        
+        # Load last selection if preferences enabled
+        if self.use_preferences:
+            try:
+                from ui.preferences import Preferences
+                prefs = Preferences()
+                self.selected = prefs.get_last_menu_selection()
+            except Exception:
+                self.selected = 1
     
     def add_item(self, title: str, func: Callable) -> None:
         """Add a menu item with title and callback function"""
         self.items.append((title, func))
     
+    def _get_key(self) -> Optional[str]:
+        """Get a single keypress from user (similar to old menu)"""
+        import tty
+        import termios
+        
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        
+        try:
+            tty.setraw(fd)
+            k = sys.stdin.read(1)
+            
+            if not k:
+                return None
+            
+            if ord(k) in (10, 13):   # Enter
+                return "enter"
+            if ord(k) == 3:          # Ctrl+C
+                raise KeyboardInterrupt
+            if ord(k) == 9:          # Tab
+                return "down"
+            if ord(k) == 27:         # escape or arrow
+                k2 = sys.stdin.read(1)
+                if k2 == '[':
+                    k3 = sys.stdin.read(1)
+                    return {
+                        'A': 'up',
+                        'B': 'down',
+                        'C': 'right',
+                        'D': 'left'
+                    }.get(k3, None)
+                return "escape"
+            
+            if k.isdigit():
+                return k
+            
+            return k.lower()
+        
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    
+    def _draw(self) -> None:
+        """Draw the menu with current selection highlighted"""
+        console.clear()
+        
+        # Create menu table
+        table = Table(
+            title=f"[bold cyan]{self.title}[/bold cyan]",
+            box=box.ROUNDED,
+            show_header=True,
+            header_style="bold magenta"
+        )
+        table.add_column("#", style="cyan", justify="right", width=4)
+        table.add_column("Option", style="white")
+        
+        # Add menu items with highlight for selected
+        menu_len = len(self.items) + 1  # +1 for Exit option
+        for idx in range(menu_len):
+            if idx == 0:
+                label = "[red]Exit[/red]"
+                num = "0"
+            else:
+                label = self.items[idx - 1][0]
+                num = str(idx)
+            
+            # Highlight selected item
+            if idx == self.selected:
+                table.add_row(f"[bold green]{num}[/bold green]", f"[bold green]→ {label}[/bold green]")
+            else:
+                table.add_row(num, label)
+        
+        console.print(table)
+        console.print()
+        console.print("[dim]Use arrows/vim keys (↑↓jk) or numbers. Enter to select. Esc to exit.[/dim]")
+        console.print()
+    
     def display(self) -> None:
-        """Display the menu and get user selection"""
-        while True:
-            console.clear()
-            
-            # Create menu table
-            table = Table(
-                title=f"[bold cyan]{self.title}[/bold cyan]",
-                box=box.ROUNDED,
-                show_header=True,
-                header_style="bold magenta"
-            )
-            table.add_column("#", style="cyan", justify="right", width=4)
-            table.add_column("Option", style="white")
-            
-            # Add menu items
-            for idx, (item_title, _) in enumerate(self.items, 1):
-                table.add_row(str(idx), item_title)
-            table.add_row("0", "[red]Exit[/red]")
-            
-            console.print(table)
-            console.print()
-            
-            # Get user choice
+        """Display the menu and get user selection with keyboard navigation"""
+        running = True
+        
+        while running:
             try:
-                choice = IntPrompt.ask(
-                    "[bold yellow]Select an option[/bold yellow]",
-                    default=0
-                )
+                self._draw()
+                key = self._get_key()
                 
-                if choice == 0:
-                    console.print("[yellow]Exiting...[/yellow]")
-                    break
-                elif 1 <= choice <= len(self.items):
+                if key in ("up", "k"):
+                    # Move selection up
+                    self.selected = (self.selected - 1) % (len(self.items) + 1)
+                
+                elif key in ("down", "j", "tab"):
+                    # Move selection down
+                    self.selected = (self.selected + 1) % (len(self.items) + 1)
+                
+                elif key in ("escape", "left", "h"):
+                    # Exit
+                    running = False
+                
+                elif key == "enter":
+                    # Execute selected item
                     console.clear()
-                    _, func = self.items[choice - 1]
-                    try:
-                        func()
-                    except KeyboardInterrupt:
-                        console.print("\n[yellow]Operation cancelled[/yellow]")
-                    except Exception as e:
-                        console.print(f"[red]Error: {e}[/red]")
-                        console.print_exception()
                     
-                    console.print()
-                    Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
-                else:
-                    console.print(f"[red]Invalid choice. Please select 0-{len(self.items)}[/red]")
-                    console.input("[dim]Press Enter to continue...[/dim]")
+                    if self.selected == 0:
+                        # Exit selected
+                        console.print("[yellow]Exiting...[/yellow]")
+                        running = False
+                    else:
+                        # Save selection if not Exit (0)
+                        if self.use_preferences:
+                            try:
+                                from ui.preferences import Preferences
+                                prefs = Preferences()
+                                prefs.set_last_menu_selection(self.selected)
+                                prefs.save()
+                            except Exception:
+                                pass
+                        
+                        # Execute menu item function
+                        _, func = self.items[self.selected - 1]
+                        try:
+                            func()
+                        except KeyboardInterrupt:
+                            console.print("\n[yellow]Operation cancelled[/yellow]")
+                        except Exception as e:
+                            console.print(f"[red]Error: {e}[/red]")
+                            console.print_exception()
+                        
+                        console.print()
+                        Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+                
+                elif key and key.isdigit():
+                    # Direct number selection
+                    num = int(key)
+                    if 0 <= num <= len(self.items):
+                        self.selected = num
+            
             except KeyboardInterrupt:
-                console.print("\n[yellow]Exiting...[/yellow]")
-                break
-            except Exception as e:
-                console.print(f"[red]Error: {e}[/red]")
-                console.input("[dim]Press Enter to continue...[/dim]")
+                console.print("\n\n[yellow]Interrupted. Exiting...[/yellow]")
+                running = False
 
 
 def select_from_list(

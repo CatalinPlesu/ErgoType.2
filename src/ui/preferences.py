@@ -102,3 +102,11 @@ class Preferences:
     def set_worker_params(self, params: Dict[str, Any]) -> None:
         """Set worker parameters"""
         self.set('worker_params', params)
+    
+    def get_last_menu_selection(self) -> int:
+        """Get the last selected menu option"""
+        return self.get('last_menu_selection', 1)
+    
+    def set_last_menu_selection(self, selection: int) -> None:
+        """Set the last selected menu option"""
+        self.set('last_menu_selection', selection)
