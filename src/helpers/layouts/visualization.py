@@ -109,11 +109,24 @@ def render_keyboard_heatmap(
         stroke='none'
     ))
     
-    # Calculate frequency range from key_frequencies
-    all_freqs = [freq for freq in key_frequencies.values() if freq > 0]
-    if all_freqs:
-        min_freq = min(all_freqs)
-        max_freq = max(all_freqs)
+    # Identify spacebar key_id (usually the widest key or labeled "Space")
+    spacebar_key_id = None
+    max_width = 0
+    for key in keyboard.keys:
+        if key.width > max_width:
+            max_width = key.width
+            spacebar_key_id = key.id
+    
+    # Calculate frequency range excluding spacebar
+    spacebar_freq = key_frequencies.get(spacebar_key_id, 0.0) if spacebar_key_id else 0.0
+    non_space_freqs = [
+        freq for key_id, freq in key_frequencies.items() 
+        if freq > 0 and key_id != spacebar_key_id
+    ]
+    
+    if non_space_freqs:
+        min_freq = min(non_space_freqs)
+        max_freq = max(non_space_freqs)
         freq_range = max_freq - min_freq if max_freq > min_freq else 1.0
     else:
         min_freq = 0.0
@@ -136,8 +149,12 @@ def render_keyboard_heatmap(
         
         # Normalize frequency
         normalized_freq = 0.0
-        if freq_range > 0 and key_freq > 0:
-            normalized_freq = (key_freq - min_freq) / freq_range
+        if key.id == spacebar_key_id:
+            # Spacebar always at 100% (max intensity)
+            normalized_freq = 1.0 if key_freq > 0 else 0.0
+        elif freq_range > 0 and key_freq > 0:
+            # Scale other keys to 0-90% range for better distinction
+            normalized_freq = ((key_freq - min_freq) / freq_range) * 0.9
         
         # Get color based on frequency
         fill_color = get_heatmap_color(normalized_freq, color_scheme) if normalized_freq > 0 else '#e0e0e0'
@@ -184,7 +201,7 @@ def render_keyboard_heatmap(
                     # Choose text color based on background brightness
                     text_color = '#ffffff' if normalized_freq > 0.5 else '#000000'
                     
-                    dwg.add(dwg.text(
+                    key_group.add(dwg.text(
                         str(label),
                         insert=(text_x, text_y),
                         text_anchor='middle',
