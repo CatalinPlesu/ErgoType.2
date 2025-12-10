@@ -84,7 +84,6 @@ def save_heuristic_layouts(ga, run_dir):
         print(f"❌ Error loading C# library: {e}")
         return
     
-    stats_json = None
     for layout_name, genotype in LAYOUT_DATA.items():
         print(f"\n{'='*80}")
         print(f"Processing heuristic layout: {layout_name}")
@@ -99,23 +98,22 @@ def save_heuristic_layouts(ga, run_dir):
             # Remap THIS evaluator's layout
             evaluator.layout.remap(LAYOUT_DATA["qwerty"], list(genotype))
            
-            if stats_json is None:
-                # Generate config using THIS evaluator
-                config_gen = CSharpFitnessConfig(
-                    keyboard=evaluator.keyboard,
-                    layout=evaluator.layout  # Use the evaluator with remapped layout
-                )
-                
-                json_string = config_gen.generate_json_string(
-                    text_file_path=ga.text_file,
-                    finger_coefficients=ga.finger_coefficients,
-                    fitts_a=ga.fitts_a,
-                    fitts_b=ga.fitts_b
-                )
-                
-                print(f"📊 Computing statistics...")
-                fitness_calculator = Fitness(json_string)
-                stats_json = fitness_calculator.ComputeStats()
+            # Generate config using THIS evaluator
+            config_gen = CSharpFitnessConfig(
+                keyboard=evaluator.keyboard,
+                layout=evaluator.layout  # Use the evaluator with remapped layout
+            )
+            
+            json_string = config_gen.generate_json_string(
+                text_file_path=ga.text_file,
+                finger_coefficients=ga.finger_coefficients,
+                fitts_a=ga.fitts_a,
+                fitts_b=ga.fitts_b
+            )
+            
+            print(f"📊 Computing statistics...")
+            fitness_calculator = Fitness(json_string)
+            stats_json = fitness_calculator.ComputeStats()
             
             stats_path = run_dir / f"heuristic_{layout_name}_stats.json"
             with open(stats_path, 'w', encoding='utf-8') as f:
@@ -394,7 +392,6 @@ def run_genetic_algorithm(
         print(f"❌ Error loading C# library components for top 3 layouts: {e}")
         return best_individual 
 
-    stats_json  = None
     for i, individual in enumerate(top_3_individuals, 1):
         layout_name = individual.name
         file_name = f"rank{i}_{layout_name}"
@@ -438,22 +435,21 @@ def run_genetic_algorithm(
             evaluator.load_layout()
             evaluator.layout.remap(LAYOUT_DATA["qwerty"], individual.chromosome)
 
-            if stats_json is None:
-                config_gen = CSharpFitnessConfig(
-                    keyboard=evaluator.keyboard,
-                    layout=evaluator.layout
-                )
+            config_gen = CSharpFitnessConfig(
+                keyboard=evaluator.keyboard,
+                layout=evaluator.layout
+            )
 
-                json_string = config_gen.generate_json_string(
-                    text_file_path=os.path.join(PROJECT_ROOT, text_file) if not os.path.isabs(text_file) else text_file,
-                    finger_coefficients=ga.finger_coefficients,
-                    fitts_a=ga.fitts_a,
-                    fitts_b=ga.fitts_b
-                )
+            json_string = config_gen.generate_json_string(
+                text_file_path=os.path.join(PROJECT_ROOT, text_file) if not os.path.isabs(text_file) else text_file,
+                finger_coefficients=ga.finger_coefficients,
+                fitts_a=ga.fitts_a,
+                fitts_b=ga.fitts_b
+            )
 
-                print(f"📊 Generating statistics...")
-                fitness_calculator = Fitness(json_string)
-                stats_json = fitness_calculator.ComputeStats()
+            print(f"📊 Generating statistics...")
+            fitness_calculator = Fitness(json_string)
+            stats_json = fitness_calculator.ComputeStats()
             
             stats_path = run_dir / f"{file_name}_stats.json"
             with open(stats_path, 'w', encoding='utf-8') as f:
