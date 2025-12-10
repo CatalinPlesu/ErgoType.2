@@ -42,21 +42,21 @@ def get_heatmap_color(normalized_freq: float, color_scheme: str = 'blue-red') ->
 
 def render_keyboard_heatmap(
     keyboard: Keyboard,
-    char_frequencies: Dict,
+    key_frequencies: Dict[int, float],
     layer_idx: int = 0,
     layout=None,
     heatmap_type: str = "press",
     exclude_space: bool = True
 ) -> SVG:
     """
-    Render keyboard with heatmap overlay.
+    Render keyboard with heatmap overlay using key_id mapping.
     
     Args:
         keyboard: Keyboard object with keys
-        char_frequencies: Dict mapping characters to frequency data
-            Format: {char: {'count': int, 'relative': float}, ...}
+        key_frequencies: Dict mapping key_id to frequency value
+            Format: {key_id: float, ...}
         layer_idx: Layer index to render
-        layout: Layout object (for getting key characters)
+        layout: Layout object (for getting key labels)
         heatmap_type: "press" (blue-red) or "hover" (grey-green)
         exclude_space: Whether to exclude spacebar from normalization
     
@@ -109,25 +109,15 @@ def render_keyboard_heatmap(
         stroke='none'
     ))
     
-    # Calculate frequency range (optionally excluding space)
-    if exclude_space:
-        non_space_freqs = [
-            data.get('relative', 0) 
-            for char, data in char_frequencies.items() 
-            if isinstance(data, dict) and char != ' '
-        ]
-        if non_space_freqs:
-            min_freq = min(non_space_freqs)
-            max_freq = max(non_space_freqs)
-            freq_range = max_freq - min_freq if max_freq > min_freq else 1.0
-        else:
-            min_freq = 0.0
-            freq_range = 1.0
-    else:
-        all_freqs = [data.get('relative', 0) for data in char_frequencies.values() if isinstance(data, dict)]
-        min_freq = min(all_freqs) if all_freqs else 0.0
-        max_freq = max(all_freqs) if all_freqs else 1.0
+    # Calculate frequency range from key_frequencies
+    all_freqs = [freq for freq in key_frequencies.values() if freq > 0]
+    if all_freqs:
+        min_freq = min(all_freqs)
+        max_freq = max(all_freqs)
         freq_range = max_freq - min_freq if max_freq > min_freq else 1.0
+    else:
+        min_freq = 0.0
+        freq_range = 1.0
     
     # Choose color scheme based on heatmap type
     color_scheme = 'grey-green' if heatmap_type == 'hover' else 'blue-red'
@@ -141,37 +131,13 @@ def render_keyboard_heatmap(
         
         parms = get_render_params(key, key_sizes)
         
-        # Get key character(s) for this layer
-        key_chars = []
-        if layout and hasattr(layout, 'mapper'):
-            if (key.id, layer_idx) in layout.mapper.data:
-                key_data = layout.mapper.data[(key.id, layer_idx)]
-                if key_data.key_type == KeyType.CHAR:
-                    if isinstance(key_data.value, tuple):
-                        key_chars = [key_data.value[0]]  # Unshifted char
-                    else:
-                        key_chars = [key_data.value]
-        
-        # Calculate frequency for this key
-        max_char_freq = 0.0
-        is_spacebar = False
-        for char in key_chars:
-            if char == ' ':
-                is_spacebar = True
-            if char in char_frequencies:
-                freq_data = char_frequencies[char]
-                relative_freq = freq_data.get('relative', 0.0) if isinstance(freq_data, dict) else freq_data
-                if relative_freq > max_char_freq:
-                    max_char_freq = relative_freq
-        
-        # Skip spacebar if exclude_space is True
-        if exclude_space and is_spacebar:
-            max_char_freq = 0.0
+        # Get frequency for this key directly using key_id
+        key_freq = key_frequencies.get(key.id, 0.0)
         
         # Normalize frequency
         normalized_freq = 0.0
-        if freq_range > 0 and max_char_freq > 0:
-            normalized_freq = (max_char_freq - min_freq) / freq_range
+        if freq_range > 0 and key_freq > 0:
+            normalized_freq = (key_freq - min_freq) / freq_range
         
         # Get color based on frequency
         fill_color = get_heatmap_color(normalized_freq, color_scheme) if normalized_freq > 0 else '#e0e0e0'
@@ -320,26 +286,29 @@ def generate_all_visualizations(
     total_presses = stats.get('total_presses', 0)
     total_chars = stats.get('total_chars_processed', total_presses)
     
-    # Build frequency dicts
-    press_frequencies = {}
-    hover_frequencies = {}
+    # Build key_id-based frequency dicts
+    press_key_frequencies = {}  # key_id -> frequency
+    hover_key_frequencies = {}  # key_id -> frequency
     
     for char, char_data in char_mappings.items():
         press_count = char_data.get('press_count', 0)
         hover_count = char_data.get('hover_count', 0)
+        key_presses = char_data.get('key_presses', [])
         
-        if press_count > 0:
-            press_frequencies[char] = {
-                'count': press_count,
-                'relative': press_count / total_presses if total_presses > 0 else 0
-            }
-        
-        if hover_count > 0:
-            total_hover_samples = total_chars  # Each char = 1 hover sample
-            hover_frequencies[char] = {
-                'count': hover_count,
-                'relative': hover_count / total_hover_samples if total_hover_samples > 0 else 0
-            }
+        # For each key press in the sequence, accumulate frequencies by key_id
+        for key_press in key_presses:
+            key_id = key_press.get('key_id')
+            if key_id is not None:
+                # Accumulate press frequency
+                if press_count > 0:
+                    relative_press = press_count / total_presses if total_presses > 0 else 0
+                    press_key_frequencies[key_id] = press_key_frequencies.get(key_id, 0.0) + relative_press
+                
+                # Accumulate hover frequency
+                if hover_count > 0:
+                    total_hover_samples = total_chars
+                    relative_hover = hover_count / total_hover_samples if total_hover_samples > 0 else 0
+                    hover_key_frequencies[key_id] = hover_key_frequencies.get(key_id, 0.0) + relative_hover
     
     # Update keyboard labels for this layer
     for key_obj in keyboard.keys:
@@ -363,7 +332,7 @@ def generate_all_visualizations(
     # Generate press heatmap (blue-red)
     press_svg = render_keyboard_heatmap(
         keyboard=keyboard,
-        char_frequencies=press_frequencies,
+        key_frequencies=press_key_frequencies,
         layer_idx=layer_idx,
         layout=layout,
         heatmap_type="press",
@@ -373,7 +342,7 @@ def generate_all_visualizations(
     # Generate hover heatmap (grey-green)
     hover_svg = render_keyboard_heatmap(
         keyboard=keyboard,
-        char_frequencies=hover_frequencies,
+        key_frequencies=hover_key_frequencies,
         layer_idx=layer_idx,
         layout=layout,
         heatmap_type="hover",
