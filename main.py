@@ -151,10 +151,8 @@ def item_run_genetic(show_title):
     stagnant_limit = get_valid_int("Stagnation limit", 10, 1, 100)
     max_processes = get_valid_int("Max parallel processes", 4, 1, 32)
     
-    # RabbitMQ option
-    print("\nDistributed Processing:")
-    use_rabbitmq_input = input("Use RabbitMQ for distributed processing? (Y/n) [Y]: ").lower().strip()
-    use_rabbitmq = use_rabbitmq_input != 'n'
+    # simply use rabbitmq if it is on
+    use_rabbitmq = True
     
     # Advanced parameters (optional)
     print("\nAdvanced Parameters (press Enter to use defaults):")
