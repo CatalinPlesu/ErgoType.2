@@ -12,7 +12,12 @@ import os
 # Add src to import path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from ui.menu import Menu
+from ui.rich_menu import (
+    RichMenu, console, select_from_list, get_parameter,
+    display_config, confirm_action, print_header, print_success,
+    print_error, print_info, print_warning
+)
+from ui.preferences import Preferences
 
 
 def get_available_keyboards():
@@ -41,124 +46,131 @@ def get_available_text_files():
     return text_files
 
 
-def print_header():
-    print("\n" + "=" * 60)
-    print("  KEYBOARD LAYOUT OPTIMIZATION SYSTEM")
-    print("  (Distributed Simulation-Based with C# Fitness)")
-    print("=" * 60)
+def print_app_header():
+    """Print application header"""
+    print_header(
+        "KEYBOARD LAYOUT OPTIMIZATION SYSTEM",
+        "Distributed Simulation-Based with C# Fitness"
+    )
 
 
 # -----------------------------
 #   MENU ITEM WRAPPERS
 # -----------------------------
 
-def item_run_genetic(show_title):
-    if show_title:
-        return "Run Genetic Algorithm (Master Mode)"
-
+def item_run_genetic():
+    """Run Genetic Algorithm (Master Mode)"""
     from core.run_ga import run_genetic_algorithm
-
-    print("\n[Starting Genetic Algorithm in Master Mode...]")
-    print("=" * 60)
-
-    # Interactive keyboard selection
-    print("\nAvailable Physical Keyboards:")
+    
+    prefs = Preferences()
+    
+    print_header("Genetic Algorithm - Master Mode", "Configure and run the genetic algorithm")
+    
+    # Get available keyboards
     keyboards = get_available_keyboards()
     if not keyboards:
-        print("❌ No keyboard layouts found in src/data/keyboards/")
-        print("Please ensure keyboard layout files are present.")
+        print_error("No keyboard layouts found in src/data/keyboards/")
         return
     
-    for i, (name, path) in enumerate(keyboards, 1):
-        print(f"  {i}. {name}")
-        print(f"     {path}")
-    
-    keyboard_file = None
-    while keyboard_file is None:
-        try:
-            choice = input(f"\nSelect keyboard (1-{len(keyboards)}) or 'q' to quit: ")
-            if choice.lower() == 'q':
-                print("Cancelled.")
-                return
-            
-            keyboard_choice = int(choice) - 1
-            if keyboard_choice < 0 or keyboard_choice >= len(keyboards):
-                print(f"Invalid selection. Please choose between 1 and {len(keyboards)}.")
-            else:
-                keyboard_file = keyboards[keyboard_choice][1]
-                print(f"✅ Selected: {keyboards[keyboard_choice][0]}")
-        except ValueError:
-            print("Invalid input. Please enter a number or 'q' to quit.")
+    # Keyboard selection
+    console.print("[bold]Step 1: Select Physical Keyboard[/bold]\n")
+    default_keyboard = prefs.get_last_keyboard()
+    result = select_from_list("Available Keyboards", keyboards, default_keyboard)
+    if result is None:
+        print_warning("Cancelled")
+        return
+    _, keyboard_file = result
+    prefs.set_last_keyboard(keyboard_file)
+    print_success(f"Selected: {keyboard_file}")
+    console.print()
 
-    # Interactive text file selection
-    print("\nAvailable Text Files for Simulation:")
+    # Text file selection
+    console.print("[bold]Step 2: Select Text File[/bold]\n")
     text_files = get_available_text_files()
     if not text_files:
-        print("❌ No text files found in src/data/text/raw/")
-        print("Please ensure text files are present.")
+        print_error("No text files found in src/data/text/raw/")
         return
     
-    for i, (name, path, size_mb) in enumerate(text_files, 1):
-        print(f"  {i}. {name}")
-        print(f"     {path} ({size_mb:.2f} MB)")
-    
-    text_file = None
-    while text_file is None:
-        try:
-            choice = input(f"\nSelect text file (1-{len(text_files)}) or 'q' to quit: ")
-            if choice.lower() == 'q':
-                print("Cancelled.")
-                return
-            
-            text_choice = int(choice) - 1
-            if text_choice < 0 or text_choice >= len(text_files):
-                print(f"Invalid selection. Please choose between 1 and {len(text_files)}.")
-            else:
-                text_file = text_files[text_choice][1]
-                print(f"✅ Selected: {text_files[text_choice][0]} ({text_files[text_choice][2]:.2f} MB)")
-        except ValueError:
-            print("Invalid input. Please enter a number or 'q' to quit.")
+    default_text = prefs.get_last_text_file()
+    result = select_from_list("Available Text Files", text_files, default_text, show_size=True)
+    if result is None:
+        print_warning("Cancelled")
+        return
+    _, text_file = result
+    prefs.set_last_text_file(text_file)
+    print_success(f"Selected: {text_file}")
+    console.print()
 
-    # Get user input for GA parameters with validation
-    print("\nGenetic Algorithm Parameters:")
+    # Get GA parameters
+    console.print("[bold]Step 3: Configure GA Parameters[/bold]\n")
+    saved_params = prefs.get_ga_params()
     
-    def get_valid_int(prompt, default, min_val=1, max_val=1000):
-        while True:
-            try:
-                value = input(f"{prompt} [{default}]: ") or str(default)
-                num = int(value)
-                if min_val <= num <= max_val:
-                    return num
-                else:
-                    print(f"Please enter a value between {min_val} and {max_val}.")
-            except ValueError:
-                print("Please enter a valid number.")
+    console.print("[dim]Press Tab/Enter to use saved values or type new values[/dim]\n")
     
-    def get_valid_float(prompt, default, min_val=0.0, max_val=10.0):
-        while True:
-            try:
-                value = input(f"{prompt} [{default}]: ") or str(default)
-                num = float(value)
-                if min_val <= num <= max_val:
-                    return num
-                else:
-                    print(f"Please enter a value between {min_val} and {max_val}.")
-            except ValueError:
-                print("Please enter a valid number.")
+    population_size = get_parameter(
+        "Population size",
+        saved_params.get('population_size', 30),
+        param_type="int",
+        min_val=1,
+        max_val=500
+    )
     
-    population_size = get_valid_int("Population size", 30, 1, 500)
-    max_iterations = get_valid_int("Max iterations", 50, 1, 1000)
-    stagnant_limit = get_valid_int("Stagnation limit", 10, 1, 100)
-    max_processes = get_valid_int("Max parallel processes", 4, 1, 32)
+    max_iterations = get_parameter(
+        "Max iterations",
+        saved_params.get('max_iterations', 50),
+        param_type="int",
+        min_val=1,
+        max_val=1000
+    )
     
-    # simply use rabbitmq if it is on
+    stagnant_limit = get_parameter(
+        "Stagnation limit",
+        saved_params.get('stagnant_limit', 10),
+        param_type="int",
+        min_val=1,
+        max_val=100
+    )
+    
+    max_processes = get_parameter(
+        "Max parallel processes",
+        saved_params.get('max_processes', 4),
+        param_type="int",
+        min_val=1,
+        max_val=32
+    )
+    
+    # Simply use rabbitmq if it is on
     use_rabbitmq = True
     
-    # Advanced parameters (optional)
-    print("\nAdvanced Parameters (press Enter to use defaults):")
-    fitts_a = get_valid_float("Fitts's Law constant 'a'", 0.5, 0.0, 5.0)
-    fitts_b = get_valid_float("Fitts's Law constant 'b'", 0.3, 0.0, 5.0)
+    # Advanced parameters
+    console.print("\n[bold]Advanced Parameters[/bold]\n")
+    fitts_a = get_parameter(
+        "Fitts's Law constant 'a'",
+        saved_params.get('fitts_a', 0.5),
+        param_type="float",
+        min_val=0.0,
+        max_val=5.0
+    )
+    
+    fitts_b = get_parameter(
+        "Fitts's Law constant 'b'",
+        saved_params.get('fitts_b', 0.3),
+        param_type="float",
+        min_val=0.0,
+        max_val=5.0
+    )
 
+    # Save parameters for next time
+    prefs.set_ga_params({
+        'population_size': population_size,
+        'max_iterations': max_iterations,
+        'stagnant_limit': stagnant_limit,
+        'max_processes': max_processes,
+        'fitts_a': fitts_a,
+        'fitts_b': fitts_b
+    })
+    prefs.save()
+    
     CONFIG = {
         'keyboard_file': keyboard_file,
         'text_file': text_file,
@@ -171,89 +183,86 @@ def item_run_genetic(show_title):
         'finger_coefficients': None,  # Use defaults
         'use_rabbitmq': use_rabbitmq
     }
-
-    print("\n" + "=" * 60)
-    print("FINAL CONFIGURATION:")
-    print("=" * 60)
-    for k, v in CONFIG.items():
-        if v is not None:
-            print(f"  {k}: {v}")
-    print("=" * 60)
-
-    confirm = input("\nStart Genetic Algorithm? (y/N): ").lower().strip()
-    if confirm not in ['y', 'yes']:
-        print("Cancelled.")
+    
+    console.print()
+    display_config("Final Configuration", CONFIG)
+    console.print()
+    
+    if not confirm_action("Start Genetic Algorithm?", default=True):
+        print_warning("Cancelled")
         return
-
+    
     try:
-        print("\n🚀 Starting Genetic Algorithm...")
+        console.print()
+        print_info("Starting Genetic Algorithm...")
         best = run_genetic_algorithm(**CONFIG)
-        print("\n" + "=" * 60)
-        print("🎉 Genetic Algorithm Complete!")
-        print("=" * 60)
-
+        console.print()
+        print_success("Genetic Algorithm Complete!")
+    
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
+        console.print()
+        print_error(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
 
 
-def item_run_worker(show_title):
-    """Run as worker node - processes jobs from queue"""
-    if show_title:
-        return "Run as Worker Node (Distributed Processing)"
+def item_run_worker():
+    """Run as Worker Node (Distributed Processing)"""
+    import multiprocessing as mp
+    from core.ga import GeneticAlgorithmSimulation
     
-    print("\n[Starting Worker Node...]")
-    print("=" * 60)
+    prefs = Preferences()
     
-    # RabbitMQ option
-    print("\nWorker Configuration:")
-    use_rabbitmq_input = input("Use RabbitMQ? (Y/n) [Y]: ").lower().strip()
-    use_rabbitmq = use_rabbitmq_input != 'n'
+    print_header("Worker Node", "Process jobs from the distributed queue")
+    
+    saved_params = prefs.get_worker_params()
+    
+    console.print("[bold]Worker Configuration[/bold]\n")
+    
+    use_rabbitmq = get_parameter(
+        "Use RabbitMQ?",
+        saved_params.get('use_rabbitmq', True),
+        param_type="bool"
+    )
     
     if not use_rabbitmq:
-        print("⚠️  Worker mode requires RabbitMQ or will use in-memory queue (only useful for testing)")
-        confirm = input("Continue anyway? (y/N): ").lower().strip()
-        if confirm not in ['y', 'yes']:
-            print("Cancelled.")
+        print_warning("Worker mode requires RabbitMQ or will use in-memory queue (only useful for testing)")
+        if not confirm_action("Continue anyway?", default=False):
+            print_warning("Cancelled")
             return
     
-    # Get max processes
-    import multiprocessing as mp
-    default_processes = mp.cpu_count()
+    max_processes = get_parameter(
+        "Max parallel processes",
+        saved_params.get('max_processes', mp.cpu_count()),
+        param_type="int",
+        min_val=1,
+        max_val=64
+    )
     
-    def get_valid_int(prompt, default, min_val=1, max_val=64):
-        while True:
-            try:
-                value = input(f"{prompt} [{default}]: ") or str(default)
-                num = int(value)
-                if min_val <= num <= max_val:
-                    return num
-                else:
-                    print(f"Please enter a value between {min_val} and {max_val}.")
-            except ValueError:
-                print("Please enter a valid number.")
+    # Save parameters
+    prefs.set_worker_params({
+        'use_rabbitmq': use_rabbitmq,
+        'max_processes': max_processes
+    })
+    prefs.save()
     
-    max_processes = get_valid_int(f"Max parallel processes", default_processes, 1, 64)
+    console.print()
+    display_config("Worker Configuration", {
+        'use_rabbitmq': use_rabbitmq,
+        'max_processes': max_processes
+    })
+    console.print()
     
-    print("\n" + "=" * 60)
-    print("WORKER CONFIGURATION:")
-    print("=" * 60)
-    print(f"  use_rabbitmq: {use_rabbitmq}")
-    print(f"  max_processes: {max_processes}")
-    print("=" * 60)
-    
-    confirm = input("\nStart Worker Node? This will run indefinitely until stopped. (y/N): ").lower().strip()
-    if confirm not in ['y', 'yes']:
-        print("Cancelled.")
+    if not confirm_action("Start Worker Node? This will run indefinitely until stopped.", default=True):
+        print_warning("Cancelled")
         return
     
     try:
-        print("\n🔧 Starting Worker Node...")
-        print("⏳ Worker will wait for jobs from master...")
-        print("💡 Press Ctrl+C to stop the worker\n")
-        
-        from core.ga import GeneticAlgorithmSimulation
+        console.print()
+        print_info("Starting Worker Node...")
+        print_info("Worker will wait for jobs from master...")
+        print_info("Press Ctrl+C to stop the worker")
+        console.print()
         
         # Initialize in worker mode - this will block and process jobs
         worker = GeneticAlgorithmSimulation(
@@ -267,185 +276,124 @@ def item_run_worker(show_title):
         # Worker runs indefinitely in __init__, won't reach here unless interrupted
         
     except KeyboardInterrupt:
-        print("\n\n🛑 Worker stopped by user")
+        console.print()
+        print_warning("Worker stopped by user")
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
+        console.print()
+        print_error(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
 
 
-def item_annotator(show_title):
-    if show_title:
-        return "Launch Keyboard Annotator GUI"
-
-    print("\n[Launching Keyboard Annotator GUI...]")
-    print("=" * 60)
-
-    print("\nAvailable Physical Keyboards:")
+def item_annotator():
+    """Launch Keyboard Annotator GUI"""
+    print_header("Keyboard Annotator GUI", "Interactive keyboard layout editor")
+    
     keyboards = get_available_keyboards()
     if not keyboards:
-        print("No keyboard layouts found!")
+        print_error("No keyboard layouts found!")
         return
     
-    for i, (name, path) in enumerate(keyboards, 1):
-        print(f"  {i}. {name}")
-    
-    try:
-        keyboard_choice = int(input(f"\nSelect keyboard (1-{len(keyboards)}): ")) - 1
-        if keyboard_choice < 0 or keyboard_choice >= len(keyboards):
-            print("Invalid selection. Using default keyboard.")
-            keyboard_file = 'src/data/keyboards/ansi_60_percent.json'
-        else:
-            keyboard_file = keyboards[keyboard_choice][1]
-    except (ValueError, KeyboardInterrupt):
-        print("Invalid input. Using default keyboard.")
+    result = select_from_list("Available Keyboards", keyboards)
+    if result is None:
         keyboard_file = 'src/data/keyboards/ansi_60_percent.json'
-
-    print(f"\nLoading keyboard: {keyboard_file}")
-
+        print_warning(f"Using default keyboard: {keyboard_file}")
+    else:
+        _, keyboard_file = result
+        print_success(f"Loading keyboard: {keyboard_file}")
+    
     try:
         from helpers.keyboards.annotator_gui import KeyboardAnnotatorDPG
         app = KeyboardAnnotatorDPG()
         app.run()
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print_error(f"Error: {e}")
         import traceback
         traceback.print_exc()
 
 
-def item_text_analysis(show_title):
-    if show_title:
-        return "Analyze Text File"
+def item_text_analysis():
+    """Analyze Text File"""
+    print_header("Text File Analysis", "Analyze character frequencies and text metrics")
     
-    print("\n[Text File Analysis]")
-    print("=" * 60)
-    
-    print("\nAvailable Text Files:")
     text_files = get_available_text_files()
     if not text_files:
-        print("❌ No text files found!")
+        print_error("No text files found!")
         return
     
-    for i, (name, path, size_mb) in enumerate(text_files, 1):
-        print(f"  {i}. {name}")
-        print(f"     {path} ({size_mb:.2f} MB)")
+    result = select_from_list("Available Text Files", text_files, show_size=True)
+    if result is None:
+        print_warning("Cancelled")
+        return
     
-    text_file = None
-    while text_file is None:
-        try:
-            choice = input(f"\nSelect text file (1-{len(text_files)}) or 'q' to quit: ")
-            if choice.lower() == 'q':
-                print("Cancelled.")
-                return
-            
-            text_choice = int(choice) - 1
-            if text_choice < 0 or text_choice >= len(text_files):
-                print(f"Invalid selection. Please choose between 1 and {len(text_files)}.")
-            else:
-                text_file = text_files[text_choice][1]
-                print(f"✅ Selected: {text_files[text_choice][0]}")
-        except ValueError:
-            print("Invalid input. Please enter a number or 'q' to quit.")
+    idx, text_file = result
+    name, _, size_mb = text_files[idx]
     
-    print(f"\n📊 Analyzing text file: {text_files[text_choice][0]}")
-    print(f"📁 File: {text_file}")
-    print(f"💾 Size: {text_files[text_choice][2]:.2f} MB")
-    print("\n📝 [Text Analysis - Coming soon!]")
-    print("💡 This feature will provide detailed statistics about character frequencies,")
-    print("   word distributions, bigrams, trigrams, and other text metrics.")
+    console.print()
+    print_success(f"Selected: {name}")
+    print_info(f"File: {text_file}")
+    print_info(f"Size: {size_mb:.2f} MB")
+    console.print()
+    print_warning("[Text Analysis - Coming soon!]")
+    console.print("[dim]This feature will provide detailed statistics about character frequencies,[/dim]")
+    console.print("[dim]word distributions, bigrams, trigrams, and other text metrics.[/dim]")
 
 
-def item_keyboard_evaluator(show_title):
-    if show_title:
-        return "Evaluate Keyboard Layout"
+def item_keyboard_evaluator():
+    """Evaluate Keyboard Layout"""
+    print_header("Keyboard Layout Evaluator", "Analyze keyboard layout efficiency")
     
-    print("\n[Keyboard Layout Evaluator]")
-    print("=" * 60)
-    
-    print("\nAvailable Physical Keyboards:")
     keyboards = get_available_keyboards()
     if not keyboards:
-        print("❌ No keyboard layouts found!")
+        print_error("No keyboard layouts found!")
         return
     
-    for i, (name, path) in enumerate(keyboards, 1):
-        print(f"  {i}. {name}")
-        print(f"     {path}")
+    result = select_from_list("Available Keyboards", keyboards)
+    if result is None:
+        print_warning("Cancelled")
+        return
+    idx, keyboard_file = result
+    keyboard_name = keyboards[idx][0]
+    print_success(f"Selected: {keyboard_name}")
+    console.print()
     
-    keyboard_file = None
-    keyboard_name = None
-    while keyboard_file is None:
-        try:
-            choice = input(f"\nSelect keyboard (1-{len(keyboards)}) or 'q' to quit: ")
-            if choice.lower() == 'q':
-                print("Cancelled.")
-                return
-            
-            keyboard_choice = int(choice) - 1
-            if keyboard_choice < 0 or keyboard_choice >= len(keyboards):
-                print(f"Invalid selection. Please choose between 1 and {len(keyboards)}.")
-            else:
-                keyboard_file = keyboards[keyboard_choice][1]
-                keyboard_name = keyboards[keyboard_choice][0]
-                print(f"✅ Selected: {keyboard_name}")
-        except ValueError:
-            print("Invalid input. Please enter a number or 'q' to quit.")
-    
-    print("\nAvailable Text Files:")
     text_files = get_available_text_files()
     if not text_files:
-        print("❌ No text files found!")
+        print_error("No text files found!")
         return
     
-    for i, (name, path, size_mb) in enumerate(text_files, 1):
-        print(f"  {i}. {name}")
-        print(f"     {path} ({size_mb:.2f} MB)")
+    result = select_from_list("Available Text Files", text_files, show_size=True)
+    if result is None:
+        print_warning("Cancelled")
+        return
+    idx, text_file = result
+    text_name = text_files[idx][0]
     
-    text_file = None
-    while text_file is None:
-        try:
-            choice = input(f"\nSelect text file (1-{len(text_files)}) or 'q' to quit: ")
-            if choice.lower() == 'q':
-                print("Cancelled.")
-                return
-            
-            text_choice = int(choice) - 1
-            if text_choice < 0 or text_choice >= len(text_files):
-                print(f"Invalid selection. Please choose between 1 and {len(text_files)}.")
-            else:
-                text_file = text_files[text_choice][1]
-                print(f"✅ Selected: {text_files[text_choice][0]}")
-        except ValueError:
-            print("Invalid input. Please enter a number or 'q' to quit.")
-    
-    print(f"\n⌨️  Evaluating keyboard: {keyboard_name}")
-    print(f"📊 Text file: {text_files[text_choice][0]}")
-    print(f"📁 File: {text_file}")
-    print("\n📝 [Keyboard Evaluator - Coming soon!]")
-    print("💡 This feature will analyze keyboard layout efficiency using simulation,")
-    print("   providing metrics like finger travel distance, typing time, and heatmaps.")
+    console.print()
+    print_info(f"Keyboard: {keyboard_name}")
+    print_info(f"Text: {text_name}")
+    console.print()
+    print_warning("[Keyboard Evaluator - Coming soon!]")
+    console.print("[dim]This feature will analyze keyboard layout efficiency using simulation,[/dim]")
+    console.print("[dim]providing metrics like finger travel distance, typing time, and heatmaps.[/dim]")
 
 
-def item_layout_comparison(show_title):
-    if show_title:
-        return "Compare Standard Layouts"
+def item_layout_comparison():
+    """Compare Standard Layouts"""
+    print_header("Layout Comparison", "Compare QWERTY, Dvorak, Colemak, etc.")
     
-    print("\n[Layout Comparison]")
-    print("=" * 60)
-    print("\n📝 [Layout Comparison - Coming soon!]")
-    print("💡 This feature will compare standard layouts (QWERTY, Dvorak, Colemak, etc.)")
-    print("   using simulation-based fitness calculation with detailed metrics and heatmaps.")
+    print_warning("[Layout Comparison - Coming soon!]")
+    console.print("[dim]This feature will compare standard layouts (QWERTY, Dvorak, Colemak, etc.)[/dim]")
+    console.print("[dim]using simulation-based fitness calculation with detailed metrics and heatmaps.[/dim]")
 
 
-def item_visualize_layout(show_title):
-    if show_title:
-        return "Visualize Keyboard Layout"
+def item_visualize_layout():
+    """Visualize Keyboard Layout"""
+    print_header("Layout Visualization", "Generate SVG visualizations")
     
-    print("\n[Layout Visualization]")
-    print("=" * 60)
-    print("\n📝 [Layout Visualization - Coming soon!]")
-    print("💡 This feature will generate SVG visualizations of keyboard layouts")
-    print("   with optional heatmaps showing key usage patterns.")
+    print_warning("[Layout Visualization - Coming soon!]")
+    console.print("[dim]This feature will generate SVG visualizations of keyboard layouts[/dim]")
+    console.print("[dim]with optional heatmaps showing key usage patterns.[/dim]")
 
 
 # -----------------------------
@@ -453,23 +401,23 @@ def item_visualize_layout(show_title):
 # -----------------------------
 
 def main():
-    print_header()
-
-    menu = Menu("Main Menu")
-
+    print_app_header()
+    
+    menu = RichMenu("🎹 Keyboard Layout Optimization - Main Menu")
+    
     # Register all menu item functions
-    menu.add_item(item_run_genetic)
-    menu.add_item(item_run_worker)  # NEW: Worker mode
-    menu.add_item(item_keyboard_evaluator)
-    menu.add_item(item_layout_comparison)
-    menu.add_item(item_text_analysis)
-    menu.add_item(item_visualize_layout)
-    menu.add_item(item_annotator)
-
-    # Interactive loop
-    menu.run()
-
-    print("\n[Exiting...]\n")
+    menu.add_item("🚀 Run Genetic Algorithm (Master Mode)", item_run_genetic)
+    menu.add_item("🔧 Run as Worker Node (Distributed Processing)", item_run_worker)
+    menu.add_item("⌨️  Evaluate Keyboard Layout", item_keyboard_evaluator)
+    menu.add_item("📊 Compare Standard Layouts", item_layout_comparison)
+    menu.add_item("📝 Analyze Text File", item_text_analysis)
+    menu.add_item("🎨 Visualize Keyboard Layout", item_visualize_layout)
+    menu.add_item("🖊️  Launch Keyboard Annotator GUI", item_annotator)
+    
+    # Run interactive menu
+    menu.display()
+    
+    console.print("\n[yellow]Goodbye![/yellow]\n")
     sys.exit(0)
 
 
