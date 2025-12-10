@@ -32,10 +32,11 @@ def get_heatmap_color(normalized_freq: float, color_scheme: str = 'blue-red') ->
         blue = int(255 - 55 * freq)    # 255 → 200
         return f"#{red:02x}{green:02x}{blue:02x}"
     elif color_scheme == 'white-blue':
-        # White (low) → blue (high) - for non-ASCII keys
-        red = int(255 * (1 - freq))    # 255 → 0
-        green = int(255 * (1 - freq))  # 255 → 0
-        blue = 255                      # Always 255
+        # White (low) → yellow (high) - for non-ASCII keys
+        # Yellow has less intensity and doesn't interfere with blue/green
+        red = 255                       # Always 255
+        green = 255                     # Always 255
+        blue = int(255 * (1 - freq))   # 255 → 0
         return f"#{red:02x}{green:02x}{blue:02x}"
     else:  # blue-red
         # White (low) → red (high)
