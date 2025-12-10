@@ -98,4 +98,30 @@ The improved heatmap function:
 - Preserves performance and accuracy
 - Compatible with existing codebase
 
-**Next Steps**: Once svgwrite dependency is available, the improved heatmap function will generate professional-looking visualizations that match the layout drawing style perfectly.
+## Latest Update: Key ID Implementation ✅
+
+### 6. **Key ID Field Throughout Pipeline**
+- **Before**: Heatmaps mapped characters to keys, which could be ambiguous
+- **After**: Each key press includes a `key_id` field that uniquely identifies the physical key
+- **Changes**:
+  - **Python JSON Generation** (`src/core/map_json_exporter.py`):
+    - Added `key_id` field to each key press in `char_mappings`
+    - Uses consistent key ID from `keyboard.keys[key_id].id`
+  - **C# KeyPress Structure** (`cs/Class.cs`):
+    - Added `KeyId` property to `KeyPress` record
+    - Updated JSON parsing to read `key_id` field
+    - Updated `_reprKeys` to include `KeyId`
+    - Modified `ComputeStats()` to output `key_id` in statistics
+  - **Heatmap Rendering** (`src/helpers/layouts/visualization.py`):
+    - Refactored to use `key_id` directly for frequency mapping
+    - Changed from character-based to key_id-based approach
+    - Ensures accurate mapping of statistics to physical keys
+- **Result**: Accurate heatmap generation that correctly maps statistics to physical keys, regardless of character mappings or layout changes
+
+### Key Flow
+```
+JSON Generation → C# Parsing → Statistics → Heatmap Rendering
+     key_id          key_id       key_id        key_id
+```
+
+**All improvements implemented and tested successfully.**
