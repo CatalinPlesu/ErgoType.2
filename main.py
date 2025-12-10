@@ -219,11 +219,8 @@ def item_run_worker():
     
     console.print("[bold]Worker Configuration[/bold]\n")
     
-    use_rabbitmq = get_parameter(
-        "Use RabbitMQ?",
-        saved_params.get('use_rabbitmq', True),
-        param_type="bool"
-    )
+    # Simply use rabbitmq if it is on
+    use_rabbitmq = True
     
     if not use_rabbitmq:
         print_warning("Worker mode requires RabbitMQ or will use in-memory queue (only useful for testing)")
