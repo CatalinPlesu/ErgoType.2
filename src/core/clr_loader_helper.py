@@ -9,6 +9,9 @@ without raising errors.
 import sys
 import os
 
+# Constants
+DEFAULT_ASSEMBLY_NAME = "KeyboardFitness"
+
 # Flag to track if runtime has been initialized
 _runtime_initialized = False
 
@@ -34,21 +37,27 @@ def initialize_clr_runtime():
         set_runtime(get_coreclr())
         _runtime_initialized = True
         return True
-    except Exception as e:
+    except (RuntimeError, ValueError) as e:
         # If the runtime is already set by another mechanism, that's okay
-        if "already been loaded" in str(e) or "already been set" in str(e):
+        # Check for common error messages that indicate the runtime is already loaded
+        error_msg = str(e).lower()
+        if "already" in error_msg and ("loaded" in error_msg or "set" in error_msg):
             _runtime_initialized = True
             return False
-        # Re-raise other exceptions
+        # Re-raise if it's a different error
+        raise
+    except Exception:
+        # Re-raise any other unexpected exceptions
         raise
 
 
-def load_csharp_fitness_library(project_root=None):
+def load_csharp_fitness_library(project_root=None, assembly_name=None):
     """
     Load the C# KeyboardFitness library after ensuring runtime is initialized.
     
     Args:
         project_root: Path to project root. If None, will be auto-detected.
+        assembly_name: Name of the C# assembly to load. If None, uses DEFAULT_ASSEMBLY_NAME.
     
     Returns:
         tuple: (Fitness class, was_newly_initialized)
@@ -69,7 +78,9 @@ def load_csharp_fitness_library(project_root=None):
         sys.path.insert(0, dll_dir)
     
     # Load the C# assembly
-    clr.AddReference("KeyboardFitness")
+    if assembly_name is None:
+        assembly_name = DEFAULT_ASSEMBLY_NAME
+    clr.AddReference(assembly_name)
     
     # Import and return the Fitness class
     from FitnessNet import Fitness
