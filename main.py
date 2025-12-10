@@ -146,7 +146,7 @@ def item_run_genetic():
     finger_left_params = get_parameter_group(
         "Left Hand Finger Coefficients (fingers 1-5: pinky to thumb)",
         [
-            {'name': f'Left Finger {i+1}', 'default': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i], 
+            {'name': f'Left Finger {i+1}', 'default': default_finger_coeffs[i], 
              'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0}
             for i in range(5)
         ],
@@ -157,7 +157,7 @@ def item_run_genetic():
     finger_right_params = get_parameter_group(
         "Right Hand Finger Coefficients (fingers 6-10: thumb to pinky)",
         [
-            {'name': f'Right Finger {i+1}', 'default': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i], 
+            {'name': f'Right Finger {i+1}', 'default': default_finger_coeffs[i], 
              'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0}
             for i in range(5, 10)
         ],
