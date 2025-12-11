@@ -160,14 +160,14 @@ def generate_heuristic_layout(
         for heatmap_type in ['press_heatmap', 'hover_heatmap', 'layout']:
             (base_cache_dir / heatmap_type).mkdir(exist_ok=True)
         
-        # Generate all visualizations
+        # Generate all visualizations (without saving to avoid duplicate files)
         layout_svg, press_svg, hover_svg = generate_all_visualizations(
             stats_json=stats_json,
             keyboard=evaluator.keyboard,
             layout=evaluator.layout,
             layout_name=layout_name,
             layer_idx=0,
-            save_dir=base_cache_dir
+            save_dir=None  # Don't save during generation, we'll save to our cache structure
         )
         
         # Save to cache structure
