@@ -14,6 +14,9 @@ from typing import Dict, List, Optional, Any
 # Add src to import path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# Analysis output directory
+ANALYSIS_OUTPUT_DIR = Path("output/analysis")
+
 from src.analysis.ga_run_loader import GARunLoader
 from src.ui.rich_menu import console, print_header, print_success, print_error, print_info, print_warning
 from src.ui.rich_menu import select_from_list, confirm_action, display_config
@@ -170,7 +173,7 @@ class SingleRunInspector:
             from src.core.evaluator import Evaluator
             from src.core.map_json_exporter import CSharpFitnessConfig
             from src.core.clr_loader_helper import load_csharp_fitness_library
-            from data.layouts.keyboard_genotypes import LAYOUT_DATA
+            from src.data.layouts.keyboard_genotypes import LAYOUT_DATA
             from src.helpers.layouts.visualization import generate_all_visualizations
             
             # Get project root
@@ -214,7 +217,7 @@ class SingleRunInspector:
             gen = individual.get('generation', 0)
             ind_id = individual.get('id', 0)
             
-            output_dir = Path("output/analysis") / self.run_dir.name / "cherry_picked" / f"gen_{gen}_chr_{ind_id}"
+            output_dir = ANALYSIS_OUTPUT_DIR / self.run_dir.name / "cherry_picked" / f"gen_{gen}_chr_{ind_id}"
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # Save stats

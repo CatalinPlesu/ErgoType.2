@@ -419,13 +419,13 @@ def item_analyze_ga_runs():
 
 def item_single_run_inspection():
     """Single GA Run Inspector"""
-    from analysis.single_run_inspector import run_single_run_inspector
+    from src.analysis.single_run_inspector import run_single_run_inspector
     run_single_run_inspector()
 
 
 def item_multi_run_comparison():
     """Multi-Run GA Comparator"""
-    from analysis.multi_run_comparator import run_multi_run_comparator
+    from src.analysis.multi_run_comparator import run_multi_run_comparator
     run_multi_run_comparator()
 
 

@@ -15,6 +15,9 @@ import numpy as np
 # Add src to import path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# Analysis output directory
+ANALYSIS_OUTPUT_DIR = Path("output/analysis")
+
 from src.analysis.ga_run_loader import GARunLoader
 from src.ui.rich_menu import console, print_header, print_success, print_error, print_info, print_warning
 from src.ui.rich_menu import confirm_action
@@ -185,9 +188,9 @@ class MultiRunComparator:
         print_info("Generating comparison visualizations...")
         
         try:
-            import matplotlib.pyplot as plt
             import matplotlib
             matplotlib.use('Agg')  # Use non-interactive backend
+            import matplotlib.pyplot as plt
             
             # 1. Fitness progression overlay chart
             self._generate_fitness_progression_chart(output_dir, normalized_individuals)
@@ -477,7 +480,7 @@ def run_multi_run_comparator():
     # Ask if user wants to export results
     if confirm_action("Generate and export comparison analysis?", default=True):
         timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
-        output_dir = Path("output/analysis") / f"multi_run_{timestamp}"
+        output_dir = ANALYSIS_OUTPUT_DIR / f"multi_run_{timestamp}"
         output_dir.mkdir(parents=True, exist_ok=True)
         
         comparator.export_results(output_dir)
