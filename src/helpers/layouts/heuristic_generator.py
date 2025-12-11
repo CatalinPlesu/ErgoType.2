@@ -22,16 +22,29 @@ from core.map_json_exporter import CSharpFitnessConfig
 from helpers.layouts.visualization import generate_all_visualizations
 
 
+def sanitize_filename(name: str) -> str:
+    """
+    Sanitize a string for safe use as a filename or directory name.
+    Removes or replaces characters that could cause filesystem issues or path traversal.
+    """
+    # Replace path separators and parent directory references
+    name = name.replace('/', '_').replace('\\', '_').replace('..', '_')
+    # Remove other potentially problematic characters
+    name = ''.join(c if c.isalnum() or c in '-_.' else '_' for c in name)
+    # Ensure the name is not empty
+    return name if name else 'unnamed'
+
+
 def get_dataset_name(text_file_path: str) -> str:
-    """Extract dataset name from text file path."""
+    """Extract and sanitize dataset name from text file path."""
     path = Path(text_file_path)
-    return path.stem
+    return sanitize_filename(path.stem)
 
 
 def get_keyboard_name(keyboard_file_path: str) -> str:
-    """Extract keyboard name from keyboard file path."""
+    """Extract and sanitize keyboard name from keyboard file path."""
     path = Path(keyboard_file_path)
-    return path.stem
+    return sanitize_filename(path.stem)
 
 
 def get_heuristic_cache_path(
@@ -46,16 +59,22 @@ def get_heuristic_cache_path(
     Structure: output/{dataset_name}/{keyboard_name}/{heatmap_type}/{layout_name}.svg
     
     Args:
-        dataset_name: Name of the text dataset
-        keyboard_name: Name of the keyboard
-        layout_name: Name of the layout (e.g., 'qwerty', 'dvorak')
+        dataset_name: Name of the text dataset (will be sanitized)
+        keyboard_name: Name of the keyboard (will be sanitized)
+        layout_name: Name of the layout (e.g., 'qwerty', 'dvorak') (will be sanitized)
         heatmap_type: Type of heatmap ('press_heatmap', 'hover_heatmap', 'layout')
     
     Returns:
         Path object for the cache file
     """
-    cache_dir = Path(PROJECT_ROOT) / "output" / dataset_name / keyboard_name / heatmap_type
-    return cache_dir / f"{layout_name}.svg"
+    # Sanitize all path components to prevent path traversal
+    safe_dataset = sanitize_filename(dataset_name)
+    safe_keyboard = sanitize_filename(keyboard_name)
+    safe_layout = sanitize_filename(layout_name)
+    safe_heatmap_type = sanitize_filename(heatmap_type)
+    
+    cache_dir = Path(PROJECT_ROOT) / "output" / safe_dataset / safe_keyboard / safe_heatmap_type
+    return cache_dir / f"{safe_layout}.svg"
 
 
 def check_heuristic_cached(
@@ -170,16 +189,19 @@ def generate_heuristic_layout(
             save_dir=None  # Don't save during generation, we'll save to our cache structure
         )
         
+        # Sanitize layout name for safe filename usage
+        safe_layout_name = sanitize_filename(layout_name)
+        
         # Save to cache structure
-        with open(base_cache_dir / "layout" / f"{layout_name}.svg", 'w') as f:
+        with open(base_cache_dir / "layout" / f"{safe_layout_name}.svg", 'w') as f:
             f.write(layout_svg.data)
-        with open(base_cache_dir / "press_heatmap" / f"{layout_name}.svg", 'w') as f:
+        with open(base_cache_dir / "press_heatmap" / f"{safe_layout_name}.svg", 'w') as f:
             f.write(press_svg.data)
-        with open(base_cache_dir / "hover_heatmap" / f"{layout_name}.svg", 'w') as f:
+        with open(base_cache_dir / "hover_heatmap" / f"{safe_layout_name}.svg", 'w') as f:
             f.write(hover_svg.data)
         
         # Also save stats JSON for reference
-        stats_path = base_cache_dir / f"{layout_name}_stats.json"
+        stats_path = base_cache_dir / f"{safe_layout_name}_stats.json"
         with open(stats_path, 'w', encoding='utf-8') as f:
             f.write(stats_json)
         
