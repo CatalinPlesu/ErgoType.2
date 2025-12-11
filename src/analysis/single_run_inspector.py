@@ -212,12 +212,12 @@ class SingleRunInspector:
             fitness_calculator = Fitness(json_string)
             stats_json = fitness_calculator.ComputeStats()
             
-            # Create output directory
+            # Create output directory within the GA run folder
             ind_name = individual.get('name', 'unknown')
             gen = individual.get('generation', 0)
             ind_id = individual.get('id', 0)
             
-            output_dir = ANALYSIS_OUTPUT_DIR / self.run_dir.name / "cherry_picked" / f"gen_{gen}_chr_{ind_id}"
+            output_dir = self.run_dir / "cherry_picked" / f"gen_{gen}_chr_{ind_id}"
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # Save stats

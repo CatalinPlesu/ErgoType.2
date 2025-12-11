@@ -34,9 +34,9 @@ This opens a sub-menu with two options:
 
 ### Output Location
 
-Selected chromosome visualizations are saved to:
+Selected chromosome visualizations are saved within the GA run folder:
 ```
-output/analysis/{run_timestamp}/cherry_picked/gen_{N}_chr_{M}/
+output/ga_results/ga_run_{timestamp}/cherry_picked/gen_{N}_chr_{M}/
 ```
 
 Each directory contains:
