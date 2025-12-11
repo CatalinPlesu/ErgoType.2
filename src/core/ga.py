@@ -142,7 +142,7 @@ class GeneticAlgorithmSimulation:
             print("👑 MASTER MODE - Coordinating GA and processing jobs...")
             print("="*80)
         
-        # Store configuration
+        # Store configuration - always store as absolute paths internally
         self.keyboard_file = os.path.join(PROJECT_ROOT, keyboard_file) if not os.path.isabs(keyboard_file) else keyboard_file
         self.text_file = os.path.join(PROJECT_ROOT, text_file) if not os.path.isabs(text_file) else text_file
         self.fitts_a = fitts_a
@@ -218,15 +218,16 @@ class GeneticAlgorithmSimulation:
                         print(f"\n📋 Jobs detected ({jobs_count} pending), fetching configuration...")
                         current_config = self.job_queue.get_config(timeout=5)
                         if current_config:
-                            # Update local config
-                            self.keyboard_file = current_config.get('keyboard_file', self.keyboard_file)
-                            self.text_file = current_config.get('text_file', self.text_file)
+                            # Update local config - convert relative paths to absolute
+                            self.keyboard_file = self._to_absolute_path(current_config.get('keyboard_file', self.keyboard_file))
+                            self.text_file = self._to_absolute_path(current_config.get('text_file', self.text_file))
                             self.fitts_a = current_config.get('fitts_a', self.fitts_a)
                             self.fitts_b = current_config.get('fitts_b', self.fitts_b)
                             self.finger_coefficients = current_config.get('finger_coefficients', self.finger_coefficients)
-                            print(f"✅ Configuration loaded:")
+                            print(f"✅ Configuration loaded (converted to absolute paths):")
+                            print(f"   Keyboard: {self.keyboard_file}")
+                            print(f"   Text: {self.text_file}")
                             print(f"   Fitts: a={self.fitts_a}, b={self.fitts_b}")
-                            print(f"   Text: {os.path.basename(self.text_file)}")
                     
                     # Pull jobs while we have available workers
                     active_jobs = len(futures)
@@ -351,6 +352,41 @@ class GeneticAlgorithmSimulation:
     def prepare_individual_data(self, individual):
         return (individual.id, individual.chromosome, individual.name)
 
+    def _to_relative_path(self, absolute_path):
+        """
+        Convert absolute path to relative path from PROJECT_ROOT.
+        This allows distributed workers to find files in their local repository.
+        
+        Args:
+            absolute_path: Absolute file path
+            
+        Returns:
+            Relative path from PROJECT_ROOT, or original path if conversion fails
+        """
+        try:
+            # Convert to Path objects for easier manipulation
+            abs_path = os.path.abspath(absolute_path)
+            rel_path = os.path.relpath(abs_path, PROJECT_ROOT)
+            return rel_path
+        except (ValueError, TypeError):
+            # If conversion fails (e.g., different drives on Windows), return original
+            return absolute_path
+    
+    def _to_absolute_path(self, relative_path):
+        """
+        Convert relative path to absolute path based on PROJECT_ROOT.
+        This allows workers to resolve relative paths from distributed jobs.
+        
+        Args:
+            relative_path: Relative file path from PROJECT_ROOT
+            
+        Returns:
+            Absolute path, or original if already absolute
+        """
+        if os.path.isabs(relative_path):
+            return relative_path
+        return os.path.join(PROJECT_ROOT, relative_path)
+
     def normalize_and_calculate_fitness(self):
         """Normalize toward 0 (better = closer to 0) with 1.2x max scaling"""
         all_evaluated = [ind for ind in self.evaluated_individuals
@@ -401,16 +437,16 @@ class GeneticAlgorithmSimulation:
         print(f"📤 DISTRIBUTING {len(individuals_to_evaluate)} JOBS")
         print(f"{'='*80}")
 
-        # Push configuration
+        # Push configuration with relative paths for distributed workers
         config = {
-            'keyboard_file': self.keyboard_file,
-            'text_file': self.text_file,
+            'keyboard_file': self._to_relative_path(self.keyboard_file),
+            'text_file': self._to_relative_path(self.text_file),
             'fitts_a': self.fitts_a,
             'fitts_b': self.fitts_b,
             'finger_coefficients': self.finger_coefficients
         }
         self.job_queue.push_config(config)
-        print("✅ Configuration pushed to queue")
+        print("✅ Configuration pushed to queue (using relative paths)")
 
         # Push all jobs
         for ind in individuals_to_evaluate:
