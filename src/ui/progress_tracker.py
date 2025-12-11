@@ -9,8 +9,7 @@ This module provides a comprehensive progress tracker that displays:
 - Stagnation count monitoring
 - Average time per job (not per process)
 
-The progress display is pinned and updates in place without hindering
-other console log output during the genetic algorithm execution.
+The progress is printed periodically to avoid conflicts with other console output.
 
 Example usage:
     tracker = GAProgressTracker(max_iterations=50, stagnation_limit=10)
@@ -34,13 +33,6 @@ Example usage:
 """
 
 import time
-from rich.console import Console, Group
-from rich.live import Live
-from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
-from rich.layout import Layout
-from rich.panel import Panel
-from rich.text import Text
 from typing import Optional
 
 
@@ -48,39 +40,33 @@ class GAProgressTracker:
     """
     Progress tracker for genetic algorithm with iteration and job metrics.
     
-    This tracker uses Rich library's Live display to show real-time progress
-    that updates in place. The display shows:
+    This tracker prints progress summaries periodically to avoid interfering
+    with other console output. The summary includes:
     
-    1. Iteration Progress Bar: Shows completion of N out of M iterations
-    2. Job Progress Bar: Shows completion of current job batch
-    3. Statistics Panel:
+    1. Iteration Progress: Shows completion of N out of M iterations
+    2. Job Progress: Shows completion of current job batch
+    3. Statistics:
        - Average Iteration Time: Mean time taken per iteration
        - Estimated Time Remaining: Based on average iteration time
        - Total Elapsed Time: Time since GA start
-       - Stagnation Count: Current/limit (color coded)
+       - Stagnation Count: Current/limit
        - Average Job Time: Mean time per job (not per process)
        - Jobs Complete: Current batch completion status
     
-    The tracker automatically calculates and displays timing estimates,
-    helping users understand GA performance and predict completion times.
-    
-    Thread-safety: This tracker is designed for single-threaded use in the
-    master GA process. It tracks distributed job processing but does not
-    need to be thread-safe itself.
+    Progress is printed every 10 seconds or when a job batch completes.
     """
     
-    def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[Console] = None):
+    def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[object] = None):
         """
         Initialize the progress tracker.
         
         Args:
             max_iterations: Maximum number of iterations
             stagnation_limit: Stagnation limit for stopping
-            console: Rich console instance (creates new if None)
+            console: Unused, kept for compatibility
         """
         self.max_iterations = max_iterations
         self.stagnation_limit = stagnation_limit
-        self.console = console or Console()
         
         # Iteration tracking
         self.current_iteration = 0
@@ -95,111 +81,71 @@ class GAProgressTracker:
         self.job_start_time = None
         self.job_times = []
         
-        # Progress components
-        self.progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}", justify="right"),
-            BarColumn(bar_width=None),
-            TextColumn("[progress.percentage]{task.percentage:>3.1f}%"),
-            TimeRemainingColumn(),
-            console=self.console
-        )
-        self.iteration_task = None
-        self.job_task = None
-        self.live = None
+        # Last print time for periodic updates
+        self.last_print_time = None
+        self.print_interval = 10.0  # Print every 10 seconds
     
     def start(self):
-        """Start the progress tracker and display."""
+        """Start the progress tracker."""
         self.overall_start_time = time.time()
         self.iteration_start_time = time.time()
-        
-        # Create tasks
-        self.iteration_task = self.progress.add_task(
-            f"Iterations (0/{self.max_iterations})",
-            total=self.max_iterations
-        )
-        self.job_task = self.progress.add_task(
-            "Jobs (0/0)",
-            total=1,
-            visible=False
-        )
-        
-        # Start live display
-        self.live = Live(self._create_display(), console=self.console, refresh_per_second=4)
-        self.live.start()
+        self.last_print_time = time.time()
+        self._print_progress()
     
     def stop(self):
-        """Stop the progress tracker display."""
-        if self.live:
-            self.live.stop()
-            self.live = None
+        """Stop the progress tracker and print final summary."""
+        self._print_progress(force=True)
     
-    def _create_display(self) -> Panel:
-        """Create the display layout with progress and statistics."""
-        # Create statistics table
-        stats = self._create_stats_table()
+    def _print_progress(self, force: bool = False):
+        """
+        Print progress summary if enough time has elapsed or if forced.
         
-        # Group progress bars and stats together
-        display_group = Group(
-            self.progress,
-            "",  # Empty line separator
-            stats
-        )
+        Args:
+            force: If True, always print regardless of time elapsed
+        """
+        current_time = time.time()
+        if not force and self.last_print_time and (current_time - self.last_print_time) < self.print_interval:
+            return
         
-        return Panel(display_group, title="🚀 Genetic Algorithm Progress", border_style="cyan")
-    
-    def _create_stats_table(self) -> Table:
-        """Create statistics table showing timing information."""
-        table = Table(show_header=False, box=None, padding=(0, 1), show_edge=False)
-        table.add_column("Metric", style="cyan", width=22)
-        table.add_column("Value", style="yellow", width=15)
-        table.add_column("Metric2", style="cyan", width=22)
-        table.add_column("Value2", style="yellow", width=15)
+        self.last_print_time = current_time
         
-        # Row 1: Iteration stats and elapsed time
+        # Calculate statistics
         avg_iteration_time = self._get_avg_iteration_time()
-        elapsed_str = ""
-        if self.overall_start_time:
-            elapsed = time.time() - self.overall_start_time
-            elapsed_str = self._format_duration(elapsed)
+        elapsed = current_time - self.overall_start_time if self.overall_start_time else 0
+        
+        # Build progress summary
+        lines = []
+        lines.append("\n" + "="*80)
+        lines.append("🚀 GENETIC ALGORITHM PROGRESS")
+        lines.append("="*80)
+        
+        # Iteration progress
+        iter_pct = (self.current_iteration / self.max_iterations * 100) if self.max_iterations > 0 else 0
+        lines.append(f"Iterations: {self.current_iteration}/{self.max_iterations} ({iter_pct:.1f}%)")
+        
+        # Job progress (if active)
+        if self.total_jobs > 0:
+            job_pct = (self.completed_jobs / self.total_jobs * 100) if self.total_jobs > 0 else 0
+            lines.append(f"Jobs: {self.completed_jobs}/{self.total_jobs} ({job_pct:.1f}%)")
+        
+        # Timing statistics
+        lines.append(f"Total Elapsed: {self._format_duration(elapsed)}")
         
         if avg_iteration_time:
-            table.add_row(
-                "⏱️  Avg Iteration", self._format_duration(avg_iteration_time),
-                "🕐 Total Elapsed", elapsed_str
-            )
-        else:
-            table.add_row(
-                "⏱️  Avg Iteration", "Calculating...",
-                "🕐 Total Elapsed", elapsed_str
-            )
-        
-        # Row 2: Estimated remaining and stagnation
-        remaining_str = "Calculating..."
-        if avg_iteration_time:
+            lines.append(f"Avg Iteration Time: {self._format_duration(avg_iteration_time)}")
             remaining_iterations = self.max_iterations - self.current_iteration
             estimated_remaining = remaining_iterations * avg_iteration_time
-            remaining_str = self._format_duration(estimated_remaining)
+            lines.append(f"Est. Time Remaining: {self._format_duration(estimated_remaining)}")
         
-        stag_text = f"{self.stagnation_count}/{self.stagnation_limit}"
-        stag_style = "red" if self.stagnation_count >= self.stagnation_limit * 0.8 else "yellow"
+        lines.append(f"Stagnation: {self.stagnation_count}/{self.stagnation_limit}")
         
-        table.add_row(
-            "⏳ Est. Remaining", remaining_str,
-            "🔄 Stagnation", Text(stag_text, style=stag_style)
-        )
-        
-        # Row 3: Job stats (if available)
         avg_job_time = self._get_avg_job_time()
-        job_time_str = self._format_duration(avg_job_time) if avg_job_time else "—"
-        jobs_text = f"{self.completed_jobs}/{self.total_jobs}" if self.total_jobs > 0 else "—"
+        if avg_job_time:
+            lines.append(f"Avg Job Time: {self._format_duration(avg_job_time)}")
         
-        table.add_row(
-            "⚡ Avg Job Time", job_time_str,
-            "📦 Jobs Complete", jobs_text
-        )
+        lines.append("="*80)
         
-        return table
+        print("\n".join(lines))
     
     def _get_avg_iteration_time(self) -> Optional[float]:
         """Get average iteration time in seconds."""
@@ -239,15 +185,8 @@ class GAProgressTracker:
         self.stagnation_count = stagnation_count
         self.iteration_start_time = time.time()
         
-        # Update progress
-        if self.iteration_task is not None:
-            self.progress.update(
-                self.iteration_task,
-                completed=iteration_num - 1,
-                description=f"Iterations ({iteration_num-1}/{self.max_iterations})"
-            )
-            if self.live:
-                self.live.update(self._create_display())
+        # Print progress periodically
+        self._print_progress()
     
     def complete_iteration(self):
         """Mark the current iteration as complete."""
@@ -256,15 +195,8 @@ class GAProgressTracker:
             self.iteration_times.append(iteration_time)
             self.iteration_start_time = None  # Reset to avoid double-counting
         
-        # Update progress
-        if self.iteration_task is not None:
-            self.progress.update(
-                self.iteration_task,
-                completed=self.current_iteration,
-                description=f"Iterations ({self.current_iteration}/{self.max_iterations})"
-            )
-            if self.live:
-                self.live.update(self._create_display())
+        # Print progress on iteration completion
+        self._print_progress(force=True)
     
     def start_job_batch(self, total_jobs: int):
         """
@@ -276,19 +208,9 @@ class GAProgressTracker:
         self.total_jobs = total_jobs
         self.completed_jobs = 0
         self.job_start_time = time.time()
-        self.job_times = []
         
-        # Update job task
-        if self.job_task is not None:
-            self.progress.update(
-                self.job_task,
-                total=total_jobs,
-                completed=0,
-                description=f"Jobs (0/{total_jobs})",
-                visible=True
-            )
-            if self.live:
-                self.live.update(self._create_display())
+        # Print progress when starting job batch
+        self._print_progress()
     
     def update_job_progress(self, completed: int):
         """
@@ -299,15 +221,8 @@ class GAProgressTracker:
         """
         self.completed_jobs = completed
         
-        # Update job task
-        if self.job_task is not None:
-            self.progress.update(
-                self.job_task,
-                completed=completed,
-                description=f"Jobs ({completed}/{self.total_jobs})"
-            )
-            if self.live:
-                self.live.update(self._create_display())
+        # Print progress periodically
+        self._print_progress()
     
     def complete_job_batch(self):
         """Mark the current job batch as complete."""
@@ -317,16 +232,13 @@ class GAProgressTracker:
             self.job_times.append(avg_time)
             self.job_start_time = None  # Reset to avoid double-counting
         
-        # Hide job task
-        if self.job_task is not None:
-            self.progress.update(
-                self.job_task,
-                visible=False
-            )
-            if self.live:
-                self.live.update(self._create_display())
+        # Print progress when batch completes
+        self._print_progress(force=True)
+        
+        # Reset job tracking
+        self.total_jobs = 0
+        self.completed_jobs = 0
     
     def update_display(self):
         """Manually trigger a display update."""
-        if self.live:
-            self.live.update(self._create_display())
+        self._print_progress()

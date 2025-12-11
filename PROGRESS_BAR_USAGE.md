@@ -19,24 +19,28 @@ The progress bar displays:
 
 ## How It Works
 
-The progress bar uses the Rich library's Live display feature to update in place at the top of the console without hindering other log output. This means:
+The progress tracker prints periodic summaries to the console without interfering with other log output. This means:
 
-- The progress display remains visible and updates automatically
-- Console logs from the GA continue to print normally below
-- No scrollback or terminal clearing issues
-- Clean, professional appearance with colors and formatting
+- Progress summaries are printed every 10 seconds
+- Additional summaries are printed when job batches complete and iterations finish
+- Console logs from the GA continue to print normally
+- No conflicts with existing print statements
+- Clean, readable text-based output
 
 ## Display Example
 
 ```
-╭─────────────────────────── 🚀 Genetic Algorithm Progress ───────────────────────────╮
-│ ⠦ Iterations (25/50) ━━━━━━━━━━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━ 50.0% 0:05:23 │
-│ ⠴ Jobs (45/100)      ━━━━━━━━━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━ 45.0% 0:01:12 │
-│                                                                                     │
-│  ⏱️  Avg Iteration        4.2s             🕐 Total Elapsed        1m 45s          │
-│  ⏳ Est. Remaining       1m 45s           🔄 Stagnation           3/10             │
-│  ⚡ Avg Job Time         0.3s             📦 Jobs Complete        45/100           │
-╰─────────────────────────────────────────────────────────────────────────────────────╯
+================================================================================
+🚀 GENETIC ALGORITHM PROGRESS
+================================================================================
+Iterations: 25/50 (50.0%)
+Jobs: 45/100 (45.0%)
+Total Elapsed: 1m 45s
+Avg Iteration Time: 4.2s
+Est. Time Remaining: 1m 45s
+Stagnation: 3/10
+Avg Job Time: 0.3s
+================================================================================
 ```
 
 ## Integration
@@ -54,6 +58,7 @@ The progress tracker is automatically initialized when you run the GA through th
 - **Module**: `src/ui/progress_tracker.py`
 - **Class**: `GAProgressTracker`
 - **Integration Point**: `src/core/ga.py` in the `run()` method
+- **Update Frequency**: Every 10 seconds, plus on iteration/batch completion
 
 ### Time Calculations
 
@@ -64,15 +69,15 @@ The progress tracker is automatically initialized when you run the GA through th
 
 ### Lifecycle
 
-1. **Initialization**: Tracker created at start of `run()` method
+1. **Initialization**: Tracker created at start of `run()` method, prints initial summary
 2. **Iteration Tracking**: 
-   - `start_iteration()` called at beginning of each iteration
-   - `complete_iteration()` called at end of each iteration
+   - `start_iteration()` called at beginning of each iteration, prints summary if 10s elapsed
+   - `complete_iteration()` called at end of each iteration, prints summary
 3. **Job Tracking**:
    - `start_job_batch()` called when fitness evaluation begins
-   - `update_job_progress()` called as jobs complete
-   - `complete_job_batch()` called when all jobs are done
-4. **Cleanup**: Tracker stopped in `finally` block to ensure proper shutdown
+   - `update_job_progress()` called as jobs complete, prints summary if 10s elapsed
+   - `complete_job_batch()` called when all jobs are done, prints summary
+4. **Cleanup**: Tracker stopped in `finally` block, prints final summary
 
 ## Testing
 
@@ -86,21 +91,15 @@ This demonstrates the progress bar with simulated GA iterations and job processi
 
 ## Requirements
 
-The progress bar requires the `rich` library, which is already included in the project dependencies:
-
-```toml
-dependencies = [
-    # ... other dependencies ...
-    "rich>=13.0.0",
-]
-```
+No special dependencies required - uses only Python standard library (time module).
 
 ## Performance Impact
 
-The progress bar has minimal performance impact:
+The progress tracker has minimal performance impact:
 
-- Updates are rate-limited to 4 times per second
-- Display updates are asynchronous and non-blocking
+- Prints summaries every 10 seconds (configurable)
+- Additional prints only on batch/iteration completion
+- No background threads or async operations
 - No significant CPU or memory overhead
 - Can be safely used with large populations and many iterations
 
@@ -109,15 +108,14 @@ The progress bar has minimal performance impact:
 To modify the progress display:
 
 1. Edit `src/ui/progress_tracker.py`
-2. Modify the `_create_stats_table()` method to change displayed metrics
-3. Modify the `_create_display()` method to change layout
-4. Adjust refresh rate in the `Live()` constructor (default: 4 Hz)
+2. Modify the `_print_progress()` method to change displayed metrics or format
+3. Adjust `print_interval` in `__init__()` to change update frequency (default: 10 seconds)
 
 ## Troubleshooting
 
-**Progress bar not showing**: Ensure Rich library is installed with `pip install rich>=13.0.0`
+**Progress not showing frequently enough**: Adjust `print_interval` in the tracker initialization (default is 10 seconds).
 
-**Garbled output**: Your terminal may not support Rich formatting. Try a modern terminal emulator.
+**Too much output**: Increase `print_interval` to reduce frequency of progress summaries.
 
 **Timing seems off**: Ensure `complete_iteration()` and `complete_job_batch()` are called properly.
 
