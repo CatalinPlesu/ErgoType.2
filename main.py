@@ -559,6 +559,28 @@ def item_generate_heuristics():
         print_error(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
+def item_analyze_ga_runs():
+    """Analyze GA Runs - Sub-menu for inspection and comparison"""
+    print_header("Analyze GA Runs", "Inspect and compare genetic algorithm results")
+    
+    # Create a sub-menu for analysis options
+    submenu = RichMenu("🔬 GA Run Analysis - Select Option")
+    submenu.add_item("🔍 Single Run Inspection", item_single_run_inspection)
+    submenu.add_item("📊 Multi-Run Comparison", item_multi_run_comparison)
+    
+    submenu.display()
+
+
+def item_single_run_inspection():
+    """Single GA Run Inspector"""
+    from src.analysis.single_run_inspector import run_single_run_inspector
+    run_single_run_inspector()
+
+
+def item_multi_run_comparison():
+    """Multi-Run GA Comparator"""
+    from src.analysis.multi_run_comparator import run_multi_run_comparator
+    run_multi_run_comparator()
 
 
 # -----------------------------
@@ -574,6 +596,7 @@ def main():
     menu.add_item("🚀 Run Genetic Algorithm (Master Mode)", item_run_genetic)
     menu.add_item("🔧 Run as Worker Node (Distributed Processing)", item_run_worker)
     menu.add_item("🎯 Generate All Heuristic Heatmaps", item_generate_heuristics)
+    menu.add_item("🔬 Analyze GA Runs", item_analyze_ga_runs)
     menu.add_item("⌨️  Evaluate Keyboard Layout", item_keyboard_evaluator)
     menu.add_item("📊 Compare Standard Layouts", item_layout_comparison)
     menu.add_item("📝 Analyze Text File", item_text_analysis)

@@ -11,8 +11,86 @@ import json
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+
+def _process_heuristic_layout_worker(layout_name, genotype, keyboard_file, text_file, 
+                                     finger_coefficients, fitts_a, fitts_b, run_dir):
+    """
+    Worker function to process a single heuristic layout in parallel.
+    
+    Args:
+        layout_name: Name of the layout (e.g., "qwerty", "dvorak")
+        genotype: Layout genotype string
+        keyboard_file: Path to keyboard file
+        text_file: Path to text file
+        finger_coefficients: Finger coefficient list
+        fitts_a: Fitts's law constant a
+        fitts_b: Fitts's law constant b
+        run_dir: Output directory path
+    
+    Returns:
+        Tuple of (layout_name, success, error_message)
+    """
+    try:
+        print(f"\n{'='*80}")
+        print(f"Processing heuristic layout: {layout_name}")
+        print(f"{'='*80}")
+        
+        # Load C# library in this process
+        from core.clr_loader_helper import load_csharp_fitness_library
+        Fitness, _ = load_csharp_fitness_library(PROJECT_ROOT)
+        
+        # Create a SEPARATE evaluator for each layout to avoid conflicts
+        evaluator = Evaluator(debug=False)
+        evaluator.load_keyoard(keyboard_file)
+        evaluator.load_layout()
+        
+        # Remap THIS evaluator's layout
+        evaluator.layout.remap(list(LAYOUT_DATA["qwerty"]), list(genotype))
+       
+        # Generate config using THIS evaluator
+        config_gen = CSharpFitnessConfig(
+            keyboard=evaluator.keyboard,
+            layout=evaluator.layout
+        )
+        
+        json_string = config_gen.generate_json_string(
+            text_file_path=text_file,
+            finger_coefficients=finger_coefficients,
+            fitts_a=fitts_a,
+            fitts_b=fitts_b
+        )
+        
+        print(f"📊 Computing statistics for {layout_name}...")
+        fitness_calculator = Fitness(json_string)
+        stats_json = fitness_calculator.ComputeStats()
+        
+        stats_path = Path(run_dir) / f"heuristic_{layout_name}_stats.json"
+        with open(stats_path, 'w', encoding='utf-8') as f:
+            f.write(stats_json)
+        print(f"✅ Saved stats: {stats_path.name}")
+        
+        # Generate visualizations
+        save_layout_visualizations(
+            stats_json=stats_json,
+            keyboard=evaluator.keyboard,
+            layout=evaluator.layout,
+            run_dir=Path(run_dir),
+            layout_name=f"heuristic_{layout_name}",
+            layer_idx=0
+        )
+        
+        return (layout_name, True, None)
+        
+    except Exception as e:
+        error_msg = f"Error processing {layout_name}: {e}"
+        print(f"❌ {error_msg}")
+        import traceback
+        traceback.print_exc()
+        return (layout_name, False, error_msg)
 
 
 def save_layout_visualizations(stats_json, keyboard, layout, run_dir, layout_name, layer_idx=0):
@@ -75,7 +153,7 @@ def save_heuristic_layouts(ga, run_dir):
     import shutil
     
     print("\n" + "="*80)
-    print("SAVING INITIAL HEURISTIC LAYOUTS")
+    print("SAVING INITIAL HEURISTIC LAYOUTS (using parallel processing)")
     print("="*80)
     
     dataset_name = get_dataset_name(ga.text_file)
