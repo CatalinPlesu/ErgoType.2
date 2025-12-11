@@ -29,19 +29,20 @@ The progress tracker prints periodic summaries to the console without interferin
 
 ## Display Example
 
+The progress is shown in a compact single-line format with a graphical progress bar:
+
 ```
-================================================================================
-🚀 GENETIC ALGORITHM PROGRESS
-================================================================================
-Iterations: 25/50 (50.0%)
-Jobs: 45/100 (45.0%)
-Total Elapsed: 1m 45s
-Avg Iteration Time: 4.2s
-Est. Time Remaining: 1m 45s
-Stagnation: 3/10
-Avg Job Time: 0.3s
-================================================================================
+🚀 [████████████░░░░░░░░] 60.0% | Iter:3/5 | Jobs:35/35(100%) | Elapsed:10.2s | ETA:6.7s | Stag:2/3
 ```
+
+**Components:**
+- **Progress Bar**: Visual representation using block characters (█ = completed, ░ = remaining)
+- **Percentage**: Numeric completion percentage
+- **Iter**: Current iteration / total iterations
+- **Jobs**: Current jobs / total jobs (percentage) - only shown when jobs are active
+- **Elapsed**: Total time since start
+- **ETA**: Estimated time remaining (shown when available)
+- **Stag**: Current stagnation count / limit
 
 ## Integration
 

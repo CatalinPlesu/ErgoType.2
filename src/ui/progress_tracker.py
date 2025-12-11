@@ -1,15 +1,18 @@
 """
 Progress tracking for genetic algorithm iterations.
 
-This module provides a comprehensive progress tracker that displays:
-- Overall iteration progress (N/M iterations complete)
-- Job batch progress for fitness evaluation
-- Average iteration time and estimated time remaining
-- Total elapsed time
+This module provides a compact single-line progress tracker that displays:
+- Graphical progress bar with completion percentage
+- Iteration count (current/total)
+- Job batch progress when active
+- Elapsed time and estimated time remaining
 - Stagnation count monitoring
-- Average time per job (not per process)
 
-The progress is printed periodically to avoid conflicts with other console output.
+The progress is printed periodically (every 10 seconds) or on completion events
+to avoid conflicts with other console output.
+
+Display format:
+    🚀 [████████████░░░░░░░░] 60.0% | Iter:3/5 | Jobs:35/35(100%) | Elapsed:10.2s | ETA:6.7s | Stag:2/3
 
 Example usage:
     tracker = GAProgressTracker(max_iterations=50, stagnation_limit=10)
@@ -40,20 +43,18 @@ class GAProgressTracker:
     """
     Progress tracker for genetic algorithm with iteration and job metrics.
     
-    This tracker prints progress summaries periodically to avoid interfering
-    with other console output. The summary includes:
+    This tracker prints a compact single-line progress summary periodically
+    to avoid interfering with other console output. The line includes:
     
-    1. Iteration Progress: Shows completion of N out of M iterations
-    2. Job Progress: Shows completion of current job batch
-    3. Statistics:
-       - Average Iteration Time: Mean time taken per iteration
-       - Estimated Time Remaining: Based on average iteration time
-       - Total Elapsed Time: Time since GA start
-       - Stagnation Count: Current/limit
-       - Average Job Time: Mean time per job (not per process)
-       - Jobs Complete: Current batch completion status
+    - Graphical progress bar (█ = completed, ░ = remaining)
+    - Percentage completion
+    - Iteration count (current/total)
+    - Job batch progress when active (current/total with percentage)
+    - Elapsed time
+    - Estimated time remaining (when available)
+    - Stagnation count (current/limit)
     
-    Progress is printed every 10 seconds or when a job batch completes.
+    Progress is printed every 10 seconds or when a job batch/iteration completes.
     """
     
     def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[object] = None):
@@ -113,39 +114,36 @@ class GAProgressTracker:
         avg_iteration_time = self._get_avg_iteration_time()
         elapsed = current_time - self.overall_start_time if self.overall_start_time else 0
         
-        # Build progress summary
-        lines = []
-        lines.append("\n" + "="*80)
-        lines.append("🚀 GENETIC ALGORITHM PROGRESS")
-        lines.append("="*80)
-        
-        # Iteration progress
+        # Build compact single-line progress
         iter_pct = (self.current_iteration / self.max_iterations * 100) if self.max_iterations > 0 else 0
-        lines.append(f"Iterations: {self.current_iteration}/{self.max_iterations} ({iter_pct:.1f}%)")
         
-        # Job progress (if active)
+        # Create text-based progress bar for iterations
+        bar_width = 20
+        filled = int(bar_width * iter_pct / 100)
+        bar = '█' * filled + '░' * (bar_width - filled)
+        
+        # Build the status line
+        parts = []
+        parts.append(f"[{bar}] {iter_pct:.1f}%")
+        parts.append(f"Iter:{self.current_iteration}/{self.max_iterations}")
+        
+        # Add job progress if active
         if self.total_jobs > 0:
             job_pct = (self.completed_jobs / self.total_jobs * 100)
-            lines.append(f"Jobs: {self.completed_jobs}/{self.total_jobs} ({job_pct:.1f}%)")
+            parts.append(f"Jobs:{self.completed_jobs}/{self.total_jobs}({job_pct:.0f}%)")
         
-        # Timing statistics
-        lines.append(f"Total Elapsed: {self._format_duration(elapsed)}")
+        # Add timing
+        parts.append(f"Elapsed:{self._format_duration(elapsed)}")
         
         if avg_iteration_time:
-            lines.append(f"Avg Iteration Time: {self._format_duration(avg_iteration_time)}")
             remaining_iterations = self.max_iterations - self.current_iteration
             estimated_remaining = remaining_iterations * avg_iteration_time
-            lines.append(f"Est. Time Remaining: {self._format_duration(estimated_remaining)}")
+            parts.append(f"ETA:{self._format_duration(estimated_remaining)}")
         
-        lines.append(f"Stagnation: {self.stagnation_count}/{self.stagnation_limit}")
+        parts.append(f"Stag:{self.stagnation_count}/{self.stagnation_limit}")
         
-        avg_job_time = self._get_avg_job_time()
-        if avg_job_time:
-            lines.append(f"Avg Job Time: {self._format_duration(avg_job_time)}")
-        
-        lines.append("="*80)
-        
-        print("\n".join(lines))
+        # Print the compact line
+        print("🚀 " + " | ".join(parts))
     
     def _get_avg_iteration_time(self) -> Optional[float]:
         """Get average iteration time in seconds."""
