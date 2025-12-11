@@ -544,6 +544,15 @@ def run_genetic_algorithm(
         "total_individuals_evaluated": len(ga.evaluated_individuals),
         "total_unique_individuals": len(ga.all_individuals)
     }
+    
+    # Add timing statistics from progress tracker if available
+    if hasattr(ga, 'progress_tracker') and ga.progress_tracker:
+        total_time = ga.progress_tracker.get_total_elapsed_time()
+        avg_job_time = ga.progress_tracker.get_average_job_time()
+        
+        ga_run_data["total_run_time_seconds"] = round(total_time, 2)
+        if avg_job_time is not None:
+            ga_run_data["average_job_time_seconds"] = round(avg_job_time, 4)
 
     ga_run_path = run_dir / "ga_run_metadata.json"
     with open(ga_run_path, 'w', encoding='utf-8') as f:

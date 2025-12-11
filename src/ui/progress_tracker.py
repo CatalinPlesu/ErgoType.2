@@ -282,3 +282,25 @@ class GAProgressTracker:
     def update_display(self):
         """Manually trigger a display update."""
         self._print_progress()
+    
+    def get_total_elapsed_time(self) -> float:
+        """
+        Get the total elapsed time since the tracker started.
+        
+        Returns:
+            Total elapsed time in seconds, or 0 if not started
+        """
+        if self.overall_start_time is None:
+            return 0.0
+        return time.time() - self.overall_start_time
+    
+    def get_average_job_time(self) -> Optional[float]:
+        """
+        Get the average time per job across all completed job batches.
+        
+        Returns:
+            Average job time in seconds, or None if no jobs completed
+        """
+        if not self.job_times:
+            return None
+        return sum(self.job_times) / len(self.job_times)
