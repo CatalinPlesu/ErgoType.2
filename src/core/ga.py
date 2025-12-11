@@ -657,6 +657,13 @@ class GeneticAlgorithmSimulation:
     def uniform_crossover(self, offsprings_per_pair=4):
         """Uniform crossover - create children from parent pairs"""
         self.children = []
+        
+        # Constants for crossover variation
+        OFFSPRING_PROBABILITY_FACTOR = 30.0
+        VARIATION_DIVISOR = 20.0
+        MAX_VARIATION_FACTOR = 0.3
+        MUTATION_THRESHOLD_ATTEMPTS = 50
+        MUTATION_PROBABILITY = 0.3
 
         def is_duplicate(chromosome, existing_individuals):
             chromosome_str = ''.join(chromosome)
@@ -711,8 +718,8 @@ class GeneticAlgorithmSimulation:
                     
                     # Vary the crossover probability based on attempt number
                     # Start with high bias toward better parent, decrease over attempts
-                    base_prob = 0.75 + o/30.0
-                    variation_factor = min(attempts / 20.0, 0.3)  # Up to 30% variation
+                    base_prob = 0.75 + o / OFFSPRING_PROBABILITY_FACTOR
+                    variation_factor = min(attempts / VARIATION_DIVISOR, MAX_VARIATION_FACTOR)
                     crossover_prob = max(0.5, base_prob - variation_factor)
 
                     for j in range(len(new_chromosome)):
@@ -738,7 +745,7 @@ class GeneticAlgorithmSimulation:
                     
                     # After many attempts, apply small mutation to crossover result
                     # This maintains crossover quality while adding uniqueness
-                    if attempts > 50 and random.random() < 0.3:
+                    if attempts > MUTATION_THRESHOLD_ATTEMPTS and random.random() < MUTATION_PROBABILITY:
                         i = random.randint(0, len(new_chromosome) - 1)
                         j = random.randint(0, len(new_chromosome) - 1)
                         new_chromosome[i], new_chromosome[j] = new_chromosome[j], new_chromosome[i]
