@@ -1,6 +1,36 @@
 """
 Progress tracking for genetic algorithm iterations.
-Provides a pinned progress display with iteration and job metrics.
+
+This module provides a comprehensive progress tracker that displays:
+- Overall iteration progress (N/M iterations complete)
+- Job batch progress for fitness evaluation
+- Average iteration time and estimated time remaining
+- Total elapsed time
+- Stagnation count monitoring
+- Average time per job (not per process)
+
+The progress display is pinned and updates in place without hindering
+other console log output during the genetic algorithm execution.
+
+Example usage:
+    tracker = GAProgressTracker(max_iterations=50, stagnation_limit=10)
+    tracker.start()
+    
+    for iteration in range(max_iterations):
+        tracker.start_iteration(iteration + 1, stagnation_count)
+        
+        # Start job batch
+        tracker.start_job_batch(total_jobs=100)
+        
+        # Process jobs and update progress
+        for job in range(100):
+            # ... process job ...
+            tracker.update_job_progress(job + 1)
+        
+        tracker.complete_job_batch()
+        tracker.complete_iteration()
+    
+    tracker.stop()
 """
 
 import time
@@ -17,7 +47,26 @@ from typing import Optional
 class GAProgressTracker:
     """
     Progress tracker for genetic algorithm with iteration and job metrics.
-    Displays a pinned progress bar at the top without hindering other console logs.
+    
+    This tracker uses Rich library's Live display to show real-time progress
+    that updates in place. The display shows:
+    
+    1. Iteration Progress Bar: Shows completion of N out of M iterations
+    2. Job Progress Bar: Shows completion of current job batch
+    3. Statistics Panel:
+       - Average Iteration Time: Mean time taken per iteration
+       - Estimated Time Remaining: Based on average iteration time
+       - Total Elapsed Time: Time since GA start
+       - Stagnation Count: Current/limit (color coded)
+       - Average Job Time: Mean time per job (not per process)
+       - Jobs Complete: Current batch completion status
+    
+    The tracker automatically calculates and displays timing estimates,
+    helping users understand GA performance and predict completion times.
+    
+    Thread-safety: This tracker is designed for single-threaded use in the
+    master GA process. It tracks distributed job processing but does not
+    need to be thread-safe itself.
     """
     
     def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[Console] = None):
