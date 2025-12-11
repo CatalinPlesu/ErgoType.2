@@ -14,9 +14,6 @@ from typing import Dict, List, Optional, Any
 # Add src to import path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-# Analysis output directory
-ANALYSIS_OUTPUT_DIR = Path("output/analysis")
-
 from src.analysis.ga_run_loader import GARunLoader
 from src.ui.rich_menu import console, print_header, print_success, print_error, print_info, print_warning
 from src.ui.rich_menu import select_from_list, confirm_action, display_config
