@@ -151,12 +151,6 @@ class GAProgressTracker:
             return None
         return sum(self.iteration_times) / len(self.iteration_times)
     
-    def _get_avg_job_time(self) -> Optional[float]:
-        """Get average job time in seconds."""
-        if not self.job_times:
-            return None
-        return sum(self.job_times) / len(self.job_times)
-    
     def _format_duration(self, seconds: float) -> str:
         """Format duration in a human-readable way."""
         if seconds < 60:
