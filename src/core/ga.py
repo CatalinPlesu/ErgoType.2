@@ -688,7 +688,7 @@ class GeneticAlgorithmSimulation:
                     break
                     
                 attempts = 0
-                max_attempts = 10
+                max_attempts = 50  # Increased from 10 to 50 to allow more tries
 
                 while attempts < max_attempts:
                     new_chromosome = [None] * len(parent0.chromosome)
@@ -733,6 +733,74 @@ class GeneticAlgorithmSimulation:
             
             if len(self.children) >= target_children:
                 break
+
+        # Fallback: if we still don't have enough children, create them through mutation
+        if len(self.children) < target_children:
+            print(f"⚠️  Only created {len(self.children)} children via crossover, filling remaining {target_children - len(self.children)} via mutation")
+            
+            # Use the best parents for mutation-based children
+            best_parents = sorted_parents[:min(10, len(sorted_parents))]
+            parent_idx = 0
+            
+            while len(self.children) < target_children:
+                parent = best_parents[parent_idx % len(best_parents)]
+                parent_idx += 1
+                
+                # Create a mutated child with higher mutation rate to ensure uniqueness
+                attempts = 0
+                max_mutation_attempts = 100
+                
+                while attempts < max_mutation_attempts:
+                    # Apply multiple mutations to ensure variation
+                    mutated_chromosome = parent.chromosome.copy()
+                    num_swaps = max(3, len(mutated_chromosome) // 10)  # At least 3 swaps, or 10% of length
+                    
+                    for _ in range(num_swaps):
+                        i = random.randint(0, len(mutated_chromosome) - 1)
+                        j = random.randint(0, len(mutated_chromosome) - 1)
+                        mutated_chromosome[i], mutated_chromosome[j] = mutated_chromosome[j], mutated_chromosome[i]
+                    
+                    all_existing = self.population + self.children
+                    
+                    if not is_duplicate(mutated_chromosome, all_existing):
+                        child = Individual(
+                            chromosome=mutated_chromosome,
+                            fitness=None,
+                            distance=None,
+                            time_taken=None,
+                            parents=[parent.id],
+                            generation=self.current_generation + 1
+                        )
+                        self.children.append(child)
+                        self.individual_names[child.id] = child.name
+                        break
+                    
+                    attempts += 1
+                
+                # Last resort: if we still can't create a unique child after many attempts,
+                # create a completely random shuffle
+                if attempts >= max_mutation_attempts and len(self.children) < target_children:
+                    random_chromosome = parent.chromosome.copy()
+                    random.shuffle(random_chromosome)
+                    
+                    # Keep shuffling until unique
+                    shuffle_attempts = 0
+                    while shuffle_attempts < 1000:
+                        all_existing = self.population + self.children
+                        if not is_duplicate(random_chromosome, all_existing):
+                            child = Individual(
+                                chromosome=random_chromosome,
+                                fitness=None,
+                                distance=None,
+                                time_taken=None,
+                                parents=[parent.id],
+                                generation=self.current_generation + 1
+                            )
+                            self.children.append(child)
+                            self.individual_names[child.id] = child.name
+                            break
+                        random.shuffle(random_chromosome)
+                        shuffle_attempts += 1
 
         print(f"Created {len(self.children)} unique children (target: {target_children})")
 
