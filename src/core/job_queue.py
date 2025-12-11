@@ -22,7 +22,7 @@ class JobQueue:
     
     # RabbitMQ connection configuration - MODIFY THESE AS NEEDED
     RABBITMQ_CONFIG = {
-        'host': 'localhost',  # Change to your RabbitMQ server IP
+        'host': '100.127.28.27',  # Change to your RabbitMQ server IP
         'port': 5672,
         'user': 'user',
         'pass': 'pass',
