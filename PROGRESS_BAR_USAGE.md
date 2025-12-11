@@ -29,20 +29,28 @@ The progress tracker prints periodic summaries to the console without interferin
 
 ## Display Example
 
-The progress is shown in a compact single-line format with a graphical progress bar:
+The progress is shown in a compact single-line format with a colorful graphical progress bar using Rich library:
 
 ```
-🚀 [████████████░░░░░░░░] 60.0% | Iter:3/5 | Jobs:35/35(100%) | Elapsed:10.2s | ETA:6.7s | Stag:2/3
+🚀 [████████████░░░░░░░░] 60.0% │ Iter:3/5 │ Jobs:35/35(100%) │ Elapsed:10.2s │ ETA:6.7s │ Stag:2/3
 ```
 
 **Components:**
-- **Progress Bar**: Visual representation using block characters (█ = completed, ░ = remaining)
-- **Percentage**: Numeric completion percentage
-- **Iter**: Current iteration / total iterations
-- **Jobs**: Current jobs / total jobs (percentage) - only shown when jobs are active
-- **Elapsed**: Total time since start
-- **ETA**: Estimated time remaining (shown when available)
-- **Stag**: Current stagnation count / limit
+- **🚀**: Rocket emoji in bold cyan
+- **Progress Bar**: Visual representation using block characters (█ = completed in green, ░ = remaining in dim white)
+- **Percentage**: Numeric completion percentage in bold yellow
+- **Iter**: Current iteration / total iterations (label in cyan, numbers in bold white)
+- **Jobs**: Current jobs / total jobs (percentage) - only shown when jobs are active (label in cyan, numbers in bold white, percentage in yellow)
+- **Elapsed**: Total time since start (label in cyan, time in bold white)
+- **ETA**: Estimated time remaining in bold green (shown when available)
+- **Stag**: Current stagnation count / limit (label in cyan, numbers color-coded: white → yellow → red as it approaches limit)
+
+**Color Scheme:**
+- Labels and separators use **cyan** and **dim white** to stand out
+- Progress bar fills with **green** to show advancement
+- Important numbers in **bold white** or **yellow**
+- ETA in **green** for positive feedback
+- Stagnation color-codes from **white** (safe) to **yellow** (warning) to **red** (critical)
 
 ## Integration
 
@@ -92,7 +100,16 @@ This demonstrates the progress bar with simulated GA iterations and job processi
 
 ## Requirements
 
-No special dependencies required - uses only Python standard library (time module).
+The progress tracker uses the Rich library for colorful, visually appealing output:
+
+```toml
+dependencies = [
+    # ... other dependencies ...
+    "rich>=13.0.0",
+]
+```
+
+Rich is already included in the project dependencies.
 
 ## Performance Impact
 

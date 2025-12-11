@@ -9,7 +9,8 @@ This module provides a compact single-line progress tracker that displays:
 - Stagnation count monitoring
 
 The progress is printed periodically (every 10 seconds) or on completion events
-to avoid conflicts with other console output.
+to avoid conflicts with other console output. Uses Rich library for colorful,
+visually appealing output.
 
 Display format:
     🚀 [████████████░░░░░░░░] 60.0% | Iter:3/5 | Jobs:35/35(100%) | Elapsed:10.2s | ETA:6.7s | Stag:2/3
@@ -37,6 +38,8 @@ Example usage:
 
 import time
 from typing import Optional
+from rich.console import Console
+from rich.text import Text
 
 
 class GAProgressTracker:
@@ -44,7 +47,8 @@ class GAProgressTracker:
     Progress tracker for genetic algorithm with iteration and job metrics.
     
     This tracker prints a compact single-line progress summary periodically
-    to avoid interfering with other console output. The line includes:
+    to avoid interfering with other console output. Uses Rich library for
+    colorful, visually appealing formatting. The line includes:
     
     - Graphical progress bar (█ = completed, ░ = remaining)
     - Percentage completion
@@ -57,17 +61,18 @@ class GAProgressTracker:
     Progress is printed every 10 seconds or when a job batch/iteration completes.
     """
     
-    def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[object] = None):
+    def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[Console] = None):
         """
         Initialize the progress tracker.
         
         Args:
             max_iterations: Maximum number of iterations
             stagnation_limit: Stagnation limit for stopping
-            console: Unused, kept for compatibility
+            console: Rich Console instance (creates new if None)
         """
         self.max_iterations = max_iterations
         self.stagnation_limit = stagnation_limit
+        self.console = console or Console()
         
         # Iteration tracking
         self.current_iteration = 0
@@ -100,6 +105,7 @@ class GAProgressTracker:
     def _print_progress(self, force: bool = False):
         """
         Print progress summary if enough time has elapsed or if forced.
+        Uses Rich library for colorful, visually appealing output.
         
         Args:
             force: If True, always print regardless of time elapsed
@@ -114,36 +120,56 @@ class GAProgressTracker:
         avg_iteration_time = self._get_avg_iteration_time()
         elapsed = current_time - self.overall_start_time if self.overall_start_time else 0
         
-        # Build compact single-line progress
+        # Build compact single-line progress with colors
         iter_pct = (self.current_iteration / self.max_iterations * 100) if self.max_iterations > 0 else 0
         
-        # Create text-based progress bar for iterations
+        # Create colorful text-based progress bar
         bar_width = 20
         filled = int(bar_width * iter_pct / 100)
-        bar = '█' * filled + '░' * (bar_width - filled)
         
-        # Build the status line
-        parts = []
-        parts.append(f"[{bar}] {iter_pct:.1f}%")
-        parts.append(f"Iter:{self.current_iteration}/{self.max_iterations}")
+        # Build the styled progress line using Rich
+        text = Text()
+        text.append("🚀 ", style="bold cyan")
+        text.append("[", style="white")
+        text.append("█" * filled, style="bold green")
+        text.append("░" * (bar_width - filled), style="dim white")
+        text.append("]", style="white")
+        text.append(f" {iter_pct:.1f}%", style="bold yellow")
+        
+        # Add iteration info
+        text.append(" │ ", style="dim white")
+        text.append("Iter:", style="cyan")
+        text.append(f"{self.current_iteration}/{self.max_iterations}", style="bold white")
         
         # Add job progress if active
         if self.total_jobs > 0:
             job_pct = (self.completed_jobs / self.total_jobs * 100)
-            parts.append(f"Jobs:{self.completed_jobs}/{self.total_jobs}({job_pct:.0f}%)")
+            text.append(" │ ", style="dim white")
+            text.append("Jobs:", style="cyan")
+            text.append(f"{self.completed_jobs}/{self.total_jobs}", style="bold white")
+            text.append(f"({job_pct:.0f}%)", style="yellow")
         
         # Add timing
-        parts.append(f"Elapsed:{self._format_duration(elapsed)}")
+        text.append(" │ ", style="dim white")
+        text.append("Elapsed:", style="cyan")
+        text.append(self._format_duration(elapsed), style="bold white")
         
         if avg_iteration_time:
             remaining_iterations = self.max_iterations - self.current_iteration
             estimated_remaining = remaining_iterations * avg_iteration_time
-            parts.append(f"ETA:{self._format_duration(estimated_remaining)}")
+            text.append(" │ ", style="dim white")
+            text.append("ETA:", style="cyan")
+            text.append(self._format_duration(estimated_remaining), style="bold green")
         
-        parts.append(f"Stag:{self.stagnation_count}/{self.stagnation_limit}")
+        # Add stagnation with color coding
+        text.append(" │ ", style="dim white")
+        text.append("Stag:", style="cyan")
+        stag_ratio = self.stagnation_count / self.stagnation_limit if self.stagnation_limit > 0 else 0
+        stag_style = "bold red" if stag_ratio > 0.7 else "bold yellow" if stag_ratio > 0.5 else "bold white"
+        text.append(f"{self.stagnation_count}/{self.stagnation_limit}", style=stag_style)
         
-        # Print the compact line
-        print("🚀 " + " | ".join(parts))
+        # Print the styled line
+        self.console.print(text)
     
     def _get_avg_iteration_time(self) -> Optional[float]:
         """Get average iteration time in seconds."""
