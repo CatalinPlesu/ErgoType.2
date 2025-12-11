@@ -90,6 +90,10 @@ class GAProgressTracker:
         # Last print time for periodic updates
         self.last_print_time = None
         self.print_interval = 10.0  # Print every 10 seconds
+        
+        # Stagnation color thresholds
+        self.STAGNATION_WARNING_THRESHOLD = 0.5  # Yellow warning at 50%
+        self.STAGNATION_CRITICAL_THRESHOLD = 0.7  # Red critical at 70%
     
     def start(self):
         """Start the progress tracker."""
@@ -164,8 +168,7 @@ class GAProgressTracker:
         # Add stagnation with color coding
         text.append(" │ ", style="dim white")
         text.append("Stag:", style="cyan")
-        stag_ratio = self.stagnation_count / self.stagnation_limit if self.stagnation_limit > 0 else 0
-        stag_style = "bold red" if stag_ratio > 0.7 else "bold yellow" if stag_ratio > 0.5 else "bold white"
+        stag_style = self._get_stagnation_style()
         text.append(f"{self.stagnation_count}/{self.stagnation_limit}", style=stag_style)
         
         # Print the styled line
@@ -176,6 +179,25 @@ class GAProgressTracker:
         if not self.iteration_times:
             return None
         return sum(self.iteration_times) / len(self.iteration_times)
+    
+    def _get_stagnation_style(self) -> str:
+        """
+        Get the Rich style for stagnation display based on severity.
+        
+        Returns:
+            Rich style string: 'bold white' (safe), 'bold yellow' (warning), or 'bold red' (critical)
+        """
+        if self.stagnation_limit == 0:
+            return "bold white"
+        
+        stag_ratio = self.stagnation_count / self.stagnation_limit
+        
+        if stag_ratio > self.STAGNATION_CRITICAL_THRESHOLD:
+            return "bold red"
+        elif stag_ratio > self.STAGNATION_WARNING_THRESHOLD:
+            return "bold yellow"
+        else:
+            return "bold white"
     
     def _format_duration(self, seconds: float) -> str:
         """Format duration in a human-readable way."""
