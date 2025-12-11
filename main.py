@@ -405,6 +405,143 @@ def item_visualize_layout():
     console.print("[dim]with optional heatmaps showing key usage patterns.[/dim]")
 
 
+def item_generate_heuristics():
+    """Generate all heuristic layout heatmaps"""
+    from helpers.layouts.heuristic_generator import generate_all_heuristics
+    
+    prefs = Preferences()
+    
+    print_header("Generate Heuristic Heatmaps", "Pre-generate heatmaps for all standard layouts")
+    
+    console.print("[bold]About this feature:[/bold]")
+    console.print("This will generate heatmaps for all combinations of:")
+    console.print("  • Keyboards (ANSI 60%, ThinkPad, Dactyl, Ferris, etc.)")
+    console.print("  • Datasets (text files used for analysis)")
+    console.print("  • Layouts (QWERTY, Dvorak, Colemak, Workman, etc.)")
+    console.print()
+    console.print("[dim]Generated heatmaps are cached and reused by the GA to speed up startup.[/dim]")
+    console.print()
+    
+    # Get available keyboards
+    keyboards = get_available_keyboards()
+    if not keyboards:
+        print_error("No keyboard layouts found in src/data/keyboards/")
+        return
+    
+    # Get available text files
+    text_files = get_available_text_files()
+    if not text_files:
+        print_error("No text files found in src/data/text/")
+        return
+    
+    # Show what will be generated
+    from data.layouts.keyboard_genotypes import LAYOUT_DATA
+    total_combinations = len(keyboards) * len(text_files) * len(LAYOUT_DATA)
+    
+    console.print(f"[bold]Summary:[/bold]")
+    console.print(f"  • {len(keyboards)} keyboards")
+    console.print(f"  • {len(text_files)} datasets")
+    console.print(f"  • {len(LAYOUT_DATA)} layouts")
+    console.print(f"  • [yellow]{total_combinations}[/yellow] total combinations")
+    console.print()
+    
+    # Ask for confirmation
+    if not confirm_action("Generate all heuristic heatmaps?", default=True):
+        print_warning("Cancelled")
+        return
+    
+    # Get Fitts's law parameters (same as GA)
+    console.print("\n[bold]Fitts's Law Parameters[/bold]")
+    console.print("[dim]These should match your typical GA parameters for consistency.[/dim]\n")
+    
+    saved_params = prefs.get_ga_params()
+    
+    from ui.rich_menu import get_parameter_group
+    
+    fitts_params = get_parameter_group(
+        "Fitts's Law Parameters",
+        [
+            {'name': "Fitts's Law constant 'a'", 'default': 0.5, 'param_type': 'float', 'min_val': 0.0, 'max_val': 5.0},
+            {'name': "Fitts's Law constant 'b'", 'default': 0.3, 'param_type': 'float', 'min_val': 0.0, 'max_val': 5.0},
+        ],
+        saved_params
+    )
+    
+    fitts_a = fitts_params["Fitts's Law constant 'a'"]
+    fitts_b = fitts_params["Fitts's Law constant 'b'"]
+    
+    # Get finger coefficients
+    default_finger_coeffs = [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07]
+    saved_finger_coeffs = saved_params.get('finger_coefficients', default_finger_coeffs)
+    
+    # Ask if user wants to regenerate existing heatmaps
+    console.print()
+    force_regenerate = confirm_action(
+        "Regenerate heatmaps that already exist?",
+        default=False
+    )
+    
+    console.print()
+    display_config("Generation Configuration", {
+        'keyboards': len(keyboards),
+        'datasets': len(text_files),
+        'layouts': len(LAYOUT_DATA),
+        'total_combinations': total_combinations,
+        'fitts_a': fitts_a,
+        'fitts_b': fitts_b,
+        'force_regenerate': force_regenerate
+    })
+    console.print()
+    
+    if not confirm_action("Start generation?", default=True):
+        print_warning("Cancelled")
+        return
+    
+    try:
+        console.print()
+        print_info("Starting heuristic generation...")
+        console.print()
+        
+        # Convert keyboard and text file tuples to paths
+        keyboard_paths = [kb[1] for kb in keyboards]
+        text_paths = [tf[1] for tf in text_files]
+        
+        results = generate_all_heuristics(
+            keyboards=keyboard_paths,
+            text_files=text_paths,
+            fitts_a=fitts_a,
+            fitts_b=fitts_b,
+            finger_coefficients=saved_finger_coeffs,
+            force_regenerate=force_regenerate,
+            verbose=True
+        )
+        
+        # Count successes and failures
+        total_success = sum(
+            1 for kb in results.values()
+            for ds in kb.values()
+            for success in ds.values()
+            if success
+        )
+        total_failed = total_combinations - total_success
+        
+        console.print()
+        if total_failed == 0:
+            print_success(f"All {total_success} heuristic heatmaps generated successfully!")
+        else:
+            print_warning(f"Completed: {total_success} successful, {total_failed} failed")
+        
+        console.print()
+        print_info("Heatmaps are cached in: output/{dataset}/{keyboard}/{heatmap_type}/")
+        console.print()
+        
+    except Exception as e:
+        console.print()
+        print_error(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 # -----------------------------
 #           MAIN
 # -----------------------------
@@ -417,6 +554,7 @@ def main():
     # Register all menu item functions
     menu.add_item("🚀 Run Genetic Algorithm (Master Mode)", item_run_genetic)
     menu.add_item("🔧 Run as Worker Node (Distributed Processing)", item_run_worker)
+    menu.add_item("🎯 Generate All Heuristic Heatmaps", item_generate_heuristics)
     menu.add_item("⌨️  Evaluate Keyboard Layout", item_keyboard_evaluator)
     menu.add_item("📊 Compare Standard Layouts", item_layout_comparison)
     menu.add_item("📝 Analyze Text File", item_text_analysis)

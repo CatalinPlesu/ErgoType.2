@@ -64,70 +64,158 @@ def save_layout_visualizations(stats_json, keyboard, layout, run_dir, layout_nam
 
 
 def save_heuristic_layouts(ga, run_dir):
-    """Save visualizations for all initial heuristic layouts (QWERTY, Dvorak, Colemak, etc.)"""
+    """
+    Save visualizations for all initial heuristic layouts (QWERTY, Dvorak, Colemak, etc.)
+    Uses cached heuristics when available, generates only if missing.
+    """
+    from helpers.layouts.heuristic_generator import (
+        check_heuristic_cached, get_dataset_name, get_keyboard_name,
+        get_heuristic_cache_path
+    )
+    import shutil
+    
     print("\n" + "="*80)
     print("SAVING INITIAL HEURISTIC LAYOUTS")
     print("="*80)
     
-    try:
-        from core.clr_loader_helper import load_csharp_fitness_library
-        Fitness, _ = load_csharp_fitness_library(PROJECT_ROOT)
-    except Exception as e:
-        print(f"❌ Error loading C# library: {e}")
-        return
+    dataset_name = get_dataset_name(ga.text_file)
+    keyboard_name = get_keyboard_name(ga.keyboard_file)
     
-    for layout_name, genotype in LAYOUT_DATA.items():
-        print(f"\n{'='*80}")
-        print(f"Processing heuristic layout: {layout_name}")
-        print(f"{'='*80}")
-       
+    print(f"Dataset: {dataset_name}")
+    print(f"Keyboard: {keyboard_name}")
+    print(f"Checking cache...")
+    
+    # Count cached vs. need to generate
+    cached_count = 0
+    need_generate = []
+    
+    for layout_name in LAYOUT_DATA.keys():
+        if check_heuristic_cached(dataset_name, keyboard_name, layout_name):
+            cached_count += 1
+        else:
+            need_generate.append(layout_name)
+    
+    print(f"Cached: {cached_count}/{len(LAYOUT_DATA)}")
+    print(f"Need to generate: {len(need_generate)}")
+    
+    # Copy cached heuristics to run directory
+    if cached_count > 0:
+        print("\n📋 Copying cached heuristics to run directory...")
+        for layout_name in LAYOUT_DATA.keys():
+            if check_heuristic_cached(dataset_name, keyboard_name, layout_name):
+                try:
+                    # Copy each heatmap type
+                    for heatmap_type in ['press_heatmap', 'hover_heatmap', 'layout']:
+                        cache_path = get_heuristic_cache_path(
+                            dataset_name, keyboard_name, layout_name, heatmap_type
+                        )
+                        
+                        # Determine destination based on heatmap type
+                        if heatmap_type == 'press_heatmap':
+                            dest_dir = run_dir / "heatmaps_press"
+                            dest_dir.mkdir(exist_ok=True)
+                            dest_path = dest_dir / f"heuristic_{layout_name}.svg"
+                        elif heatmap_type == 'hover_heatmap':
+                            dest_dir = run_dir / "heatmaps_hover"
+                            dest_dir.mkdir(exist_ok=True)
+                            dest_path = dest_dir / f"heuristic_{layout_name}.svg"
+                        else:  # layout
+                            dest_dir = run_dir / "layouts"
+                            dest_dir.mkdir(exist_ok=True)
+                            dest_path = dest_dir / f"heuristic_{layout_name}.svg"
+                        
+                        shutil.copy2(cache_path, dest_path)
+                    
+                    # Also copy stats if available
+                    cache_dir = cache_path.parent.parent
+                    stats_cache = cache_dir / f"{layout_name}_stats.json"
+                    if stats_cache.exists():
+                        shutil.copy2(stats_cache, run_dir / f"heuristic_{layout_name}_stats.json")
+                    
+                    print(f"✅ Copied from cache: {layout_name}")
+                except Exception as e:
+                    print(f"⚠️  Error copying {layout_name} from cache: {e}")
+                    need_generate.append(layout_name)
+    
+    # Generate missing heuristics
+    if need_generate:
+        print(f"\n🔧 Generating {len(need_generate)} missing heuristics...")
+        
         try:
-            # Create a SEPARATE evaluator for each layout to avoid conflicts
-            evaluator = Evaluator(debug=False)
-            evaluator.load_keyoard(ga.keyboard_file)
-            evaluator.load_layout()
-            
-            # Remap THIS evaluator's layout
-            evaluator.layout.remap(LAYOUT_DATA["qwerty"], list(genotype))
-           
-            # Generate config using THIS evaluator
-            config_gen = CSharpFitnessConfig(
-                keyboard=evaluator.keyboard,
-                layout=evaluator.layout  # Use the evaluator with remapped layout
-            )
-            
-            json_string = config_gen.generate_json_string(
-                text_file_path=ga.text_file,
-                finger_coefficients=ga.finger_coefficients,
-                fitts_a=ga.fitts_a,
-                fitts_b=ga.fitts_b
-            )
-            
-            print(f"📊 Computing statistics...")
-            fitness_calculator = Fitness(json_string)
-            stats_json = fitness_calculator.ComputeStats()
-            
-            stats_path = run_dir / f"heuristic_{layout_name}_stats.json"
-            with open(stats_path, 'w', encoding='utf-8') as f:
-                f.write(stats_json)
-            print(f"✅ Saved stats: {stats_path.name}")
-            
-            save_layout_visualizations(
-                stats_json=stats_json,
-                keyboard=evaluator.keyboard,
-                layout=evaluator.layout,  # Use THIS evaluator's layout
-                run_dir=run_dir,
-                layout_name=f"heuristic_{layout_name}",
-                layer_idx=0
-            )
-            
+            from core.clr_loader_helper import load_csharp_fitness_library
+            Fitness, _ = load_csharp_fitness_library(PROJECT_ROOT)
         except Exception as e:
-            print(f"❌ Error processing {layout_name}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Error loading C# library: {e}")
+            return
+        
+        for layout_name in need_generate:
+            genotype = LAYOUT_DATA[layout_name]
+            print(f"\n{'='*80}")
+            print(f"Generating heuristic layout: {layout_name}")
+            print(f"{'='*80}")
+           
+            try:
+                # Create a SEPARATE evaluator for each layout to avoid conflicts
+                evaluator = Evaluator(debug=False)
+                evaluator.load_keyoard(ga.keyboard_file)
+                evaluator.load_layout()
+                
+                # Remap THIS evaluator's layout
+                evaluator.layout.remap(LAYOUT_DATA["qwerty"], list(genotype))
+               
+                # Generate config using THIS evaluator
+                config_gen = CSharpFitnessConfig(
+                    keyboard=evaluator.keyboard,
+                    layout=evaluator.layout  # Use the evaluator with remapped layout
+                )
+                
+                json_string = config_gen.generate_json_string(
+                    text_file_path=ga.text_file,
+                    finger_coefficients=ga.finger_coefficients,
+                    fitts_a=ga.fitts_a,
+                    fitts_b=ga.fitts_b
+                )
+                
+                print(f"📊 Computing statistics...")
+                fitness_calculator = Fitness(json_string)
+                stats_json = fitness_calculator.ComputeStats()
+                
+                stats_path = run_dir / f"heuristic_{layout_name}_stats.json"
+                with open(stats_path, 'w', encoding='utf-8') as f:
+                    f.write(stats_json)
+                print(f"✅ Saved stats: {stats_path.name}")
+                
+                save_layout_visualizations(
+                    stats_json=stats_json,
+                    keyboard=evaluator.keyboard,
+                    layout=evaluator.layout,  # Use THIS evaluator's layout
+                    run_dir=run_dir,
+                    layout_name=f"heuristic_{layout_name}",
+                    layer_idx=0
+                )
+                
+                # Also save to cache for future use
+                from helpers.layouts.heuristic_generator import generate_heuristic_layout
+                generate_heuristic_layout(
+                    layout_name=layout_name,
+                    genotype=genotype,
+                    keyboard_file=ga.keyboard_file,
+                    text_file=ga.text_file,
+                    fitts_a=ga.fitts_a,
+                    fitts_b=ga.fitts_b,
+                    finger_coefficients=ga.finger_coefficients,
+                    force_regenerate=True
+                )
+                
+            except Exception as e:
+                print(f"❌ Error processing {layout_name}: {e}")
+                import traceback
+                traceback.print_exc()
     
     print(f"\n{'='*80}")
     print(f"✅ COMPLETE: Saved {len(LAYOUT_DATA)} heuristic layouts")
+    print(f"  - Copied from cache: {cached_count}")
+    print(f"  - Newly generated: {len(need_generate)}")
     print(f"{'='*80}")
 
 
