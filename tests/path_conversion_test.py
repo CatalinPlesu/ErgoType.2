@@ -28,7 +28,7 @@ class MockGA:
             Relative path from PROJECT_ROOT, or original path if conversion fails
         """
         try:
-            # Convert to Path objects for easier manipulation
+            # Normalize to absolute path then compute relative path
             abs_path = os.path.abspath(absolute_path)
             rel_path = os.path.relpath(abs_path, PROJECT_ROOT)
             return rel_path
