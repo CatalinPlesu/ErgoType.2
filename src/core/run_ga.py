@@ -136,8 +136,7 @@ def save_heuristic_layouts(ga, run_dir):
     print(f"✅ COMPLETE: Heuristic layouts cached")
     print(f"  - Already cached: {cached_count}")
     print(f"  - Newly generated: {len(need_generate)}")
-    cache_location = Path(PROJECT_ROOT) / "output" / dataset_name / keyboard_name
-    print(f"  - Cache location: {cache_location}")
+    print(f"  - Cache location: output/{dataset_name}/{keyboard_name}/")
     print(f"{'='*80}")
 
 
