@@ -119,7 +119,7 @@ def save_heuristic_layouts(ga, run_dir):
                     fitts_a=ga.fitts_a,
                     fitts_b=ga.fitts_b,
                     finger_coefficients=ga.finger_coefficients,
-                    force_regenerate=True
+                    force_regenerate=False
                 )
                 
                 if success:
