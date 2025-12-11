@@ -125,7 +125,7 @@ class GAProgressTracker:
         
         # Job progress (if active)
         if self.total_jobs > 0:
-            job_pct = (self.completed_jobs / self.total_jobs * 100) if self.total_jobs > 0 else 0
+            job_pct = (self.completed_jobs / self.total_jobs * 100)
             lines.append(f"Jobs: {self.completed_jobs}/{self.total_jobs} ({job_pct:.1f}%)")
         
         # Timing statistics
