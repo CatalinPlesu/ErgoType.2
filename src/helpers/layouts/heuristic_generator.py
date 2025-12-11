@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
@@ -325,29 +326,32 @@ def generate_all_heuristics(
             dataset_name = get_dataset_name(text_file)
             results[keyboard_name][dataset_name] = {}
     
-    # Process tasks in parallel using process pool
+    # Process tasks in parallel using ProcessPoolExecutor
+    # Uses max_tasks_per_child=1 to recycle processes and prevent resource exhaustion
     completed = 0
-    pool = None
     try:
-        pool = mp.Pool(processes=max_workers)
-        for keyboard_name, dataset_name, layout_name, success, message in pool.imap_unordered(_generate_single_task, tasks):
-            completed += 1
-            results[keyboard_name][dataset_name][layout_name] = success
+        with ProcessPoolExecutor(max_workers=max_workers, max_tasks_per_child=1) as executor:
+            # Submit all tasks
+            future_to_task = {executor.submit(_generate_single_task, task): task for task in tasks}
             
-            if verbose:
-                status = "✅" if success else "❌"
-                print(f"[{completed}/{total_combinations}] {status} {keyboard_name}/{dataset_name}/{layout_name}: {message}")
+            # Process results as they complete
+            for future in as_completed(future_to_task):
+                try:
+                    keyboard_name, dataset_name, layout_name, success, message = future.result()
+                    completed += 1
+                    results[keyboard_name][dataset_name][layout_name] = success
+                    
+                    if verbose:
+                        status = "✅" if success else "❌"
+                        print(f"[{completed}/{total_combinations}] {status} {keyboard_name}/{dataset_name}/{layout_name}: {message}")
+                except Exception as e:
+                    completed += 1
+                    if verbose:
+                        print(f"[{completed}/{total_combinations}] ❌ Task failed with exception: {e}")
     
     except KeyboardInterrupt:
         if verbose:
             print("\n⚠️  Generation interrupted by user")
-        if pool is not None:
-            pool.terminate()
-            pool.join()
-    finally:
-        if pool is not None:
-            pool.close()
-            pool.join()
     
     if verbose:
         print("\n" + "=" * 80)

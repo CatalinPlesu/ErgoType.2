@@ -80,7 +80,13 @@ All filenames are sanitized to prevent path traversal attacks:
 
 ### Performance
 
-The system uses **parallel processing** (multiprocessing) to generate heuristics on multiple CPU cores simultaneously, significantly improving performance for large batches.
+The system uses **efficient parallel processing** with `ProcessPoolExecutor` and `max_tasks_per_child=1` to generate heuristics on multiple CPU cores simultaneously. This approach prevents resource exhaustion by recycling worker processes after each task, ensuring stable performance even for large batches.
+
+**Implementation details:**
+- Uses `concurrent.futures.ProcessPoolExecutor` (same pattern as `ga.py`)
+- `max_tasks_per_child=1` ensures processes are recycled after each task
+- Prevents memory leaks and resource exhaustion
+- Stable performance for extended generation sessions
 
 Typical generation times:
 - Single heuristic layout: 2-5 seconds
@@ -95,6 +101,7 @@ Once cached, loading from cache is nearly instantaneous.
 - Default: Uses all available CPU cores
 - Configurable via menu: "Max parallel workers" parameter
 - Best performance: 4-8 workers for typical systems
+- Safe for long-running generation sessions (no resource exhaustion)
 
 ## Testing
 
