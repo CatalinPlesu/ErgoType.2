@@ -149,7 +149,7 @@ def save_heuristic_layouts(ga, run_dir):
     
     # Determine number of workers (use CPU count or max from GA config)
     import multiprocessing as mp
-    max_workers = min(len(LAYOUT_DATA), ga.max_concurrent_processes if hasattr(ga, 'max_concurrent_processes') else mp.cpu_count())
+    max_workers = min(len(LAYOUT_DATA), getattr(ga, 'max_concurrent_processes', mp.cpu_count()))
     
     print(f"📊 Processing {len(LAYOUT_DATA)} layouts with {max_workers} parallel workers...")
     
