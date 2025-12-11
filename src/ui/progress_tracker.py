@@ -298,6 +298,10 @@ class GAProgressTracker:
         """
         Get the average time per job across all completed job batches.
         
+        This method returns the mean of per-job times calculated for each batch.
+        Each batch's per-job time is computed as (batch_elapsed_time / jobs_in_batch),
+        and this method returns the average of those values across all batches.
+        
         Returns:
             Average job time in seconds, or None if no jobs completed
         """

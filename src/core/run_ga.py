@@ -546,9 +546,10 @@ def run_genetic_algorithm(
     }
     
     # Add timing statistics from progress tracker if available
-    if hasattr(ga, 'progress_tracker') and ga.progress_tracker:
-        total_time = ga.progress_tracker.get_total_elapsed_time()
-        avg_job_time = ga.progress_tracker.get_average_job_time()
+    progress_tracker = getattr(ga, 'progress_tracker', None)
+    if progress_tracker:
+        total_time = progress_tracker.get_total_elapsed_time()
+        avg_job_time = progress_tracker.get_average_job_time()
         
         ga_run_data["total_run_time_seconds"] = round(total_time, 2)
         if avg_job_time is not None:
