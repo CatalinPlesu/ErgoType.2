@@ -673,9 +673,24 @@ class GeneticAlgorithmSimulation:
         num_pairs = len(sorted_parents) // 2
         target_children = len(self.population)
         
+        # Try multiple pairing strategies to maximize crossover success
+        pair_strategies = []
+        
+        # Strategy 1: Sequential best pairs (original approach)
         for pair_idx in range(num_pairs):
-            parent0 = sorted_parents[pair_idx * 2]
-            parent1 = sorted_parents[pair_idx * 2 + 1]
+            pair_strategies.append((pair_idx * 2, pair_idx * 2 + 1, 4))
+        
+        # Strategy 2: Best parent with diverse partners (if we need more children)
+        if num_pairs < len(sorted_parents) - 1:
+            for i in range(min(5, len(sorted_parents) - num_pairs * 2)):
+                pair_strategies.append((0, num_pairs * 2 + i, 2))
+        
+        for parent0_idx, parent1_idx, max_offspring in pair_strategies:
+            if len(self.children) >= target_children:
+                break
+                
+            parent0 = sorted_parents[parent0_idx]
+            parent1 = sorted_parents[parent1_idx]
 
             if parent0.fitness is None or parent1.fitness is None:
                 continue
@@ -683,18 +698,25 @@ class GeneticAlgorithmSimulation:
             if parent0.fitness > parent1.fitness:
                 parent0, parent1 = parent1, parent0
 
-            for o in range(offsprings_per_pair):
+            for o in range(max_offspring):
                 if len(self.children) >= target_children:
                     break
                     
                 attempts = 0
-                max_attempts = 50  # Increased from 10 to 50 to allow more tries
-
+                max_attempts = 100  # Increased to allow more exploration
+                
+                # Progressively increase variation with each attempt
                 while attempts < max_attempts:
                     new_chromosome = [None] * len(parent0.chromosome)
+                    
+                    # Vary the crossover probability based on attempt number
+                    # Start with high bias toward better parent, decrease over attempts
+                    base_prob = 0.75 + o/30.0
+                    variation_factor = min(attempts / 20.0, 0.3)  # Up to 30% variation
+                    crossover_prob = max(0.5, base_prob - variation_factor)
 
                     for j in range(len(new_chromosome)):
-                        if random.random() < 0.75 + o/30.0:
+                        if random.random() < crossover_prob:
                             new_chromosome[j] = parent0.chromosome[j]
 
                     for j in range(len(new_chromosome)):
@@ -713,6 +735,13 @@ class GeneticAlgorithmSimulation:
                     for j in range(len(new_chromosome)):
                         if new_chromosome[j] is None:
                             new_chromosome[j] = missing_genes.pop(0)
+                    
+                    # After many attempts, apply small mutation to crossover result
+                    # This maintains crossover quality while adding uniqueness
+                    if attempts > 50 and random.random() < 0.3:
+                        i = random.randint(0, len(new_chromosome) - 1)
+                        j = random.randint(0, len(new_chromosome) - 1)
+                        new_chromosome[i], new_chromosome[j] = new_chromosome[j], new_chromosome[i]
 
                     all_existing = self.population + self.children + [parent0, parent1]
 
@@ -730,9 +759,6 @@ class GeneticAlgorithmSimulation:
                         break
                     else:
                         attempts += 1
-            
-            if len(self.children) >= target_children:
-                break
 
         # Fallback: if we still don't have enough children, create them through mutation
         if len(self.children) < target_children:
