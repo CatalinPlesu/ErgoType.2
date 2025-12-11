@@ -34,7 +34,7 @@ Example usage:
 """
 
 import time
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
@@ -139,10 +139,6 @@ class GAProgressTracker:
         # Create statistics table
         stats = self._create_stats_table()
         
-        # Create a table that combines progress and stats
-        from rich.columns import Columns
-        from rich.console import Group
-        
         # Group progress bars and stats together
         display_group = Group(
             self.progress,
@@ -238,11 +234,6 @@ class GAProgressTracker:
             iteration_num: Current iteration number (1-based)
             stagnation_count: Current stagnation count
         """
-        # Complete previous iteration if exists
-        if self.iteration_start_time and self.current_iteration > 0:
-            iteration_time = time.time() - self.iteration_start_time
-            self.iteration_times.append(iteration_time)
-        
         # Start new iteration
         self.current_iteration = iteration_num
         self.stagnation_count = stagnation_count
@@ -263,6 +254,7 @@ class GAProgressTracker:
         if self.iteration_start_time:
             iteration_time = time.time() - self.iteration_start_time
             self.iteration_times.append(iteration_time)
+            self.iteration_start_time = None  # Reset to avoid double-counting
         
         # Update progress
         if self.iteration_task is not None:
@@ -307,14 +299,6 @@ class GAProgressTracker:
         """
         self.completed_jobs = completed
         
-        # Calculate time per job
-        if self.job_start_time and completed > 0:
-            elapsed = time.time() - self.job_start_time
-            avg_time = elapsed / completed
-            if completed == self.total_jobs:
-                # Store average for this batch
-                self.job_times.append(avg_time)
-        
         # Update job task
         if self.job_task is not None:
             self.progress.update(
@@ -331,6 +315,7 @@ class GAProgressTracker:
             elapsed = time.time() - self.job_start_time
             avg_time = elapsed / self.total_jobs
             self.job_times.append(avg_time)
+            self.job_start_time = None  # Reset to avoid double-counting
         
         # Hide job task
         if self.job_task is not None:
