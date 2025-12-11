@@ -264,13 +264,17 @@ def run_single_run_inspector():
         print_info("Run the genetic algorithm first to generate data")
         return
     
-    # Create selection list
+    # Create selection list with detailed information
     run_list = []
     for run_dir in runs:
         try:
             loader = GARunLoader(run_dir)
             summary = loader.get_run_summary()
-            name = f"{run_dir.name} (Best: {summary['best_fitness']:.6f})"
+            name = (f"{run_dir.name} | "
+                   f"Pop:{summary['population_size']} "
+                   f"Iter:{summary['max_iterations']} "
+                   f"Inds:{summary['total_individuals']} | "
+                   f"Best:{summary['best_fitness']:.6f}")
             run_list.append((name, run_dir))
         except Exception as e:
             # Skip runs that can't be loaded

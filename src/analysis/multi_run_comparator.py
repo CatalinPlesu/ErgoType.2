@@ -436,15 +436,25 @@ def run_multi_run_comparator():
     table = Table(box=box.ROUNDED, show_header=True, header_style="bold magenta")
     table.add_column("#", style="cyan", justify="right", width=3)
     table.add_column("Run", style="white")
+    table.add_column("Pop Size", justify="right", style="yellow")
+    table.add_column("Max Iter", justify="right", style="yellow")
+    table.add_column("Total Inds", justify="right", style="cyan")
     table.add_column("Best Fitness", justify="right", style="green")
     
     for idx, run_dir in enumerate(runs, 1):
         try:
             loader = GARunLoader(run_dir)
             summary = loader.get_run_summary()
-            table.add_row(str(idx), run_dir.name, f"{summary['best_fitness']:.6f}")
+            table.add_row(
+                str(idx), 
+                run_dir.name, 
+                str(summary['population_size']),
+                str(summary['max_iterations']),
+                str(summary['total_individuals']),
+                f"{summary['best_fitness']:.6f}"
+            )
         except Exception as e:
-            table.add_row(str(idx), run_dir.name, "[red]Error loading[/red]")
+            table.add_row(str(idx), run_dir.name, "[red]Error[/red]", "[red]Error[/red]", "[red]Error[/red]", "[red]Error loading[/red]")
     
     console.print(table)
     console.print()
