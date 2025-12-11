@@ -213,6 +213,37 @@ def generate_heuristic_layout(
         return False, error_msg
 
 
+def _generate_single_task(args):
+    """
+    Worker function for parallel processing of a single heuristic layout.
+    
+    Args:
+        args: Tuple of (layout_name, genotype, keyboard_file, text_file, 
+              fitts_a, fitts_b, finger_coefficients, force_regenerate)
+    
+    Returns:
+        Tuple of (keyboard_name, dataset_name, layout_name, success, message)
+    """
+    (layout_name, genotype, keyboard_file, text_file, 
+     fitts_a, fitts_b, finger_coefficients, force_regenerate) = args
+    
+    keyboard_name = get_keyboard_name(keyboard_file)
+    dataset_name = get_dataset_name(text_file)
+    
+    success, message = generate_heuristic_layout(
+        layout_name=layout_name,
+        genotype=genotype,
+        keyboard_file=keyboard_file,
+        text_file=text_file,
+        fitts_a=fitts_a,
+        fitts_b=fitts_b,
+        finger_coefficients=finger_coefficients,
+        force_regenerate=force_regenerate
+    )
+    
+    return keyboard_name, dataset_name, layout_name, success, message
+
+
 def generate_all_heuristics(
     keyboards: Optional[List[str]] = None,
     text_files: Optional[List[str]] = None,
@@ -220,10 +251,12 @@ def generate_all_heuristics(
     fitts_b: float = 0.3,
     finger_coefficients: Optional[List[float]] = None,
     force_regenerate: bool = False,
-    verbose: bool = True
+    verbose: bool = True,
+    max_workers: Optional[int] = None
 ) -> Dict[str, Dict[str, Dict[str, bool]]]:
     """
     Generate heuristic heatmaps for all combinations of keyboards, datasets, and layouts.
+    Uses multiprocessing for parallel generation to improve performance.
     
     Args:
         keyboards: List of keyboard file paths (default: all keyboards in src/data/keyboards/)
@@ -233,10 +266,13 @@ def generate_all_heuristics(
         finger_coefficients: List of finger coefficients
         force_regenerate: If True, regenerate even if cached
         verbose: If True, print progress messages
+        max_workers: Maximum number of parallel workers (default: CPU count)
     
     Returns:
         Dict mapping keyboard -> dataset -> layout -> success status
     """
+    import multiprocessing as mp
+    
     # Get default keyboard and text file lists if not provided
     if keyboards is None:
         keyboards_dir = Path(PROJECT_ROOT) / "src" / "data" / "keyboards"
@@ -253,57 +289,60 @@ def generate_all_heuristics(
         if text_processed_dir.exists():
             text_files.extend([str(f) for f in text_processed_dir.glob("*.txt")])
     
-    results = {}
-    total_combinations = len(keyboards) * len(text_files) * len(LAYOUT_DATA)
-    current = 0
+    # Determine number of workers
+    if max_workers is None:
+        max_workers = mp.cpu_count()
+    
+    # Build list of all tasks
+    tasks = []
+    for keyboard_file in keyboards:
+        for text_file in text_files:
+            for layout_name, genotype in LAYOUT_DATA.items():
+                tasks.append((
+                    layout_name, genotype, keyboard_file, text_file,
+                    fitts_a, fitts_b, finger_coefficients, force_regenerate
+                ))
+    
+    total_combinations = len(tasks)
     
     if verbose:
         print("=" * 80)
-        print("GENERATING HEURISTIC LAYOUT HEATMAPS")
+        print("GENERATING HEURISTIC LAYOUT HEATMAPS (PARALLEL)")
         print("=" * 80)
         print(f"Keyboards: {len(keyboards)}")
         print(f"Datasets: {len(text_files)}")
         print(f"Layouts: {len(LAYOUT_DATA)}")
         print(f"Total combinations: {total_combinations}")
+        print(f"Parallel workers: {max_workers}")
         print("=" * 80)
         print()
     
+    # Initialize results structure
+    results = {}
     for keyboard_file in keyboards:
         keyboard_name = get_keyboard_name(keyboard_file)
         results[keyboard_name] = {}
-        
         for text_file in text_files:
             dataset_name = get_dataset_name(text_file)
             results[keyboard_name][dataset_name] = {}
-            
-            if verbose:
-                print(f"\n{'='*80}")
-                print(f"Keyboard: {keyboard_name}")
-                print(f"Dataset: {dataset_name}")
-                print(f"{'='*80}")
-            
-            for layout_name, genotype in LAYOUT_DATA.items():
-                current += 1
-                
-                if verbose:
-                    print(f"\n[{current}/{total_combinations}] Processing: {layout_name}...")
-                
-                success, message = generate_heuristic_layout(
-                    layout_name=layout_name,
-                    genotype=genotype,
-                    keyboard_file=keyboard_file,
-                    text_file=text_file,
-                    fitts_a=fitts_a,
-                    fitts_b=fitts_b,
-                    finger_coefficients=finger_coefficients,
-                    force_regenerate=force_regenerate
-                )
-                
+    
+    # Process tasks in parallel using process pool
+    completed = 0
+    try:
+        with mp.Pool(processes=max_workers) as pool:
+            for keyboard_name, dataset_name, layout_name, success, message in pool.imap_unordered(_generate_single_task, tasks):
+                completed += 1
                 results[keyboard_name][dataset_name][layout_name] = success
                 
                 if verbose:
                     status = "✅" if success else "❌"
-                    print(f"{status} {message}")
+                    print(f"[{completed}/{total_combinations}] {status} {keyboard_name}/{dataset_name}/{layout_name}: {message}")
+    
+    except KeyboardInterrupt:
+        if verbose:
+            print("\n⚠️  Generation interrupted by user")
+        pool.terminate()
+        pool.join()
     
     if verbose:
         print("\n" + "=" * 80)

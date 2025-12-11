@@ -474,6 +474,23 @@ def item_generate_heuristics():
     default_finger_coeffs = [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07]
     saved_finger_coeffs = saved_params.get('finger_coefficients', default_finger_coeffs)
     
+    # Get parallel processing parameters
+    console.print("\n[bold]Parallel Processing Configuration[/bold]")
+    console.print("[dim]Use multiple CPU cores to speed up generation.[/dim]\n")
+    
+    import multiprocessing as mp
+    cpu_count = mp.cpu_count()
+    
+    parallel_params = get_parameter_group(
+        "Parallel Processing",
+        [
+            {'name': 'Max parallel workers', 'default': cpu_count, 'param_type': 'int', 'min_val': 1, 'max_val': cpu_count * 2},
+        ],
+        saved_params
+    )
+    
+    max_workers = parallel_params['Max parallel workers']
+    
     # Ask if user wants to regenerate existing heatmaps
     console.print()
     force_regenerate = confirm_action(
@@ -489,6 +506,7 @@ def item_generate_heuristics():
         'total_combinations': total_combinations,
         'fitts_a': fitts_a,
         'fitts_b': fitts_b,
+        'max_workers': max_workers,
         'force_regenerate': force_regenerate
     })
     console.print()
@@ -513,7 +531,8 @@ def item_generate_heuristics():
             fitts_b=fitts_b,
             finger_coefficients=saved_finger_coeffs,
             force_regenerate=force_regenerate,
-            verbose=True
+            verbose=True,
+            max_workers=max_workers
         )
         
         # Count successes and failures

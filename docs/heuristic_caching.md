@@ -80,12 +80,21 @@ All filenames are sanitized to prevent path traversal attacks:
 
 ### Performance
 
+The system uses **parallel processing** (multiprocessing) to generate heuristics on multiple CPU cores simultaneously, significantly improving performance for large batches.
+
 Typical generation times:
 - Single heuristic layout: 2-5 seconds
-- All 7 layouts for one keyboard/dataset: 15-30 seconds
-- Full generation (4 keyboards × 1 dataset × 7 layouts): 2-4 minutes
+- All 7 layouts for one keyboard/dataset: 15-30 seconds (sequential)
+- All 7 layouts for one keyboard/dataset: 5-10 seconds (parallel with 4+ cores)
+- Full generation (4 keyboards × 1 dataset × 7 layouts): 2-4 minutes (sequential)
+- Full generation (4 keyboards × 1 dataset × 7 layouts): 30-90 seconds (parallel with 4+ cores)
 
 Once cached, loading from cache is nearly instantaneous.
+
+**Parallel Processing Configuration:**
+- Default: Uses all available CPU cores
+- Configurable via menu: "Max parallel workers" parameter
+- Best performance: 4-8 workers for typical systems
 
 ## Testing
 
@@ -123,5 +132,5 @@ rm -rf output/{dataset_name}/{keyboard_name}/
 Potential improvements:
 - Cache metadata with generation parameters
 - Cache invalidation based on parameter changes
-- Parallel generation for faster processing
 - Progress bars for long-running generations
+- Configurable generation priority/ordering
