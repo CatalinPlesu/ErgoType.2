@@ -9,6 +9,7 @@ structure for reuse by the genetic algorithm.
 import os
 import sys
 import json
+import multiprocessing as mp
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
@@ -271,8 +272,6 @@ def generate_all_heuristics(
     Returns:
         Dict mapping keyboard -> dataset -> layout -> success status
     """
-    import multiprocessing as mp
-    
     # Get default keyboard and text file lists if not provided
     if keyboards is None:
         keyboards_dir = Path(PROJECT_ROOT) / "src" / "data" / "keyboards"
@@ -328,21 +327,27 @@ def generate_all_heuristics(
     
     # Process tasks in parallel using process pool
     completed = 0
+    pool = None
     try:
-        with mp.Pool(processes=max_workers) as pool:
-            for keyboard_name, dataset_name, layout_name, success, message in pool.imap_unordered(_generate_single_task, tasks):
-                completed += 1
-                results[keyboard_name][dataset_name][layout_name] = success
-                
-                if verbose:
-                    status = "✅" if success else "❌"
-                    print(f"[{completed}/{total_combinations}] {status} {keyboard_name}/{dataset_name}/{layout_name}: {message}")
+        pool = mp.Pool(processes=max_workers)
+        for keyboard_name, dataset_name, layout_name, success, message in pool.imap_unordered(_generate_single_task, tasks):
+            completed += 1
+            results[keyboard_name][dataset_name][layout_name] = success
+            
+            if verbose:
+                status = "✅" if success else "❌"
+                print(f"[{completed}/{total_combinations}] {status} {keyboard_name}/{dataset_name}/{layout_name}: {message}")
     
     except KeyboardInterrupt:
         if verbose:
             print("\n⚠️  Generation interrupted by user")
-        pool.terminate()
-        pool.join()
+        if pool is not None:
+            pool.terminate()
+            pool.join()
+    finally:
+        if pool is not None:
+            pool.close()
+            pool.join()
     
     if verbose:
         print("\n" + "=" * 80)
