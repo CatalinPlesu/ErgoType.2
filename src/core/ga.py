@@ -738,6 +738,12 @@ class GeneticAlgorithmSimulation:
         if len(self.children) < target_children:
             print(f"⚠️  Only created {len(self.children)} children via crossover, filling remaining {target_children - len(self.children)} via mutation")
             
+            # Constants for mutation-based generation
+            MIN_SWAPS = 3
+            SWAP_PERCENTAGE_DIVISOR = 10
+            MAX_MUTATION_ATTEMPTS = 100
+            MAX_SHUFFLE_ATTEMPTS = 1000
+            
             # Use the best parents for mutation-based children
             best_parents = sorted_parents[:min(10, len(sorted_parents))]
             parent_idx = 0
@@ -748,12 +754,11 @@ class GeneticAlgorithmSimulation:
                 
                 # Create a mutated child with higher mutation rate to ensure uniqueness
                 attempts = 0
-                max_mutation_attempts = 100
                 
-                while attempts < max_mutation_attempts:
+                while attempts < MAX_MUTATION_ATTEMPTS:
                     # Apply multiple mutations to ensure variation
                     mutated_chromosome = parent.chromosome.copy()
-                    num_swaps = max(3, len(mutated_chromosome) // 10)  # At least 3 swaps, or 10% of length
+                    num_swaps = max(MIN_SWAPS, len(mutated_chromosome) // SWAP_PERCENTAGE_DIVISOR)
                     
                     for _ in range(num_swaps):
                         i = random.randint(0, len(mutated_chromosome) - 1)
@@ -779,14 +784,18 @@ class GeneticAlgorithmSimulation:
                 
                 # Last resort: if we still can't create a unique child after many attempts,
                 # create a completely random shuffle
-                if attempts >= max_mutation_attempts and len(self.children) < target_children:
+                if attempts >= MAX_MUTATION_ATTEMPTS:
                     random_chromosome = parent.chromosome.copy()
                     random.shuffle(random_chromosome)
                     
+                    # Pre-compute existing list once
+                    all_existing = self.population + self.children
+                    
                     # Keep shuffling until unique
                     shuffle_attempts = 0
-                    while shuffle_attempts < 1000:
-                        all_existing = self.population + self.children
+                    found_unique = False
+                    
+                    while shuffle_attempts < MAX_SHUFFLE_ATTEMPTS:
                         if not is_duplicate(random_chromosome, all_existing):
                             child = Individual(
                                 chromosome=random_chromosome,
@@ -798,9 +807,16 @@ class GeneticAlgorithmSimulation:
                             )
                             self.children.append(child)
                             self.individual_names[child.id] = child.name
+                            found_unique = True
                             break
                         random.shuffle(random_chromosome)
                         shuffle_attempts += 1
+                    
+                    # Safety check: if we absolutely can't find a unique child, log and break
+                    if not found_unique:
+                        print(f"⚠️  Warning: Could not generate unique child after {MAX_SHUFFLE_ATTEMPTS} shuffle attempts")
+                        print(f"   Stopping at {len(self.children)} children (target was {target_children})")
+                        break
 
         print(f"Created {len(self.children)} unique children (target: {target_children})")
 
