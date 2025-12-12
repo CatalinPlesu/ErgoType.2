@@ -110,3 +110,11 @@ class Preferences:
     def set_last_menu_selection(self, selection: int) -> None:
         """Set the last selected menu option"""
         self.set('last_menu_selection', selection)
+    
+    def get_last_language_layout(self) -> Optional[str]:
+        """Get the last selected language layout"""
+        return self.get('last_language_layout')
+    
+    def set_last_language_layout(self, language_layout: Optional[str]) -> None:
+        """Set the last selected language layout"""
+        self.set('last_language_layout', language_layout)

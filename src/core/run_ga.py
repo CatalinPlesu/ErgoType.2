@@ -251,13 +251,15 @@ def run_genetic_algorithm(
     use_rabbitmq=True,
     save_heuristics=True,
     num_layers=1,
-    max_layers=3
+    max_layers=3,
+    language_layout=None
 ):
     """Run the genetic algorithm with C# simulation and distributed processing
     
     Args:
         num_layers: Initial number of layers for chromosomes (default: 1)
         max_layers: Maximum number of layers allowed during evolution (default: 3)
+        language_layout: Module path for language layout remapping (e.g., 'data.languages.romanian_programmers')
     """
     try:
         from rich.console import Console
@@ -278,6 +280,7 @@ def run_genetic_algorithm(
         table.add_column("Value", style="yellow")
         table.add_row("Keyboard", keyboard_file)
         table.add_row("Text file", text_file)
+        table.add_row("Language layout", language_layout if language_layout else "None (English/Default)")
         table.add_row("Fitts's Law", f"a={fitts_a}, b={fitts_b}")
         table.add_row("Population size", str(population_size))
         table.add_row("Max iterations", str(max_iterations))
@@ -296,6 +299,7 @@ def run_genetic_algorithm(
         print("="*80)
         print(f"Keyboard: {keyboard_file}")
         print(f"Text file: {text_file}")
+        print(f"Language layout: {language_layout if language_layout else 'None (English/Default)'}")
         print(f"Fitts's Law: a={fitts_a}, b={fitts_b}")
         print(f"Population size: {population_size}")
         print(f"Max iterations: {max_iterations}")
@@ -319,6 +323,7 @@ def run_genetic_algorithm(
         finger_coefficients=finger_coefficients,
         num_layers=num_layers,
         max_layers=max_layers,
+        language_layout=language_layout,
         max_concurrent_processes=max_concurrent_processes,
         use_rabbitmq=use_rabbitmq,
         is_worker=False  # Master mode

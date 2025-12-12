@@ -46,6 +46,27 @@ def get_available_text_files():
     return text_files
 
 
+def get_available_language_layouts():
+    """Get list of available language layout remappings"""
+    layouts_dir = Path(__file__).parent / "src" / "data" / "languages"
+    language_layouts = [("None (English/Default)", None)]  # Add default option
+    
+    if not layouts_dir.exists():
+        return language_layouts
+    
+    for file in layouts_dir.glob("*.py"):
+        if file.name == "__init__.py":
+            continue
+        
+        # Convert filename to display name
+        # e.g., "romanian_programmers.py" -> "Romanian Programmers"
+        name = file.stem.replace('_', ' ').title()
+        module_path = f"data.languages.{file.stem}"
+        language_layouts.append((name, module_path))
+    
+    return language_layouts
+
+
 def print_app_header():
     """Print application header"""
     print_header(
@@ -101,8 +122,26 @@ def item_run_genetic():
     print_success(f"Selected: {text_file}")
     console.print()
 
+    # Language layout selection
+    console.print("[bold]Step 3: Select Language Layout Remapping (Optional)[/bold]\n")
+    language_layouts = get_available_language_layouts()
+    
+    default_language = prefs.get_last_language_layout()
+    result = select_from_list("Available Language Layouts", language_layouts, default_language)
+    if result is None:
+        print_warning("Cancelled")
+        return
+    _, language_layout = result
+    prefs.set_last_language_layout(language_layout)
+    
+    if language_layout:
+        print_success(f"Selected: {language_layout}")
+    else:
+        print_success("Selected: None (English/Default)")
+    console.print()
+
     # Get GA parameters
-    console.print("[bold]Step 3: Configure GA Parameters[/bold]\n")
+    console.print("[bold]Step 4: Configure GA Parameters[/bold]\n")
     saved_params = prefs.get_ga_params()
     
     # Import the new function
@@ -186,6 +225,7 @@ def item_run_genetic():
     CONFIG = {
         'keyboard_file': keyboard_file,
         'text_file': text_file,
+        'language_layout': language_layout,
         'population_size': population_size,
         'max_iterations': max_iterations,
         'stagnant_limit': stagnant_limit,

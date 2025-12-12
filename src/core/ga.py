@@ -171,7 +171,8 @@ class GeneticAlgorithmSimulation:
                  use_rabbitmq=True,
                  is_worker=False,
                  num_layers=1,
-                 max_layers=3):
+                 max_layers=3,
+                 language_layout=None):
         """
         Initialize GA with C# fitness calculator.
         
@@ -180,10 +181,12 @@ class GeneticAlgorithmSimulation:
                       If False, runs as master (coordinates GA and also processes jobs)
             num_layers: Initial number of layers for chromosomes (default: 1)
             max_layers: Maximum number of layers allowed (default: 3)
+            language_layout: Module path for language layout remapping (e.g., 'data.languages.romanian_programmers')
         """
         self.is_worker = is_worker
         self.num_layers = num_layers
         self.max_layers = max_layers
+        self.language_layout = language_layout
         
         if is_worker:
             print("="*80)
@@ -193,6 +196,8 @@ class GeneticAlgorithmSimulation:
             print("="*80)
             print("👑 MASTER MODE - Coordinating GA and processing jobs...")
             print(f"  Initial layers: {num_layers}, Max layers: {max_layers}")
+            if language_layout:
+                print(f"  Language layout: {language_layout}")
             print("="*80)
         
         # Store configuration - always store as absolute paths internally
