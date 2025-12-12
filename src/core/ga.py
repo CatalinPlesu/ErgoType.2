@@ -1446,6 +1446,9 @@ class GeneticAlgorithmSimulation:
 
         best = min(self.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
         
+        # Store actual iterations executed
+        self.actual_iterations = iteration
+        
         # Close queue connection
         self.job_queue.close()
         

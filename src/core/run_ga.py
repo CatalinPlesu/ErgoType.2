@@ -430,6 +430,7 @@ def run_genetic_algorithm(
         "finger_coefficients": finger_coefficients if finger_coefficients else [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07],
         "population_size": population_size,
         "max_iterations": max_iterations,
+        "actual_iterations": ga.actual_iterations if hasattr(ga, 'actual_iterations') else max_iterations,
         "stagnant_limit": stagnant_limit,
         "use_rabbitmq": use_rabbitmq,
         "num_layers": num_layers,
