@@ -364,7 +364,10 @@ def run_genetic_algorithm(
         console.print()
         console.print("[bold]Optimized Layout (Multi-Layer):[/bold]")
         for layer_idx, layer in enumerate(best_individual.chromosome):
-            console.print(f"[cyan]Layer {layer_idx}:[/cyan] [green]{''.join(layer)}[/green]")
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            none_count = sum(1 for c in layer if c is None)
+            utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+            console.print(f"[cyan]Layer {layer_idx}:[/cyan] [green]{layer_str}[/green] [dim]({utilization:.1f}% utilized)[/dim]")
         console.print()
     else:
         print("\n" + "="*80)
@@ -379,18 +382,24 @@ def run_genetic_algorithm(
         print(f"Parent Names: {', '.join(parent_names)}")
         print(f"\nOptimized Layout (Multi-Layer):")
         for layer_idx, layer in enumerate(best_individual.chromosome):
-            print(f"Layer {layer_idx}: {''.join(layer)}")
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            none_count = sum(1 for c in layer if c is None)
+            utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+            print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
         print()
 
     # Get the top 3 best individuals
     sorted_population = sorted(ga.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
     top_3_individuals = sorted_population[:3]
 
-    # Serialize best individual chromosome
+    # Serialize best individual chromosome (handle None values)
     if isinstance(best_individual.chromosome[0], list):
-        best_chromosome_serialized = [''.join(layer) for layer in best_individual.chromosome]
+        best_chromosome_serialized = []
+        for layer in best_individual.chromosome:
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            best_chromosome_serialized.append(layer_str)
     else:
-        best_chromosome_serialized = [''.join(best_individual.chromosome)]
+        best_chromosome_serialized = [''.join(c if c is not None else '∅' for c in best_individual.chromosome)]
     
     # Save GA run metadata
     ga_run_data = {
@@ -477,15 +486,21 @@ def run_genetic_algorithm(
         print(f"Time: {individual.time_taken:.2f}")
         print(f"Layers: {len(individual.chromosome)}")
         for layer_idx, layer in enumerate(individual.chromosome):
-            print(f"Layer {layer_idx}: {''.join(layer)}")
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            none_count = sum(1 for c in layer if c is None)
+            utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+            print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
         
         parent_names = [ga.get_individual_name(p) for p in individual.parents] if individual.parents else []
 
-        # Serialize chromosome properly
+        # Serialize chromosome properly (handle None values)
         if isinstance(individual.chromosome[0], list):
-            chromosome_serialized = [''.join(layer) for layer in individual.chromosome]
+            chromosome_serialized = []
+            for layer in individual.chromosome:
+                layer_str = ''.join(c if c is not None else '∅' for c in layer)
+                chromosome_serialized.append(layer_str)
         else:
-            chromosome_serialized = [''.join(individual.chromosome)]
+            chromosome_serialized = [''.join(c if c is not None else '∅' for c in individual.chromosome)]
 
         json_data = {
             "timestamp": timestamp,
@@ -595,7 +610,10 @@ if __name__ == "__main__":
     print(f"Time: {best.time_taken:.2f}")
     print(f"Layers: {len(best.chromosome)}")
     for layer_idx, layer in enumerate(best.chromosome):
-        print(f"Layer {layer_idx}: {''.join(layer)}")
+        layer_str = ''.join(c if c is not None else '∅' for c in layer)
+        none_count = sum(1 for c in layer if c is None)
+        utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+        print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
     print("="*80)
     
     print("\n💡 To use different parameters, modify the CONFIG dictionary")

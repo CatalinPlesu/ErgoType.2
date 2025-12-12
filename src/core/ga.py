@@ -367,30 +367,40 @@ class GeneticAlgorithmSimulation:
                     time.sleep(1)
 
     def population_initialization(self, size=50):
-        """Initialize population (master only) with multi-layer support"""
+        """Initialize population (master only) with sparse multi-layer support"""
         if self.is_worker:
             return
             
         self.population = []
 
-        # Add heuristic layouts (base layer only for now)
+        # Add heuristic layouts with sparse upper layers
         for layout_name, genotype in LAYOUT_DATA.items():
             # Create multi-layer chromosome
-            # Start with base layer from heuristic
+            # Layer 0: Fully populated with base layout
             chromosome = [list(genotype)]
             
-            # Add additional layers if num_layers > 1
+            # Add additional layers if num_layers > 1 - START SPARSE
             if self.num_layers > 1:
-                # For additional layers, create random permutations
                 for layer_idx in range(1, self.num_layers):
-                    layer = list(genotype).copy()
-                    random.shuffle(layer)
-                    chromosome.append(layer)
+                    # Create sparse layer (mostly None)
+                    sparse_layer = [None] * len(genotype)
+                    
+                    # Seed with 1-5 random characters (not all keys)
+                    num_seeds = random.randint(1, min(5, len(genotype) // 10))
+                    seed_positions = random.sample(range(len(genotype)), num_seeds)
+                    available_chars = list(genotype)
+                    random.shuffle(available_chars)
+                    
+                    for i, pos in enumerate(seed_positions):
+                        if i < len(available_chars):
+                            sparse_layer[pos] = available_chars[i]
+                    
+                    chromosome.append(sparse_layer)
             
             individual = Individual(chromosome=chromosome, generation=0, name=layout_name)
             self.population.append(individual)
             self.individual_names[individual.id] = individual.name
-            print(f"Added heuristic layout: {layout_name} with {len(chromosome)} layer(s)")
+            print(f"Added heuristic layout: {layout_name} with {len(chromosome)} layer(s) (sparse)")
 
         print(f"Population initialized with {len(self.population)} heuristic individuals")
 
@@ -404,10 +414,26 @@ class GeneticAlgorithmSimulation:
                 for _ in range(needed):
                     # Create multi-layer chromosome
                     chromosome = []
-                    for layer_idx in range(self.num_layers):
-                        layer = template_base_layer.copy()
-                        random.shuffle(layer)
-                        chromosome.append(layer)
+                    
+                    # Layer 0: Fully populated (shuffled base)
+                    layer0 = template_base_layer.copy()
+                    random.shuffle(layer0)
+                    chromosome.append(layer0)
+                    
+                    # Upper layers: Sparse initialization
+                    for layer_idx in range(1, self.num_layers):
+                        sparse_layer = [None] * len(template_base_layer)
+                        # Seed with few random characters
+                        num_seeds = random.randint(1, min(5, len(template_base_layer) // 10))
+                        seed_positions = random.sample(range(len(template_base_layer)), num_seeds)
+                        available_chars = template_base_layer.copy()
+                        random.shuffle(available_chars)
+                        
+                        for i, pos in enumerate(seed_positions):
+                            if i < len(available_chars):
+                                sparse_layer[pos] = available_chars[i]
+                        
+                        chromosome.append(sparse_layer)
                     
                     individual = Individual(chromosome=chromosome, generation=0)
                     self.population.append(individual)
@@ -851,57 +877,197 @@ class GeneticAlgorithmSimulation:
         print(f"Created {len(self.children)} unique children (target: {target_children})")
 
     def mutation(self):
-        """Mutate children with multi-layer support"""
-        base_mutation_rate = 0.05
-        mutation_rate = base_mutation_rate * 0.5 if self.previous_population_iteration > 0 else base_mutation_rate
-        num_mutations = 1 if self.previous_population_iteration == 0 else min(self.previous_population_iteration, 5)
-
+        """Mutate children with 7 mutation strategies"""
         for individual in self.children:
-            individual.chromosome = self.mutate_permutation(individual.chromosome, mutation_rate, num_mutations)
+            # Apply mutations with specified probabilities
+            if random.random() < 0.05:  # 5% chance to mutate per individual
+                mutation_type = random.choices(
+                    ['intra_layer_swap', 'cross_layer_swap', 'populate_none', 
+                     'safe_replace', 'relocate_replace', 'layer_promotion', 'add_layer'],
+                    weights=[0.30, 0.20, 0.25, 0.10, 0.05, 0.05, 0.05]
+                )[0]
+                
+                if mutation_type == 'intra_layer_swap':
+                    self.mutate_intra_layer_swap(individual)
+                elif mutation_type == 'cross_layer_swap':
+                    self.mutate_cross_layer_swap(individual)
+                elif mutation_type == 'populate_none':
+                    self.mutate_populate_none(individual)
+                elif mutation_type == 'safe_replace':
+                    self.mutate_safe_replace(individual)
+                elif mutation_type == 'relocate_replace':
+                    self.mutate_relocate_replace(individual)
+                elif mutation_type == 'layer_promotion':
+                    self.mutate_layer_promotion(individual)
+                elif mutation_type == 'add_layer':
+                    self.add_layer_mutation_exponential(individual)
             
-            # Low probability mutation for layer addition (if under max_layers)
-            if len(individual.chromosome) < self.max_layers and random.random() < 0.01:
-                self.add_layer_mutation(individual)
-            
-            # Low probability mutation for layer removal (if more than 1 layer)
+            # Layer removal with low probability
             if len(individual.chromosome) > 1 and random.random() < 0.01:
                 self.remove_layer_mutation(individual)
-
-    def mutate_permutation(self, chromosome, mutation_rate=0.05, num_mutations=1):
-        """Swap mutation for multi-layer chromosomes"""
-        # Deep copy for multi-layer support
-        mutated = [layer.copy() for layer in chromosome]
-        
-        # Mutate each layer independently
-        for layer_idx in range(len(mutated)):
-            layer = mutated[layer_idx]
             
-            # Apply more conservative mutations to base layer (layer 0)
-            layer_mutation_rate = mutation_rate * 0.5 if layer_idx == 0 else mutation_rate
-            
-            for _ in range(num_mutations):
-                if random.random() < layer_mutation_rate:
-                    i = random.randint(0, len(layer) - 1)
-                    j = random.randint(0, len(layer) - 1)
-                    while i == j:
-                        j = random.randint(0, len(layer) - 1)
-                    layer[i], layer[j] = layer[j], layer[i]
-        
-        return mutated
+            # Validate after mutations
+            self.validate_chromosome(individual)
     
-    def add_layer_mutation(self, individual):
-        """Add a new layer to an individual's chromosome"""
-        # Validate individual has at least one layer
-        if not individual.chromosome or len(individual.chromosome) == 0:
-            print(f"  ⚠️  Cannot add layer to {individual.name}: no base layer exists")
+    def mutate_intra_layer_swap(self, individual):
+        """Type 1: Swap two keys within the same layer (30%)"""
+        if not individual.chromosome:
             return
         
-        # Create new layer as a shuffled copy of base layer
+        layer_idx = random.randint(0, len(individual.chromosome) - 1)
+        layer = individual.chromosome[layer_idx]
+        
+        # Find non-None positions
+        non_none_positions = [i for i, k in enumerate(layer) if k is not None]
+        if len(non_none_positions) < 2:
+            return
+        
+        pos1, pos2 = random.sample(non_none_positions, 2)
+        layer[pos1], layer[pos2] = layer[pos2], layer[pos1]
+    
+    def mutate_cross_layer_swap(self, individual):
+        """Type 2: Swap keys at SAME position across different layers (20%)"""
+        if len(individual.chromosome) < 2:
+            return
+        
+        pos = random.randint(0, len(individual.chromosome[0]) - 1)
+        layer1_idx, layer2_idx = random.sample(range(len(individual.chromosome)), 2)
+        
+        layer1 = individual.chromosome[layer1_idx]
+        layer2 = individual.chromosome[layer2_idx]
+        
+        layer1[pos], layer2[pos] = layer2[pos], layer1[pos]
+    
+    def mutate_populate_none(self, individual):
+        """Type 3: Add key to None position (25%, higher if many None values)"""
+        if len(individual.chromosome) < 2:
+            return
+        
+        # Focus on upper layers (not base layer)
+        layer_idx = random.randint(1, len(individual.chromosome) - 1)
+        layer = individual.chromosome[layer_idx]
+        
+        none_positions = [i for i, k in enumerate(layer) if k is None]
+        if not none_positions:
+            return
+        
+        pos = random.choice(none_positions)
+        
+        # Get available characters from base layer
         base_layer = individual.chromosome[0]
-        new_layer = base_layer.copy()
-        random.shuffle(new_layer)
-        individual.chromosome.append(new_layer)
-        print(f"  ➕ Added layer to {individual.name}: now has {len(individual.chromosome)} layers")
+        available_chars = [c for c in base_layer if c is not None and c not in layer]
+        
+        if available_chars:
+            layer[pos] = random.choice(available_chars)
+    
+    def mutate_safe_replace(self, individual):
+        """Type 4: Replace key ONLY if at least 1 copy remains elsewhere (10%)"""
+        if not individual.chromosome:
+            return
+        
+        layer_idx = random.randint(0, len(individual.chromosome) - 1)
+        layer = individual.chromosome[layer_idx]
+        
+        non_none_positions = [i for i, k in enumerate(layer) if k is not None]
+        if not non_none_positions:
+            return
+        
+        pos = random.choice(non_none_positions)
+        old_key = layer[pos]
+        
+        # Count occurrences across all layers
+        total_count = sum(l.count(old_key) for l in individual.chromosome if l is not None)
+        
+        if total_count > 1:  # Safe to replace
+            base_layer = individual.chromosome[0]
+            available_chars = [c for c in base_layer if c is not None]
+            if available_chars:
+                layer[pos] = random.choice(available_chars)
+    
+    def mutate_relocate_replace(self, individual):
+        """Type 5: Replace key but move it to random None position first (5%)"""
+        if not individual.chromosome:
+            return
+        
+        layer_idx = random.randint(0, len(individual.chromosome) - 1)
+        layer = individual.chromosome[layer_idx]
+        
+        non_none_positions = [i for i, k in enumerate(layer) if k is not None]
+        if not non_none_positions:
+            return
+        
+        pos = random.choice(non_none_positions)
+        old_key = layer[pos]
+        
+        # Find empty slots in any layer
+        empty_slots = []
+        for l_idx, l in enumerate(individual.chromosome):
+            for p_idx, k in enumerate(l):
+                if k is None:
+                    empty_slots.append((l_idx, p_idx))
+        
+        if empty_slots:
+            new_layer_idx, new_pos = random.choice(empty_slots)
+            individual.chromosome[new_layer_idx][new_pos] = old_key
+            
+            # Replace with new character
+            base_layer = individual.chromosome[0]
+            available_chars = [c for c in base_layer if c is not None]
+            if available_chars:
+                layer[pos] = random.choice(available_chars)
+    
+    def mutate_layer_promotion(self, individual):
+        """Type 6: Swap high-frequency key from upper layer with low-frequency from base (5%)"""
+        if len(individual.chromosome) < 2:
+            return
+        
+        # Simple heuristic: swap random keys between base and upper layer
+        base_layer = individual.chromosome[0]
+        upper_layer_idx = random.randint(1, len(individual.chromosome) - 1)
+        upper_layer = individual.chromosome[upper_layer_idx]
+        
+        # Find non-None positions in both layers
+        base_positions = [i for i, k in enumerate(base_layer) if k is not None]
+        upper_positions = [i for i, k in enumerate(upper_layer) if k is not None]
+        
+        if base_positions and upper_positions:
+            base_pos = random.choice(base_positions)
+            upper_pos = random.choice(upper_positions)
+            base_layer[base_pos], upper_layer[upper_pos] = upper_layer[upper_pos], base_layer[base_pos]
+    
+    def add_layer_mutation_exponential(self, individual):
+        """Type 7: Add new sparse layer with exponentially decreasing probability"""
+        if not individual.chromosome or len(individual.chromosome) == 0:
+            return
+        
+        current_layers = len(individual.chromosome)
+        
+        # Only if under max_layers
+        if current_layers >= self.max_layers:
+            return
+        
+        # Exponential decay probability: 5% / (2^(n-1))
+        # Layer 2: 5%, Layer 3: 2.5%, Layer 4: 1.25%
+        probability = 0.05 / (2 ** (current_layers - 1))
+        
+        if random.random() < probability:
+            base_layer = individual.chromosome[0]
+            
+            # Create sparse new layer (mostly None)
+            new_layer = [None] * len(base_layer)
+            
+            # Seed with 1-3 random characters
+            num_seeds = random.randint(1, 3)
+            seed_positions = random.sample(range(len(base_layer)), min(num_seeds, len(base_layer)))
+            available_chars = [c for c in base_layer if c is not None]
+            random.shuffle(available_chars)
+            
+            for i, pos in enumerate(seed_positions):
+                if i < len(available_chars):
+                    new_layer[pos] = available_chars[i]
+            
+            individual.chromosome.append(new_layer)
+            print(f"  ➕ Added sparse layer to {individual.name}: now has {len(individual.chromosome)} layers")
     
     def remove_layer_mutation(self, individual):
         """Remove a layer from an individual's chromosome (never remove base layer)"""
@@ -913,6 +1079,42 @@ class GeneticAlgorithmSimulation:
         layer_to_remove = random.randint(1, len(individual.chromosome) - 1)
         del individual.chromosome[layer_to_remove]
         print(f"  ➖ Removed layer from {individual.name}: now has {len(individual.chromosome)} layers")
+    
+    def validate_chromosome(self, individual):
+        """Ensure chromosome is always valid"""
+        if not individual.chromosome or len(individual.chromosome) == 0:
+            return
+        
+        base_layer = individual.chromosome[0]
+        
+        # Rule 1: Base layer must not be entirely None
+        non_none_in_base = [k for k in base_layer if k is not None]
+        if len(non_none_in_base) < len(base_layer) // 2:
+            # Too many None values in base layer - this shouldn't happen
+            # Fill with available characters
+            all_chars = set()
+            for layer in individual.chromosome:
+                for char in layer:
+                    if char is not None:
+                        all_chars.add(char)
+            
+            if all_chars:
+                for i in range(len(base_layer)):
+                    if base_layer[i] is None:
+                        base_layer[i] = random.choice(list(all_chars))
+        
+        # Rule 2: Ensure no duplicate non-None values within same layer
+        for layer_idx, layer in enumerate(individual.chromosome):
+            non_none_chars = [c for c in layer if c is not None]
+            if len(non_none_chars) != len(set(non_none_chars)):
+                # Has duplicates - remove them
+                seen = set()
+                for i in range(len(layer)):
+                    if layer[i] is not None:
+                        if layer[i] in seen:
+                            layer[i] = None  # Clear duplicate
+                        else:
+                            seen.add(layer[i])
 
     def survivor_selection(self):
         """Elitist survivor selection with individual tracking"""
@@ -922,13 +1124,16 @@ class GeneticAlgorithmSimulation:
         
         for ind in sorted_combined:
             if ind.id not in self.all_individuals:
-                # Serialize multi-layer chromosome properly
+                # Serialize multi-layer chromosome properly (handle None values)
                 if isinstance(ind.chromosome[0], list):
-                    # Multi-layer: serialize as list of joined strings
-                    chromosome_serialized = [''.join(layer) for layer in ind.chromosome]
+                    # Multi-layer: serialize as list of joined strings, replace None with placeholder
+                    chromosome_serialized = []
+                    for layer in ind.chromosome:
+                        layer_str = ''.join(c if c is not None else '∅' for c in layer)
+                        chromosome_serialized.append(layer_str)
                 else:
                     # Single layer (shouldn't happen but handle it)
-                    chromosome_serialized = [''.join(ind.chromosome)]
+                    chromosome_serialized = [''.join(c if c is not None else '∅' for c in ind.chromosome)]
                 
                 self.all_individuals[ind.id] = {
                     'id': ind.id,
@@ -1066,9 +1271,12 @@ if __name__ == "__main__":
         parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ["Initial"]
         print(f"Parents: {', '.join(parent_names)}")
         
-        # Print each layer
+        # Print each layer (handle None values)
         for layer_idx, layer in enumerate(best_individual.chromosome):
-            print(f"Layer {layer_idx}: {''.join(layer)}")
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            none_count = sum(1 for c in layer if c is None)
+            utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+            print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
         print("="*80)
         
         print("\n" + "="*80)
@@ -1081,11 +1289,14 @@ if __name__ == "__main__":
         
         import json
         
-        # Serialize chromosome properly
+        # Serialize chromosome properly (handle None values)
         if isinstance(best_individual.chromosome[0], list):
-            chromosome_serialized = [''.join(layer) for layer in best_individual.chromosome]
+            chromosome_serialized = []
+            for layer in best_individual.chromosome:
+                layer_str = ''.join(c if c is not None else '∅' for c in layer)
+                chromosome_serialized.append(layer_str)
         else:
-            chromosome_serialized = [''.join(best_individual.chromosome)]
+            chromosome_serialized = [''.join(c if c is not None else '∅' for c in best_individual.chromosome)]
         
         with open('ga_all_individuals.json', 'w') as f:
             json.dump({
