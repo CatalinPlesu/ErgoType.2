@@ -113,8 +113,12 @@ class Individual:
                 - Single list (legacy/single-layer): ['a', 'b', 'c', ...]
                 - List of lists (multi-layer): [['a', 'b', 'c', ...], ['ă', 'â', 'î', ...], ...]
         """
+        # Validate chromosome is not empty
+        if not chromosome:
+            raise ValueError("Chromosome cannot be empty")
+        
         # Normalize chromosome to always be list of lists internally
-        if chromosome and isinstance(chromosome[0], list):
+        if len(chromosome) > 0 and isinstance(chromosome[0], list):
             # Already multi-layer
             self.chromosome = chromosome
         else:
@@ -728,6 +732,10 @@ class GeneticAlgorithmSimulation:
 
         def is_duplicate(chromosome, existing_individuals):
             """Check if chromosome is duplicate - works with multi-layer"""
+            # Validate chromosome is not empty
+            if not chromosome or len(chromosome) == 0:
+                return False
+            
             # Convert to string representation for comparison
             if isinstance(chromosome[0], list):
                 # Multi-layer
@@ -738,6 +746,9 @@ class GeneticAlgorithmSimulation:
             
             for individual in existing_individuals:
                 ind_chrom = individual.chromosome
+                if not ind_chrom or len(ind_chrom) == 0:
+                    continue
+                    
                 if isinstance(ind_chrom[0], list):
                     ind_str = '|'.join([''.join(layer) for layer in ind_chrom])
                 else:
@@ -880,6 +891,11 @@ class GeneticAlgorithmSimulation:
     
     def add_layer_mutation(self, individual):
         """Add a new layer to an individual's chromosome"""
+        # Validate individual has at least one layer
+        if not individual.chromosome or len(individual.chromosome) == 0:
+            print(f"  ⚠️  Cannot add layer to {individual.name}: no base layer exists")
+            return
+        
         # Create new layer as a shuffled copy of base layer
         base_layer = individual.chromosome[0]
         new_layer = base_layer.copy()
@@ -889,11 +905,14 @@ class GeneticAlgorithmSimulation:
     
     def remove_layer_mutation(self, individual):
         """Remove a layer from an individual's chromosome (never remove base layer)"""
-        if len(individual.chromosome) > 1:
-            # Remove a random layer (but not the base layer 0)
-            layer_to_remove = random.randint(1, len(individual.chromosome) - 1)
-            del individual.chromosome[layer_to_remove]
-            print(f"  ➖ Removed layer from {individual.name}: now has {len(individual.chromosome)} layers")
+        # Guard: never remove if only 1 or 0 layers
+        if not individual.chromosome or len(individual.chromosome) <= 1:
+            return
+        
+        # Remove a random layer (but not the base layer 0)
+        layer_to_remove = random.randint(1, len(individual.chromosome) - 1)
+        del individual.chromosome[layer_to_remove]
+        print(f"  ➖ Removed layer from {individual.name}: now has {len(individual.chromosome)} layers")
 
     def survivor_selection(self):
         """Elitist survivor selection with individual tracking"""
