@@ -1041,12 +1041,12 @@ class GeneticAlgorithmSimulation:
     def mutation(self):
         """Mutate children with 7 mutation strategies"""
         for individual in self.children:
-            # Apply mutations with configurable probability
+            # Apply standard mutations with configurable probability
             if random.random() < self.mutation_rate:
                 mutation_type = random.choices(
                     ['intra_layer_swap', 'cross_layer_swap', 'populate_none', 
-                     'safe_replace', 'relocate_replace', 'layer_promotion', 'add_layer'],
-                    weights=[0.30, 0.20, 0.25, 0.10, 0.05, 0.05, 0.05]
+                     'safe_replace', 'relocate_replace', 'layer_promotion'],
+                    weights=[0.30, 0.20, 0.25, 0.10, 0.05, 0.10]
                 )[0]
                 
                 if mutation_type == 'intra_layer_swap':
@@ -1061,8 +1061,12 @@ class GeneticAlgorithmSimulation:
                     self.mutate_relocate_replace(individual)
                 elif mutation_type == 'layer_promotion':
                     self.mutate_layer_promotion(individual)
-                elif mutation_type == 'add_layer':
-                    self.add_layer_mutation_exponential(individual)
+            
+            # Layer addition as separate pass with higher effective probability
+            # Direct probability: mutation_rate * exponential_decay
+            # Layer 2: 20% * 5% = 1%, Layer 3: 20% * 2.5% = 0.5%, Layer 4: 20% * 1.25% = 0.25%
+            if random.random() < self.mutation_rate:
+                self.add_layer_mutation_exponential(individual)
             
             # Layer removal with configurable probability
             if len(individual.chromosome) > 1 and random.random() < (self.layer_mutation_rate * 0.1):
