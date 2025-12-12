@@ -34,15 +34,25 @@ def _evaluate_individual_worker(individual_data, keyboard_file, text_file, finge
         evaluator.load_keyoard(keyboard_file)
         evaluator.load_layout()
 
-        # CRITICAL: Ensure chromosome is a list
+        # Handle multi-layer chromosomes
+        # Chromosome can be:
+        # 1. Single list (legacy): ['a', 'b', 'c', ...]
+        # 2. List of lists (multi-layer): [['a', 'b', 'c', ...], ['ă', 'â', 'î', ...], ...]
         if isinstance(chromosome, str):
-            chromosome = list(chromosome)
-        elif not isinstance(chromosome, list):
-            chromosome = list(chromosome)
+            chromosome = [list(chromosome)]  # Wrap in layer
+        elif isinstance(chromosome, list):
+            if chromosome and isinstance(chromosome[0], list):
+                # Already multi-layer format
+                pass
+            else:
+                # Single layer - wrap it
+                chromosome = [chromosome]
         
-        # Remap layout
+        # For now, only use the first layer (base layer) for remapping
+        # TODO: Implement proper multi-layer remapping in Layout class
         qwerty_base = list(LAYOUT_DATA["qwerty"])
-        evaluator.layout.remap(qwerty_base, chromosome)
+        base_layer = chromosome[0]
+        evaluator.layout.remap(qwerty_base, base_layer)
         
         # DEBUG: Check if char_mappings would be generated
         # print(f"Worker {os.getpid()}: Layout mapper has {len(evaluator.layout.mapper.data)} keys")
@@ -95,7 +105,22 @@ class Individual:
     _next_id = 0
 
     def __init__(self, chromosome, fitness=None, distance=None, time_taken=None, parents=None, generation=0, name=None):
-        self.chromosome = chromosome
+        """
+        Initialize an Individual with a chromosome that can be single or multi-layer.
+        
+        Args:
+            chromosome: Can be:
+                - Single list (legacy/single-layer): ['a', 'b', 'c', ...]
+                - List of lists (multi-layer): [['a', 'b', 'c', ...], ['ă', 'â', 'î', ...], ...]
+        """
+        # Normalize chromosome to always be list of lists internally
+        if chromosome and isinstance(chromosome[0], list):
+            # Already multi-layer
+            self.chromosome = chromosome
+        else:
+            # Single layer - wrap in list
+            self.chromosome = [chromosome]
+        
         self.fitness = fitness
         self.distance = distance
         self.time_taken = time_taken
@@ -108,9 +133,26 @@ class Individual:
         else:
             self.name = name
 
+    def get_layer_count(self):
+        """Get number of layers in this individual's chromosome."""
+        return len(self.chromosome)
+    
+    def get_layer(self, layer_idx):
+        """Get a specific layer from the chromosome."""
+        if layer_idx < len(self.chromosome):
+            return self.chromosome[layer_idx]
+        return None
+    
+    def get_flattened_chromosome(self):
+        """Get chromosome as flat structure (for backwards compatibility)."""
+        if len(self.chromosome) == 1:
+            return self.chromosome[0]
+        return self.chromosome
+
     def __repr__(self):
         parent_names = [p if isinstance(p, str) else f"gen_{self.generation-1}-{p}" for p in self.parents] if self.parents else []
-        return f"Individual(name={self.name}, fitness={self.fitness:.6f if self.fitness else None}, distance={self.distance}, time={self.time_taken}, parents={parent_names})"
+        layer_info = f", layers={len(self.chromosome)}"
+        return f"Individual(name={self.name}, fitness={self.fitness:.6f if self.fitness else None}, distance={self.distance}, time={self.time_taken}{layer_info}, parents={parent_names})"
 
 
 class GeneticAlgorithmSimulation:
@@ -123,15 +165,21 @@ class GeneticAlgorithmSimulation:
                  finger_coefficients=None,
                  max_concurrent_processes=None,
                  use_rabbitmq=True,
-                 is_worker=False):
+                 is_worker=False,
+                 num_layers=1,
+                 max_layers=3):
         """
         Initialize GA with C# fitness calculator.
         
         Args:
             is_worker: If True, runs in worker mode (processes jobs from queue)
                       If False, runs as master (coordinates GA and also processes jobs)
+            num_layers: Initial number of layers for chromosomes (default: 1)
+            max_layers: Maximum number of layers allowed (default: 3)
         """
         self.is_worker = is_worker
+        self.num_layers = num_layers
+        self.max_layers = max_layers
         
         if is_worker:
             print("="*80)
@@ -140,6 +188,7 @@ class GeneticAlgorithmSimulation:
         else:
             print("="*80)
             print("👑 MASTER MODE - Coordinating GA and processing jobs...")
+            print(f"  Initial layers: {num_layers}, Max layers: {max_layers}")
             print("="*80)
         
         # Store configuration - always store as absolute paths internally
@@ -314,30 +363,49 @@ class GeneticAlgorithmSimulation:
                     time.sleep(1)
 
     def population_initialization(self, size=50):
-        """Initialize population (master only)"""
+        """Initialize population (master only) with multi-layer support"""
         if self.is_worker:
             return
             
         self.population = []
 
+        # Add heuristic layouts (base layer only for now)
         for layout_name, genotype in LAYOUT_DATA.items():
-            individual = Individual(chromosome=list(genotype), generation=0, name=layout_name)
+            # Create multi-layer chromosome
+            # Start with base layer from heuristic
+            chromosome = [list(genotype)]
+            
+            # Add additional layers if num_layers > 1
+            if self.num_layers > 1:
+                # For additional layers, create random permutations
+                for layer_idx in range(1, self.num_layers):
+                    layer = list(genotype).copy()
+                    random.shuffle(layer)
+                    chromosome.append(layer)
+            
+            individual = Individual(chromosome=chromosome, generation=0, name=layout_name)
             self.population.append(individual)
             self.individual_names[individual.id] = individual.name
-            print(f"Added heuristic layout: {layout_name}")
+            print(f"Added heuristic layout: {layout_name} with {len(chromosome)} layer(s)")
 
         print(f"Population initialized with {len(self.population)} heuristic individuals")
 
         if size > len(self.population):
             if self.population:
-                template_genotype = self.population[0].chromosome
+                # Use the base layer from first individual as template
+                template_base_layer = self.population[0].chromosome[0]
                 needed = size - len(self.population)
-                print(f"Adding {needed} random individuals")
+                print(f"Adding {needed} random individuals with {self.num_layers} layer(s)")
 
                 for _ in range(needed):
-                    shuffled_clone = template_genotype.copy()
-                    random.shuffle(shuffled_clone)
-                    individual = Individual(chromosome=shuffled_clone, generation=0)
+                    # Create multi-layer chromosome
+                    chromosome = []
+                    for layer_idx in range(self.num_layers):
+                        layer = template_base_layer.copy()
+                        random.shuffle(layer)
+                        chromosome.append(layer)
+                    
+                    individual = Individual(chromosome=chromosome, generation=0)
                     self.population.append(individual)
                     self.individual_names[individual.id] = individual.name
 
@@ -655,15 +723,60 @@ class GeneticAlgorithmSimulation:
         print(f"Selected {len(self.parents)} parents via tournament selection")
 
     def uniform_crossover(self, offsprings_per_pair=4):
-        """Uniform crossover - create children from parent pairs"""
+        """Uniform crossover - create children from parent pairs with multi-layer support"""
         self.children = []
 
         def is_duplicate(chromosome, existing_individuals):
-            chromosome_str = ''.join(chromosome)
+            """Check if chromosome is duplicate - works with multi-layer"""
+            # Convert to string representation for comparison
+            if isinstance(chromosome[0], list):
+                # Multi-layer
+                chromosome_str = '|'.join([''.join(layer) for layer in chromosome])
+            else:
+                # Single layer (shouldn't happen but handle it)
+                chromosome_str = ''.join(chromosome)
+            
             for individual in existing_individuals:
-                if ''.join(individual.chromosome) == chromosome_str:
+                ind_chrom = individual.chromosome
+                if isinstance(ind_chrom[0], list):
+                    ind_str = '|'.join([''.join(layer) for layer in ind_chrom])
+                else:
+                    ind_str = ''.join(ind_chrom)
+                
+                if ind_str == chromosome_str:
                     return True
             return False
+        
+        def crossover_single_layer(parent0_layer, parent1_layer, bias):
+            """Perform crossover on a single layer"""
+            new_layer = [None] * len(parent0_layer)
+
+            # First pass: take from parent0 with bias
+            for j in range(len(new_layer)):
+                if random.random() < bias:
+                    new_layer[j] = parent0_layer[j]
+
+            # Second pass: fill from parent1 where not duplicate
+            for j in range(len(new_layer)):
+                if new_layer[j] is None and parent1_layer[j] not in new_layer:
+                    new_layer[j] = parent1_layer[j]
+
+            # Third pass: fill remaining from parent0 where not duplicate
+            for j in range(len(new_layer)):
+                if new_layer[j] is None and parent0_layer[j] not in new_layer:
+                    new_layer[j] = parent0_layer[j]
+
+            # Fourth pass: fill any remaining gaps with missing genes
+            existing_genes = set(gene for gene in new_layer if gene is not None)
+            all_possible_genes = set(parent0_layer)
+            missing_genes = list(all_possible_genes - existing_genes)
+            random.shuffle(missing_genes)
+
+            for j in range(len(new_layer)):
+                if new_layer[j] is None:
+                    new_layer[j] = missing_genes.pop(0)
+            
+            return new_layer
 
         if len(self.parents) < 2:
             print(f"Warning: Not enough parents. Have {len(self.parents)} parents.")
@@ -691,28 +804,18 @@ class GeneticAlgorithmSimulation:
                 max_attempts = 10
 
                 while attempts < max_attempts:
-                    new_chromosome = [None] * len(parent0.chromosome)
-
-                    for j in range(len(new_chromosome)):
-                        if random.random() < 0.75 + o/30.0:
-                            new_chromosome[j] = parent0.chromosome[j]
-
-                    for j in range(len(new_chromosome)):
-                        if new_chromosome[j] is None and parent1.chromosome[j] not in new_chromosome:
-                            new_chromosome[j] = parent1.chromosome[j]
-
-                    for j in range(len(new_chromosome)):
-                        if new_chromosome[j] is None and parent0.chromosome[j] not in new_chromosome:
-                            new_chromosome[j] = parent0.chromosome[j]
-
-                    existing_genes = set(gene for gene in new_chromosome if gene is not None)
-                    all_possible_genes = set(parent0.chromosome)
-                    missing_genes = list(all_possible_genes - existing_genes)
-                    random.shuffle(missing_genes)
-
-                    for j in range(len(new_chromosome)):
-                        if new_chromosome[j] is None:
-                            new_chromosome[j] = missing_genes.pop(0)
+                    # Perform layer-to-layer crossover
+                    new_chromosome = []
+                    bias = 0.75 + o/30.0
+                    
+                    # Crossover each layer independently
+                    num_layers = len(parent0.chromosome)
+                    for layer_idx in range(num_layers):
+                        parent0_layer = parent0.chromosome[layer_idx]
+                        parent1_layer = parent1.chromosome[layer_idx]
+                        
+                        new_layer = crossover_single_layer(parent0_layer, parent1_layer, bias)
+                        new_chromosome.append(new_layer)
 
                     all_existing = self.population + self.children + [parent0, parent1]
 
@@ -737,25 +840,60 @@ class GeneticAlgorithmSimulation:
         print(f"Created {len(self.children)} unique children (target: {target_children})")
 
     def mutation(self):
-        """Mutate children"""
+        """Mutate children with multi-layer support"""
         base_mutation_rate = 0.05
         mutation_rate = base_mutation_rate * 0.5 if self.previous_population_iteration > 0 else base_mutation_rate
         num_mutations = 1 if self.previous_population_iteration == 0 else min(self.previous_population_iteration, 5)
 
         for individual in self.children:
             individual.chromosome = self.mutate_permutation(individual.chromosome, mutation_rate, num_mutations)
+            
+            # Low probability mutation for layer addition (if under max_layers)
+            if len(individual.chromosome) < self.max_layers and random.random() < 0.01:
+                self.add_layer_mutation(individual)
+            
+            # Low probability mutation for layer removal (if more than 1 layer)
+            if len(individual.chromosome) > 1 and random.random() < 0.01:
+                self.remove_layer_mutation(individual)
 
     def mutate_permutation(self, chromosome, mutation_rate=0.05, num_mutations=1):
-        """Swap mutation"""
-        mutated = chromosome.copy()
-        for _ in range(num_mutations):
-            if random.random() < mutation_rate:
-                i = random.randint(0, len(chromosome) - 1)
-                j = random.randint(0, len(chromosome) - 1)
-                while i == j:
-                    j = random.randint(0, len(chromosome) - 1)
-                mutated[i], mutated[j] = mutated[j], mutated[i]
+        """Swap mutation for multi-layer chromosomes"""
+        # Deep copy for multi-layer support
+        mutated = [layer.copy() for layer in chromosome]
+        
+        # Mutate each layer independently
+        for layer_idx in range(len(mutated)):
+            layer = mutated[layer_idx]
+            
+            # Apply more conservative mutations to base layer (layer 0)
+            layer_mutation_rate = mutation_rate * 0.5 if layer_idx == 0 else mutation_rate
+            
+            for _ in range(num_mutations):
+                if random.random() < layer_mutation_rate:
+                    i = random.randint(0, len(layer) - 1)
+                    j = random.randint(0, len(layer) - 1)
+                    while i == j:
+                        j = random.randint(0, len(layer) - 1)
+                    layer[i], layer[j] = layer[j], layer[i]
+        
         return mutated
+    
+    def add_layer_mutation(self, individual):
+        """Add a new layer to an individual's chromosome"""
+        # Create new layer as a shuffled copy of base layer
+        base_layer = individual.chromosome[0]
+        new_layer = base_layer.copy()
+        random.shuffle(new_layer)
+        individual.chromosome.append(new_layer)
+        print(f"  ➕ Added layer to {individual.name}: now has {len(individual.chromosome)} layers")
+    
+    def remove_layer_mutation(self, individual):
+        """Remove a layer from an individual's chromosome (never remove base layer)"""
+        if len(individual.chromosome) > 1:
+            # Remove a random layer (but not the base layer 0)
+            layer_to_remove = random.randint(1, len(individual.chromosome) - 1)
+            del individual.chromosome[layer_to_remove]
+            print(f"  ➖ Removed layer from {individual.name}: now has {len(individual.chromosome)} layers")
 
     def survivor_selection(self):
         """Elitist survivor selection with individual tracking"""
@@ -765,11 +903,20 @@ class GeneticAlgorithmSimulation:
         
         for ind in sorted_combined:
             if ind.id not in self.all_individuals:
+                # Serialize multi-layer chromosome properly
+                if isinstance(ind.chromosome[0], list):
+                    # Multi-layer: serialize as list of joined strings
+                    chromosome_serialized = [''.join(layer) for layer in ind.chromosome]
+                else:
+                    # Single layer (shouldn't happen but handle it)
+                    chromosome_serialized = [''.join(ind.chromosome)]
+                
                 self.all_individuals[ind.id] = {
                     'id': ind.id,
                     'name': ind.name,
                     'generation': ind.generation,
-                    'chromosome': ''.join(ind.chromosome),
+                    'chromosome': chromosome_serialized,
+                    'num_layers': len(ind.chromosome),
                     'distance': ind.distance,
                     'time_taken': ind.time_taken,
                     'fitness': ind.fitness,
@@ -896,9 +1043,13 @@ if __name__ == "__main__":
         print(f"Fitness: {best_individual.fitness:.6f}")
         print(f"Raw Distance: {best_individual.distance:.2f}")
         print(f"Raw Time: {best_individual.time_taken:.2f}")
+        print(f"Layers: {len(best_individual.chromosome)}")
         parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ["Initial"]
         print(f"Parents: {', '.join(parent_names)}")
-        print(f"Layout: {''.join(best_individual.chromosome)}")
+        
+        # Print each layer
+        for layer_idx, layer in enumerate(best_individual.chromosome):
+            print(f"Layer {layer_idx}: {''.join(layer)}")
         print("="*80)
         
         print("\n" + "="*80)
@@ -910,6 +1061,13 @@ if __name__ == "__main__":
         print("="*80)
         
         import json
+        
+        # Serialize chromosome properly
+        if isinstance(best_individual.chromosome[0], list):
+            chromosome_serialized = [''.join(layer) for layer in best_individual.chromosome]
+        else:
+            chromosome_serialized = [''.join(best_individual.chromosome)]
+        
         with open('ga_all_individuals.json', 'w') as f:
             json.dump({
                 'all_individuals': list(ga.all_individuals.values()),
@@ -919,7 +1077,8 @@ if __name__ == "__main__":
                     'fitness': best_individual.fitness,
                     'distance': best_individual.distance,
                     'time_taken': best_individual.time_taken,
-                    'chromosome': ''.join(best_individual.chromosome),
+                    'chromosome': chromosome_serialized,
+                    'num_layers': len(best_individual.chromosome),
                     'generation': best_individual.generation,
                     'parents': best_individual.parents
                 }

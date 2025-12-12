@@ -249,9 +249,16 @@ def run_genetic_algorithm(
     stagnant_limit=15,
     max_concurrent_processes=4,
     use_rabbitmq=True,
-    save_heuristics=True
+    save_heuristics=True,
+    num_layers=1,
+    max_layers=3
 ):
-    """Run the genetic algorithm with C# simulation and distributed processing"""
+    """Run the genetic algorithm with C# simulation and distributed processing
+    
+    Args:
+        num_layers: Initial number of layers for chromosomes (default: 1)
+        max_layers: Maximum number of layers allowed during evolution (default: 3)
+    """
     try:
         from rich.console import Console
         from rich.table import Table
@@ -278,6 +285,8 @@ def run_genetic_algorithm(
         table.add_row("Max processes", str(max_concurrent_processes))
         table.add_row("Use RabbitMQ", str(use_rabbitmq))
         table.add_row("Save heuristics", str(save_heuristics))
+        table.add_row("Initial layers", str(num_layers))
+        table.add_row("Max layers", str(max_layers))
         table.add_row("Start time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         console.print(table)
         console.print()
@@ -294,6 +303,8 @@ def run_genetic_algorithm(
         print(f"Max processes: {max_concurrent_processes}")
         print(f"Use RabbitMQ: {use_rabbitmq}")
         print(f"Save heuristics: {save_heuristics}")
+        print(f"Initial layers: {num_layers}")
+        print(f"Max layers: {max_layers}")
         print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*80)
         print()
@@ -306,6 +317,8 @@ def run_genetic_algorithm(
         fitts_b=fitts_b,
         population_size=population_size,
         finger_coefficients=finger_coefficients,
+        num_layers=num_layers,
+        max_layers=max_layers,
         max_concurrent_processes=max_concurrent_processes,
         use_rabbitmq=use_rabbitmq,
         is_worker=False  # Master mode
@@ -344,12 +357,14 @@ def run_genetic_algorithm(
         result_table.add_row("Fitness Score", f"{best_individual.fitness:.6f}")
         result_table.add_row("Raw Distance", f"{best_individual.distance:.2f}")
         result_table.add_row("Raw Time", f"{best_individual.time_taken:.2f}")
+        result_table.add_row("Layers", str(len(best_individual.chromosome)))
         parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ['Initial Population']
         result_table.add_row("Parents", ', '.join(parent_names))
         console.print(result_table)
         console.print()
-        console.print("[bold]Optimized Layout:[/bold]")
-        console.print(f"[green]{''.join(best_individual.chromosome)}[/green]")
+        console.print("[bold]Optimized Layout (Multi-Layer):[/bold]")
+        for layer_idx, layer in enumerate(best_individual.chromosome):
+            console.print(f"[cyan]Layer {layer_idx}:[/cyan] [green]{''.join(layer)}[/green]")
         console.print()
     else:
         print("\n" + "="*80)
@@ -359,16 +374,24 @@ def run_genetic_algorithm(
         print(f"Fitness Score: {best_individual.fitness:.6f}")
         print(f"Raw Distance: {best_individual.distance:.2f}")
         print(f"Raw Time: {best_individual.time_taken:.2f}")
+        print(f"Layers: {len(best_individual.chromosome)}")
         parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ['Initial Population']
         print(f"Parent Names: {', '.join(parent_names)}")
-        print(f"\nOptimized Layout:")
-        print(''.join(best_individual.chromosome))
+        print(f"\nOptimized Layout (Multi-Layer):")
+        for layer_idx, layer in enumerate(best_individual.chromosome):
+            print(f"Layer {layer_idx}: {''.join(layer)}")
         print()
 
     # Get the top 3 best individuals
     sorted_population = sorted(ga.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
     top_3_individuals = sorted_population[:3]
 
+    # Serialize best individual chromosome
+    if isinstance(best_individual.chromosome[0], list):
+        best_chromosome_serialized = [''.join(layer) for layer in best_individual.chromosome]
+    else:
+        best_chromosome_serialized = [''.join(best_individual.chromosome)]
+    
     # Save GA run metadata
     ga_run_data = {
         "timestamp": timestamp,
@@ -381,9 +404,12 @@ def run_genetic_algorithm(
         "max_iterations": max_iterations,
         "stagnant_limit": stagnant_limit,
         "use_rabbitmq": use_rabbitmq,
+        "num_layers": num_layers,
+        "max_layers": max_layers,
         "best_fitness": best_individual.fitness,
         "best_layout_name": best_individual.name,
-        "best_layout": ''.join(best_individual.chromosome),
+        "best_layout": best_chromosome_serialized,
+        "best_layout_num_layers": len(best_individual.chromosome),
         "total_individuals_evaluated": len(ga.evaluated_individuals),
         "total_unique_individuals": len(ga.all_individuals)
     }
@@ -403,7 +429,8 @@ def run_genetic_algorithm(
                 'fitness': best_individual.fitness,
                 'distance': best_individual.distance,
                 'time_taken': best_individual.time_taken,
-                'chromosome': ''.join(best_individual.chromosome),
+                'chromosome': best_chromosome_serialized,
+                'num_layers': len(best_individual.chromosome),
                 'generation': best_individual.generation,
                 'parents': best_individual.parents
             }
@@ -448,9 +475,17 @@ def run_genetic_algorithm(
         print(f"Fitness: {individual.fitness:.6f}")
         print(f"Distance: {individual.distance:.2f}")
         print(f"Time: {individual.time_taken:.2f}")
-        print(f"Layout: {''.join(individual.chromosome)}")
+        print(f"Layers: {len(individual.chromosome)}")
+        for layer_idx, layer in enumerate(individual.chromosome):
+            print(f"Layer {layer_idx}: {''.join(layer)}")
         
         parent_names = [ga.get_individual_name(p) for p in individual.parents] if individual.parents else []
+
+        # Serialize chromosome properly
+        if isinstance(individual.chromosome[0], list):
+            chromosome_serialized = [''.join(layer) for layer in individual.chromosome]
+        else:
+            chromosome_serialized = [''.join(individual.chromosome)]
 
         json_data = {
             "timestamp": timestamp,
@@ -460,11 +495,11 @@ def run_genetic_algorithm(
             "fitness": individual.fitness,
             "distance": individual.distance,
             "time_taken": individual.time_taken,
-            "chromosome": individual.chromosome,
+            "chromosome": chromosome_serialized,
+            "num_layers": len(individual.chromosome),
             "parents": parent_names,
             "parent_ids": individual.parents,
             "generation": individual.generation,
-            "layout_string": ''.join(individual.chromosome),
             "keyboard_file": keyboard_file,
             "text_file": text_file
         }
@@ -479,7 +514,9 @@ def run_genetic_algorithm(
             evaluator = Evaluator(debug=False)
             evaluator.load_keyoard(ga.keyboard_file)
             evaluator.load_layout()
-            evaluator.layout.remap(LAYOUT_DATA["qwerty"], individual.chromosome)
+            # Use only the base layer for remapping (for now)
+            base_layer = individual.chromosome[0]
+            evaluator.layout.remap(LAYOUT_DATA["qwerty"], base_layer)
 
             config_gen = CSharpFitnessConfig(
                 keyboard=evaluator.keyboard,
@@ -556,7 +593,9 @@ if __name__ == "__main__":
     print(f"Fitness: {best.fitness:.6f}")
     print(f"Distance: {best.distance:.2f}")
     print(f"Time: {best.time_taken:.2f}")
-    print(f"Layout: {''.join(best.chromosome)}")
+    print(f"Layers: {len(best.chromosome)}")
+    for layer_idx, layer in enumerate(best.chromosome):
+        print(f"Layer {layer_idx}: {''.join(layer)}")
     print("="*80)
     
     print("\n💡 To use different parameters, modify the CONFIG dictionary")
