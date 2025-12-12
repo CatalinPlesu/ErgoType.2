@@ -961,14 +961,27 @@ class GeneticAlgorithmSimulation:
                     new_chromosome = []
                     bias = 0.75 + o/30.0
                     
-                    # Crossover each layer independently
-                    num_layers = len(parent0.chromosome)
-                    for layer_idx in range(num_layers):
-                        parent0_layer = parent0.chromosome[layer_idx]
-                        parent1_layer = parent1.chromosome[layer_idx]
+                    # Crossover each layer independently, handling different layer counts
+                    max_layers = max(len(parent0.chromosome), len(parent1.chromosome))
+                    for layer_idx in range(max_layers):
+                        # If parent has this layer, use it; otherwise use None placeholder
+                        parent0_layer = parent0.chromosome[layer_idx] if layer_idx < len(parent0.chromosome) else None
+                        parent1_layer = parent1.chromosome[layer_idx] if layer_idx < len(parent1.chromosome) else None
                         
-                        new_layer = crossover_single_layer(parent0_layer, parent1_layer, bias)
-                        new_chromosome.append(new_layer)
+                        # If both parents have this layer, crossover
+                        if parent0_layer is not None and parent1_layer is not None:
+                            new_layer = crossover_single_layer(parent0_layer, parent1_layer, bias)
+                            new_chromosome.append(new_layer)
+                        # If only one parent has this layer, inherit with 50% probability
+                        elif parent0_layer is not None and random.random() < 0.5:
+                            new_chromosome.append(parent0_layer[:])  # Copy layer
+                        elif parent1_layer is not None and random.random() < 0.5:
+                            new_chromosome.append(parent1_layer[:])  # Copy layer
+                    
+                    # Ensure child has at least one layer (base layer from better parent)
+                    if len(new_chromosome) == 0:
+                        better_parent = parent0 if parent0.fitness < parent1.fitness else parent1
+                        new_chromosome.append(better_parent.chromosome[0][:])
 
                     all_existing = self.population + self.children + [parent0, parent1]
 
