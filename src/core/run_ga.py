@@ -378,7 +378,11 @@ def run_genetic_algorithm(
             layer_str = ''.join(c if c is not None else '∅' for c in layer)
             none_count = sum(1 for c in layer if c is None)
             utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
-            console.print(f"[cyan]Layer {layer_idx}:[/cyan] [green]{layer_str}[/green] [dim]({utilization:.1f}% utilized)[/dim]")
+            modifier = best_individual.get_modifier_for_layer(layer_idx)
+            if modifier:
+                console.print(f"[cyan]Layer {layer_idx} ({modifier}):[/cyan] [green]{layer_str}[/green] [dim]({utilization:.1f}% utilized)[/dim]")
+            else:
+                console.print(f"[cyan]Layer {layer_idx}:[/cyan] [green]{layer_str}[/green] [dim]({utilization:.1f}% utilized)[/dim]")
         console.print()
     else:
         print("\n" + "="*80)
@@ -396,7 +400,11 @@ def run_genetic_algorithm(
             layer_str = ''.join(c if c is not None else '∅' for c in layer)
             none_count = sum(1 for c in layer if c is None)
             utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
-            print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
+            modifier = best_individual.get_modifier_for_layer(layer_idx)
+            if modifier:
+                print(f"Layer {layer_idx} ({modifier}): {layer_str} ({utilization:.1f}% utilized)")
+            else:
+                print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
         print()
 
     # Get the top 3 best individuals
@@ -510,7 +518,11 @@ def run_genetic_algorithm(
             layer_str = ''.join(c if c is not None else '∅' for c in layer)
             none_count = sum(1 for c in layer if c is None)
             utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
-            print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
+            modifier = individual.get_modifier_for_layer(layer_idx)
+            if modifier:
+                print(f"Layer {layer_idx} ({modifier}): {layer_str} ({utilization:.1f}% utilized)")
+            else:
+                print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
         
         parent_names = [ga.get_individual_name(p) for p in individual.parents] if individual.parents else []
 
@@ -634,7 +646,11 @@ if __name__ == "__main__":
         layer_str = ''.join(c if c is not None else '∅' for c in layer)
         none_count = sum(1 for c in layer if c is None)
         utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
-        print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
+        modifier = best.get_modifier_for_layer(layer_idx)
+        if modifier:
+            print(f"Layer {layer_idx} ({modifier}): {layer_str} ({utilization:.1f}% utilized)")
+        else:
+            print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
     print("="*80)
     
     print("\n💡 To use different parameters, modify the CONFIG dictionary")

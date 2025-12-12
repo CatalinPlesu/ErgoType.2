@@ -104,7 +104,7 @@ def _evaluate_individual_worker(individual_data, keyboard_file, text_file, finge
 class Individual:
     _next_id = 0
 
-    def __init__(self, chromosome, fitness=None, distance=None, time_taken=None, parents=None, generation=0, name=None):
+    def __init__(self, chromosome, fitness=None, distance=None, time_taken=None, parents=None, generation=0, name=None, layer_modifiers=None):
         """
         Initialize an Individual with a chromosome that can be single or multi-layer.
         
@@ -112,6 +112,9 @@ class Individual:
             chromosome: Can be:
                 - Single list (legacy/single-layer): ['a', 'b', 'c', ...]
                 - List of lists (multi-layer): [['a', 'b', 'c', ...], ['ă', 'â', 'î', ...], ...]
+            layer_modifiers: Dict mapping layer index to modifier key(s) required to access it
+                - Example: {1: 'AltGr', 2: 'Shift+AltGr'}
+                - If None, defaults are assigned based on layer count
         """
         # Validate chromosome is not empty
         if not chromosome:
@@ -125,6 +128,12 @@ class Individual:
             # Single layer - wrap in list
             self.chromosome = [chromosome]
         
+        # Assign default modifier keys if not provided
+        if layer_modifiers is None:
+            self.layer_modifiers = self._assign_default_modifiers()
+        else:
+            self.layer_modifiers = layer_modifiers
+        
         self.fitness = fitness
         self.distance = distance
         self.time_taken = time_taken
@@ -136,6 +145,24 @@ class Individual:
             self.name = f"gen_{generation}-{self.id}"
         else:
             self.name = name
+    
+    def _assign_default_modifiers(self):
+        """
+        Assign default modifier keys for accessing each layer.
+        Layer 0 (base) has no modifier.
+        Upper layers get standard modifier combinations.
+        """
+        modifiers = {}
+        num_layers = len(self.chromosome)
+        
+        if num_layers > 1:
+            modifiers[1] = 'AltGr'  # Standard for diacritics/special chars
+        if num_layers > 2:
+            modifiers[2] = 'Shift+AltGr'  # Second special layer
+        if num_layers > 3:
+            modifiers[3] = 'Ctrl+Alt'  # Third special layer
+        
+        return modifiers
 
     def get_layer_count(self):
         """Get number of layers in this individual's chromosome."""
@@ -146,6 +173,12 @@ class Individual:
         if layer_idx < len(self.chromosome):
             return self.chromosome[layer_idx]
         return None
+    
+    def get_modifier_for_layer(self, layer_idx):
+        """Get the modifier key(s) required to access a specific layer."""
+        if layer_idx == 0:
+            return None  # Base layer has no modifier
+        return self.layer_modifiers.get(layer_idx, None)
     
     def get_flattened_chromosome(self):
         """Get chromosome as flat structure (for backwards compatibility)."""
@@ -1125,7 +1158,18 @@ class GeneticAlgorithmSimulation:
                     new_layer[pos] = available_chars[i]
             
             individual.chromosome.append(new_layer)
-            print(f"  ➕ Added sparse layer to {individual.name}: now has {len(individual.chromosome)} layers")
+            
+            # Assign modifier key for the new layer
+            new_layer_idx = len(individual.chromosome) - 1
+            if new_layer_idx == 1:
+                individual.layer_modifiers[new_layer_idx] = 'AltGr'
+            elif new_layer_idx == 2:
+                individual.layer_modifiers[new_layer_idx] = 'Shift+AltGr'
+            elif new_layer_idx == 3:
+                individual.layer_modifiers[new_layer_idx] = 'Ctrl+Alt'
+            
+            modifier = individual.layer_modifiers.get(new_layer_idx, '?')
+            print(f"  ➕ Added sparse layer {new_layer_idx} to {individual.name}: now has {len(individual.chromosome)} layers (accessed via {modifier})")
     
     def remove_layer_mutation(self, individual):
         """Remove a layer from an individual's chromosome (never remove base layer)"""
@@ -1136,7 +1180,21 @@ class GeneticAlgorithmSimulation:
         # Remove a random layer (but not the base layer 0)
         layer_to_remove = random.randint(1, len(individual.chromosome) - 1)
         del individual.chromosome[layer_to_remove]
-        print(f"  ➖ Removed layer from {individual.name}: now has {len(individual.chromosome)} layers")
+        
+        # Remove modifier assignment for removed layer
+        if layer_to_remove in individual.layer_modifiers:
+            del individual.layer_modifiers[layer_to_remove]
+        
+        # Renumber modifiers for layers above the removed one
+        new_modifiers = {}
+        for layer_idx, modifier in individual.layer_modifiers.items():
+            if layer_idx < layer_to_remove:
+                new_modifiers[layer_idx] = modifier
+            elif layer_idx > layer_to_remove:
+                new_modifiers[layer_idx - 1] = modifier
+        individual.layer_modifiers = new_modifiers
+        
+        print(f"  ➖ Removed layer {layer_to_remove} from {individual.name}: now has {len(individual.chromosome)} layers")
     
     def validate_chromosome(self, individual):
         """Ensure chromosome is always valid"""
@@ -1199,6 +1257,7 @@ class GeneticAlgorithmSimulation:
                     'generation': ind.generation,
                     'chromosome': chromosome_serialized,
                     'num_layers': len(ind.chromosome),
+                    'layer_modifiers': ind.layer_modifiers,
                     'distance': ind.distance,
                     'time_taken': ind.time_taken,
                     'fitness': ind.fitness,
@@ -1352,7 +1411,11 @@ if __name__ == "__main__":
             layer_str = ''.join(c if c is not None else '∅' for c in layer)
             none_count = sum(1 for c in layer if c is None)
             utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
-            print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
+            modifier = best_individual.get_modifier_for_layer(layer_idx)
+            if modifier:
+                print(f"Layer {layer_idx} ({modifier}): {layer_str} ({utilization:.1f}% utilized)")
+            else:
+                print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
         print("="*80)
         
         print("\n" + "="*80)
@@ -1385,6 +1448,7 @@ if __name__ == "__main__":
                     'time_taken': best_individual.time_taken,
                     'chromosome': chromosome_serialized,
                     'num_layers': len(best_individual.chromosome),
+                    'layer_modifiers': best_individual.layer_modifiers,
                     'generation': best_individual.generation,
                     'parents': best_individual.parents
                 }
