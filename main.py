@@ -67,6 +67,31 @@ def get_available_language_layouts():
     return language_layouts
 
 
+def detect_language_layout_layers(language_layout):
+    """
+    Detect how many layers a language layout needs.
+    Returns (num_layers, max_layers) tuple.
+    """
+    if not language_layout:
+        return 1, 3  # Default: single layer, allow up to 3
+    
+    try:
+        # Import the language layout module
+        import importlib
+        module = importlib.import_module(language_layout)
+        layout = module.get_layout()
+        
+        # Check if it has altgr_remaps (indicates multi-layer)
+        if 'altgr_remaps' in layout and layout['altgr_remaps']:
+            # Has AltGr layer, so needs at least 2 layers
+            return 2, 3  # Start with 2, allow up to 3
+        else:
+            return 1, 3  # Single layer
+    except Exception as e:
+        print_warning(f"Could not detect language layout layers: {e}")
+        return 1, 3  # Default on error
+
+
 def print_app_header():
     """Print application header"""
     print_header(
@@ -207,6 +232,11 @@ def item_run_genetic():
     finger_coefficients = [finger_left_params[f'Left Finger {i+1}'] for i in range(5)] + \
                           [finger_right_params[f'Right Finger {i+1}'] for i in range(5, 10)]
     
+    # Auto-detect number of layers based on language layout
+    num_layers, max_layers = detect_language_layout_layers(language_layout)
+    if num_layers > 1:
+        print_info(f"Detected multi-layer layout: starting with {num_layers} layers (max: {max_layers})")
+    
     # Simply use rabbitmq if it is on
     use_rabbitmq = True
 
@@ -233,7 +263,9 @@ def item_run_genetic():
         'fitts_a': fitts_a,
         'fitts_b': fitts_b,
         'finger_coefficients': finger_coefficients,
-        'use_rabbitmq': use_rabbitmq
+        'use_rabbitmq': use_rabbitmq,
+        'num_layers': num_layers,
+        'max_layers': max_layers
     }
     
     console.print()

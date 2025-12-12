@@ -410,6 +410,33 @@ class GeneticAlgorithmSimulation:
                     import traceback
                     traceback.print_exc()
                     time.sleep(1)
+    
+    def get_language_layer_chars(self):
+        """
+        Extract character mappings from language layout for layer initialization.
+        Returns dict mapping base character to AltGr character for layer 1.
+        """
+        if not self.language_layout:
+            return {}
+        
+        try:
+            import importlib
+            module = importlib.import_module(self.language_layout)
+            layout = module.get_layout()
+            
+            # Extract AltGr mappings for layer 1
+            layer1_chars = {}
+            if 'altgr_remaps' in layout:
+                for base_char, altgr_tuple in layout['altgr_remaps'].items():
+                    # altgr_tuple is (lowercase, uppercase)
+                    # Use lowercase version for layer 1
+                    if isinstance(altgr_tuple, tuple) and len(altgr_tuple) > 0:
+                        layer1_chars[base_char] = altgr_tuple[0]
+            
+            return layer1_chars
+        except Exception as e:
+            print(f"Warning: Could not load language layout characters: {e}")
+            return {}
 
     def population_initialization(self, size=50):
         """Initialize population (master only) with sparse multi-layer support"""
@@ -417,6 +444,9 @@ class GeneticAlgorithmSimulation:
             return
             
         self.population = []
+        
+        # Get language layer character mappings (e.g., a->ă for Romanian)
+        layer1_char_map = self.get_language_layer_chars()
 
         # Add heuristic layouts with sparse upper layers
         for layout_name, genotype in LAYOUT_DATA.items():
@@ -424,28 +454,38 @@ class GeneticAlgorithmSimulation:
             # Layer 0: Fully populated with base layout
             chromosome = [list(genotype)]
             
-            # Add additional layers if num_layers > 1 - START SPARSE
+            # Add additional layers if num_layers > 1
             if self.num_layers > 1:
                 for layer_idx in range(1, self.num_layers):
                     # Create sparse layer (mostly None)
                     sparse_layer = [None] * len(genotype)
                     
-                    # Seed with 1-5 random characters (not all keys)
-                    num_seeds = random.randint(1, min(5, len(genotype) // 10))
-                    seed_positions = random.sample(range(len(genotype)), num_seeds)
-                    available_chars = list(genotype)
-                    random.shuffle(available_chars)
-                    
-                    for i, pos in enumerate(seed_positions):
-                        if i < len(available_chars):
-                            sparse_layer[pos] = available_chars[i]
+                    # For layer 1, use language layout mappings if available
+                    if layer_idx == 1 and layer1_char_map:
+                        # Place AltGr characters at the same positions as their base chars
+                        for pos, base_char in enumerate(genotype):
+                            if base_char in layer1_char_map:
+                                sparse_layer[pos] = layer1_char_map[base_char]
+                        
+                        diacritic_count = sum(1 for c in sparse_layer if c is not None)
+                        print(f"  Layer 1 for {layout_name}: {diacritic_count} diacritics from language layout")
+                    else:
+                        # Other layers: seed with 1-5 random characters
+                        num_seeds = random.randint(1, min(5, len(genotype) // 10))
+                        seed_positions = random.sample(range(len(genotype)), num_seeds)
+                        available_chars = list(genotype)
+                        random.shuffle(available_chars)
+                        
+                        for i, pos in enumerate(seed_positions):
+                            if i < len(available_chars):
+                                sparse_layer[pos] = available_chars[i]
                     
                     chromosome.append(sparse_layer)
             
             individual = Individual(chromosome=chromosome, generation=0, name=layout_name)
             self.population.append(individual)
             self.individual_names[individual.id] = individual.name
-            print(f"Added heuristic layout: {layout_name} with {len(chromosome)} layer(s) (sparse)")
+            print(f"Added heuristic layout: {layout_name} with {len(chromosome)} layer(s)")
 
         print(f"Population initialized with {len(self.population)} heuristic individuals")
 
@@ -468,15 +508,23 @@ class GeneticAlgorithmSimulation:
                     # Upper layers: Sparse initialization
                     for layer_idx in range(1, self.num_layers):
                         sparse_layer = [None] * len(template_base_layer)
-                        # Seed with few random characters
-                        num_seeds = random.randint(1, min(5, len(template_base_layer) // 10))
-                        seed_positions = random.sample(range(len(template_base_layer)), num_seeds)
-                        available_chars = template_base_layer.copy()
-                        random.shuffle(available_chars)
                         
-                        for i, pos in enumerate(seed_positions):
-                            if i < len(available_chars):
-                                sparse_layer[pos] = available_chars[i]
+                        # For layer 1, use language layout mappings if available
+                        if layer_idx == 1 and layer1_char_map:
+                            # Place AltGr characters at same positions as base chars
+                            for pos, base_char in enumerate(layer0):
+                                if base_char in layer1_char_map:
+                                    sparse_layer[pos] = layer1_char_map[base_char]
+                        else:
+                            # Other layers: seed with few random characters
+                            num_seeds = random.randint(1, min(5, len(template_base_layer) // 10))
+                            seed_positions = random.sample(range(len(template_base_layer)), num_seeds)
+                            available_chars = template_base_layer.copy()
+                            random.shuffle(available_chars)
+                            
+                            for i, pos in enumerate(seed_positions):
+                                if i < len(available_chars):
+                                    sparse_layer[pos] = available_chars[i]
                         
                         chromosome.append(sparse_layer)
                     
