@@ -566,12 +566,24 @@ def run_genetic_algorithm(
             # Remap ALL layers of the multi-layer chromosome
             num_chromosome_layers = len(individual.chromosome)
             
-            # Only use base layer for now (full multi-layer remapping requires more complex logic)
-            # TODO: Full multi-layer support would require remapping each layer separately
-            base_layer = individual.chromosome[0]
-            evaluator.layout.remap(LAYOUT_DATA["qwerty"], base_layer)
+            # Remap each chromosome layer to its corresponding mapper layer
+            for layer_idx in range(num_chromosome_layers):
+                chromosome_layer = individual.chromosome[layer_idx]
+                # Filter out None values for remapping
+                qwerty_layer = LAYOUT_DATA["qwerty"]
+                
+                # Create a version of chromosome layer with None filtered for remapping
+                # Map position-to-position (QWERTY position -> new char at that position)
+                if layer_idx == 0:
+                    # Base layer: Use standard remap (handles uppercase/lowercase pairs)
+                    evaluator.layout.remap(qwerty_layer, chromosome_layer)
+                else:
+                    # Upper layers: Remap to AltGr layer in mapper
+                    # This adds characters to the AltGr layer at corresponding keyboard positions
+                    evaluator.layout.remap_to_layer(qwerty_layer, chromosome_layer, layer_idx)
             
             # Apply language layout if specified (for evolved layouts with custom language)
+            # This further modifies the mapper to add language-specific characters
             if language_layout:
                 try:
                     from importlib import import_module
