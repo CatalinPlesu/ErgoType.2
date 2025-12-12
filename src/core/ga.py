@@ -914,13 +914,14 @@ class GeneticAlgorithmSimulation:
             # For sparse layers, we allow None to remain in the child
             existing_genes = set(gene for gene in new_layer if gene is not None)
             # Filter out None from parent genes (for sparse layers)
-            all_possible_genes = set(gene for gene in parent0_layer if gene is not None)
+            # Combine genes from both parents to avoid losing genes unique to parent1
+            all_possible_genes = set(gene for gene in parent0_layer + parent1_layer if gene is not None)
             missing_genes = list(all_possible_genes - existing_genes)
             random.shuffle(missing_genes)
 
             # Fill remaining None positions only if we have missing genes
             for j in range(len(new_layer)):
-                if new_layer[j] is None and missing_genes:
+                if new_layer[j] is None and len(missing_genes) > 0:
                     new_layer[j] = missing_genes.pop(0)
             # Note: Some positions may remain None for sparse layers
             
