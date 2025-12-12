@@ -91,7 +91,8 @@ class Layout:
         # Stage 1: Collect all keys that need to be remapped
         keys_to_update = []
         for before, after in remap:
-            if before == after:
+            # Skip None values (sparse multi-layer chromosomes can have None in layers)
+            if after is None or before == after:
                 continue
             char_keys = self.mapper.filter_data(
                 lambda key_id, layer_id, value: value.key_type == KeyType.CHAR and value.value[0] == before)
@@ -100,6 +101,10 @@ class Layout:
 
         # Stage 2: Apply all remappings
         for key_id, before, after in keys_to_update:
+            # Skip if after is None (defensive check, should be filtered in stage 1)
+            if after is None:
+                continue
+                
             # Get the original key to determine how to map the shifted version
             original_key_obj = self.mapper[key_id]
             if original_key_obj.key_type == KeyType.CHAR and isinstance(original_key_obj.value, tuple):
