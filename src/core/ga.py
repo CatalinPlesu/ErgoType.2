@@ -868,12 +868,13 @@ class GeneticAlgorithmSimulation:
                 return False
             
             # Convert to string representation for comparison
+            # Handle None values in sparse layers by converting to placeholder
             if isinstance(chromosome[0], list):
-                # Multi-layer
-                chromosome_str = '|'.join([''.join(layer) for layer in chromosome])
+                # Multi-layer - convert None to ∅ for comparison
+                chromosome_str = '|'.join([''.join(str(g) if g is not None else '∅' for g in layer) for layer in chromosome])
             else:
                 # Single layer (shouldn't happen but handle it)
-                chromosome_str = ''.join(chromosome)
+                chromosome_str = ''.join(str(g) if g is not None else '∅' for g in chromosome)
             
             for individual in existing_individuals:
                 ind_chrom = individual.chromosome
@@ -881,9 +882,10 @@ class GeneticAlgorithmSimulation:
                     continue
                     
                 if isinstance(ind_chrom[0], list):
-                    ind_str = '|'.join([''.join(layer) for layer in ind_chrom])
+                    # Multi-layer - convert None to ∅ for comparison
+                    ind_str = '|'.join([''.join(str(g) if g is not None else '∅' for g in layer) for layer in ind_chrom])
                 else:
-                    ind_str = ''.join(ind_chrom)
+                    ind_str = ''.join(str(g) if g is not None else '∅' for g in ind_chrom)
                 
                 if ind_str == chromosome_str:
                     return True
