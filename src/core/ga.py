@@ -172,7 +172,9 @@ class GeneticAlgorithmSimulation:
                  is_worker=False,
                  num_layers=1,
                  max_layers=3,
-                 language_layout=None):
+                 language_layout=None,
+                 mutation_rate=0.20,
+                 layer_mutation_rate=0.15):
         """
         Initialize GA with C# fitness calculator.
         
@@ -182,11 +184,15 @@ class GeneticAlgorithmSimulation:
             num_layers: Initial number of layers for chromosomes (default: 1)
             max_layers: Maximum number of layers allowed (default: 3)
             language_layout: Module path for language layout remapping (e.g., 'data.languages.romanian_programmers')
+            mutation_rate: Probability that an individual gets mutated (default: 0.20 = 20%)
+            layer_mutation_rate: Probability of layer add/remove mutations (default: 0.15 = 15%)
         """
         self.is_worker = is_worker
         self.num_layers = num_layers
         self.max_layers = max_layers
         self.language_layout = language_layout
+        self.mutation_rate = mutation_rate
+        self.layer_mutation_rate = layer_mutation_rate
         
         if is_worker:
             print("="*80)
@@ -196,6 +202,7 @@ class GeneticAlgorithmSimulation:
             print("="*80)
             print("👑 MASTER MODE - Coordinating GA and processing jobs...")
             print(f"  Initial layers: {num_layers}, Max layers: {max_layers}")
+            print(f"  Mutation rate: {mutation_rate*100:.1f}%, Layer mutation: {layer_mutation_rate*100:.1f}%")
             if language_layout:
                 print(f"  Language layout: {language_layout}")
             print("="*80)
@@ -840,6 +847,9 @@ class GeneticAlgorithmSimulation:
         num_pairs = len(sorted_parents) // 2
         target_children = len(self.population)
         
+        crossover_failures = 0
+        mutated_clones_created = 0
+        
         for pair_idx in range(num_pairs):
             parent0 = sorted_parents[pair_idx * 2]
             parent1 = sorted_parents[pair_idx * 2 + 1]
@@ -856,6 +866,7 @@ class GeneticAlgorithmSimulation:
                     
                 attempts = 0
                 max_attempts = 10
+                child_created = False
 
                 while attempts < max_attempts:
                     # Perform layer-to-layer crossover
@@ -884,20 +895,50 @@ class GeneticAlgorithmSimulation:
                         )
                         self.children.append(child)
                         self.individual_names[child.id] = child.name
+                        child_created = True
                         break
                     else:
                         attempts += 1
+                
+                # If crossover failed, create a mutated clone as fallback
+                if not child_created and len(self.children) < target_children:
+                    crossover_failures += 1
+                    # Pick the better parent and create a mutated clone
+                    better_parent = parent0 if parent0.fitness < parent1.fitness else parent1
+                    clone_chromosome = [layer.copy() for layer in better_parent.chromosome]
+                    
+                    # Apply multiple mutations to ensure it's different
+                    for _ in range(3):
+                        layer_idx = random.randint(0, len(clone_chromosome) - 1)
+                        layer = clone_chromosome[layer_idx]
+                        non_none_positions = [i for i, k in enumerate(layer) if k is not None]
+                        if len(non_none_positions) >= 2:
+                            pos1, pos2 = random.sample(non_none_positions, 2)
+                            layer[pos1], layer[pos2] = layer[pos2], layer[pos1]
+                    
+                    child = Individual(
+                        chromosome=clone_chromosome,
+                        fitness=None,
+                        distance=None,
+                        time_taken=None,
+                        parents=[better_parent.id],
+                        generation=self.current_generation + 1
+                    )
+                    self.children.append(child)
+                    self.individual_names[child.id] = child.name
+                    mutated_clones_created += 1
             
             if len(self.children) >= target_children:
                 break
 
-        print(f"Created {len(self.children)} unique children (target: {target_children})")
+        if crossover_failures > 0:
+            print(f"Created {len(self.children)} unique children (target: {target_children}) - {crossover_failures} crossover failures, {mutated_clones_created} mutated clones")
 
     def mutation(self):
         """Mutate children with 7 mutation strategies"""
         for individual in self.children:
-            # Apply mutations with specified probabilities
-            if random.random() < 0.05:  # 5% chance to mutate per individual
+            # Apply mutations with configurable probability
+            if random.random() < self.mutation_rate:
                 mutation_type = random.choices(
                     ['intra_layer_swap', 'cross_layer_swap', 'populate_none', 
                      'safe_replace', 'relocate_replace', 'layer_promotion', 'add_layer'],
@@ -919,8 +960,8 @@ class GeneticAlgorithmSimulation:
                 elif mutation_type == 'add_layer':
                     self.add_layer_mutation_exponential(individual)
             
-            # Layer removal with low probability
-            if len(individual.chromosome) > 1 and random.random() < 0.01:
+            # Layer removal with configurable probability
+            if len(individual.chromosome) > 1 and random.random() < (self.layer_mutation_rate * 0.1):
                 self.remove_layer_mutation(individual)
             
             # Validate after mutations

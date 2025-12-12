@@ -252,7 +252,9 @@ def run_genetic_algorithm(
     save_heuristics=True,
     num_layers=1,
     max_layers=3,
-    language_layout=None
+    language_layout=None,
+    mutation_rate=0.20,
+    layer_mutation_rate=0.15
 ):
     """Run the genetic algorithm with C# simulation and distributed processing
     
@@ -260,6 +262,8 @@ def run_genetic_algorithm(
         num_layers: Initial number of layers for chromosomes (default: 1)
         max_layers: Maximum number of layers allowed during evolution (default: 3)
         language_layout: Module path for language layout remapping (e.g., 'data.languages.romanian_programmers')
+        mutation_rate: Probability that an individual gets mutated (default: 0.20 = 20%)
+        layer_mutation_rate: Probability of layer add/remove mutations (default: 0.15 = 15%)
     """
     try:
         from rich.console import Console
@@ -324,6 +328,8 @@ def run_genetic_algorithm(
         num_layers=num_layers,
         max_layers=max_layers,
         language_layout=language_layout,
+        mutation_rate=mutation_rate,
+        layer_mutation_rate=layer_mutation_rate,
         max_concurrent_processes=max_concurrent_processes,
         use_rabbitmq=use_rabbitmq,
         is_worker=False  # Master mode
