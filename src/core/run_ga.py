@@ -562,9 +562,26 @@ def run_genetic_algorithm(
             evaluator = Evaluator(debug=False)
             evaluator.load_keyoard(ga.keyboard_file)
             evaluator.load_layout()
-            # Use only the base layer for remapping (for now)
+            
+            # Remap ALL layers of the multi-layer chromosome
+            num_chromosome_layers = len(individual.chromosome)
+            
+            # Only use base layer for now (full multi-layer remapping requires more complex logic)
+            # TODO: Full multi-layer support would require remapping each layer separately
             base_layer = individual.chromosome[0]
             evaluator.layout.remap(LAYOUT_DATA["qwerty"], base_layer)
+            
+            # Apply language layout if specified (for evolved layouts with custom language)
+            if language_layout:
+                try:
+                    from importlib import import_module
+                    language_module = import_module(language_layout)
+                    if hasattr(language_module, 'get_layout'):
+                        lang_layout_data = language_module.get_layout()
+                        evaluator.layout.apply_language_layout(lang_layout_data)
+                        print(f"✅ Applied language layout: {lang_layout_data.get('name', language_layout)}")
+                except Exception as lang_err:
+                    print(f"⚠️  Could not apply language layout: {lang_err}")
 
             config_gen = CSharpFitnessConfig(
                 keyboard=evaluator.keyboard,
@@ -587,13 +604,12 @@ def run_genetic_algorithm(
                 f.write(stats_json)
             print(f"✅ Saved Stats: {stats_path.name}")
 
-            layers = []
-            for key_id, layer_idx in evaluator.layout.mapper.data.keys():
-                if layer_idx not in layers:
-                    layers.append(layer_idx)
-            layers = sorted(layers) if layers else [0]
+            # Determine which layers to visualize
+            # Generate visualizations for ALL chromosome layers (not just what's in mapper)
+            layers_to_visualize = list(range(num_chromosome_layers))
+            print(f"📸 Generating visualizations for {num_chromosome_layers} layer(s)...")
 
-            for layer_idx in layers:
+            for layer_idx in layers_to_visualize:
                 save_layout_visualizations(
                     stats_json=stats_json,
                     keyboard=evaluator.keyboard,
