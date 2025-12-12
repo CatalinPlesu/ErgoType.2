@@ -973,15 +973,18 @@ class GeneticAlgorithmSimulation:
                             new_layer = crossover_single_layer(parent0_layer, parent1_layer, bias)
                             new_chromosome.append(new_layer)
                         # If only one parent has this layer, inherit with 50% probability
-                        elif parent0_layer is not None and random.random() < 0.5:
-                            new_chromosome.append(parent0_layer[:])  # Copy layer
-                        elif parent1_layer is not None and random.random() < 0.5:
-                            new_chromosome.append(parent1_layer[:])  # Copy layer
+                        elif parent0_layer is not None:
+                            if random.random() < 0.5:
+                                new_chromosome.append(parent0_layer[:])  # Copy layer
+                        elif parent1_layer is not None:
+                            if random.random() < 0.5:
+                                new_chromosome.append(parent1_layer[:])  # Copy layer
                     
                     # Ensure child has at least one layer (base layer from better parent)
                     if len(new_chromosome) == 0:
                         better_parent = parent0 if parent0.fitness < parent1.fitness else parent1
-                        new_chromosome.append(better_parent.chromosome[0][:])
+                        if len(better_parent.chromosome) > 0:
+                            new_chromosome.append(better_parent.chromosome[0][:])
 
                     all_existing = self.population + self.children + [parent0, parent1]
 
