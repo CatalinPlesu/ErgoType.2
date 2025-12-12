@@ -16,3 +16,4 @@ notebooks/src/data/distance/
 raport.txt
 output/
 test_output/
+test_progress_bar.py

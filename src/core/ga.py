@@ -436,6 +436,10 @@ class GeneticAlgorithmSimulation:
         print(f"\n{'='*80}")
         print(f"📤 DISTRIBUTING {len(individuals_to_evaluate)} JOBS")
         print(f"{'='*80}")
+        
+        # Update progress tracker with job batch
+        if hasattr(self, 'progress_tracker'):
+            self.progress_tracker.start_job_batch(len(individuals_to_evaluate))
 
         # Push configuration with relative paths for distributed workers
         config = {
@@ -571,6 +575,10 @@ class GeneticAlgorithmSimulation:
                         if ind not in self.evaluated_individuals:
                             self.evaluated_individuals.append(ind)
                         results_collected += 1
+                        
+                        # Update progress tracker
+                        if hasattr(self, 'progress_tracker'):
+                            self.progress_tracker.update_job_progress(results_collected)
                         break
                 
                 if results_collected % 10 == 0 or results_collected == expected_results:
@@ -602,6 +610,10 @@ class GeneticAlgorithmSimulation:
 
         print(f"✅ Collection complete: {results_collected}/{expected_results} results")
         print(f"{'='*80}\n")
+        
+        # Complete job batch tracking
+        if hasattr(self, 'progress_tracker'):
+            self.progress_tracker.complete_job_batch()
         
         gc.collect()
         self.normalize_and_calculate_fitness()
@@ -829,6 +841,15 @@ class GeneticAlgorithmSimulation:
         print("\n🧹 Purging all queues...")
         self.job_queue.purge_all()
         
+        # Initialize progress tracker
+        from ui.progress_tracker import GAProgressTracker
+        progress_tracker = GAProgressTracker(
+            max_iterations=max_iterations,
+            stagnation_limit=stagnant
+        )
+        progress_tracker.start()
+        self.progress_tracker = progress_tracker  # Store for use in fitness calculation
+        
         iteration = 0
         print("Starting genetic algorithm...")
         self.fitness_function_calculation()
@@ -836,6 +857,9 @@ class GeneticAlgorithmSimulation:
 
         try:
             while self.previous_population_iteration < stagnant and iteration < max_iterations:
+                # Update progress tracker
+                progress_tracker.start_iteration(iteration + 1, self.previous_population_iteration)
+                
                 print(f"\n{'='*80}")
                 print(f"ITERATION {iteration + 1} (Generation {self.current_generation + 1})")
                 print(f"Stagnation count: {self.previous_population_iteration}/{stagnant}")
@@ -855,9 +879,15 @@ class GeneticAlgorithmSimulation:
                     self.previous_population_iteration = 0
 
                 iteration += 1
+                
+                # Mark iteration complete
+                progress_tracker.complete_iteration()
 
         except KeyboardInterrupt:
             print("\n\n🛑 Interrupted by user!")
+        finally:
+            # Stop progress tracker
+            progress_tracker.stop()
 
         print(f"\nAlgorithm completed after {iteration} iterations")
         print(f"Final stagnation count: {self.previous_population_iteration}")
