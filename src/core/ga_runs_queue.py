@@ -126,9 +126,10 @@ class GARunsQueue:
             if verbose:
                 print(f"✅ Reset Individual ID counter to 0")
             
+            # Capture start time before try block
+            start_time = datetime.now()
+            
             try:
-                start_time = datetime.now()
-                
                 # Execute the GA run
                 best_individual = run_genetic_algorithm(**run_config.to_dict())
                 
@@ -158,7 +159,7 @@ class GARunsQueue:
                 
             except Exception as e:
                 end_time = datetime.now()
-                duration = (end_time - start_time).total_seconds() if 'start_time' in locals() else 0
+                duration = (end_time - start_time).total_seconds()
                 
                 if verbose:
                     print(f"\n❌ Run {i} failed: {e}")
@@ -168,7 +169,7 @@ class GARunsQueue:
                 result = {
                     'run_number': i,
                     'name': run_config.name,
-                    'start_time': start_time.isoformat() if 'start_time' in locals() else datetime.now().isoformat(),
+                    'start_time': start_time.isoformat(),
                     'end_time': end_time.isoformat(),
                     'duration_seconds': duration,
                     'success': False,

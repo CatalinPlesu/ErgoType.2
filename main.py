@@ -629,6 +629,7 @@ def _execute_queue_from_file():
     """Load and execute a queue from a JSON file"""
     from core.ga_runs_queue import GARunsQueue
     from datetime import datetime
+    # Import Prompt locally to avoid dependency when queue feature isn't used
     from rich.prompt import Prompt
     import os
     
@@ -689,6 +690,7 @@ def _create_custom_queue():
     """Interactively create and execute a custom queue"""
     from core.ga_runs_queue import GARunsQueue, GARunConfig
     from datetime import datetime
+    # Import Prompt locally to avoid dependency when queue feature isn't used
     from rich.prompt import Prompt
     
     print_header("Create Custom Queue", "Define multiple GA runs interactively")
