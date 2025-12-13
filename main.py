@@ -562,7 +562,7 @@ def item_generate_heuristics():
 def item_run_ga_queue():
     """Execute a queue of GA runs sequentially"""
     try:
-        from core.ga_runs_queue import GARunsQueue, create_run_config, create_example_queue
+        from core.ga_runs_queue import GARunsQueue, create_run_config, create_example_queue, create_parameter_exploration_queue
         from pathlib import Path
         
         print_header("Execute GA Runs Queue", "Run multiple GA configurations sequentially")
@@ -575,13 +575,74 @@ def item_run_ga_queue():
         # Create a sub-menu for queue options
         submenu = RichMenu("📋 GA Runs Queue - Select Option")
         submenu.add_item("1️⃣  Run Example Queue (3 preconfigured runs)", lambda: _execute_example_queue())
-        submenu.add_item("2️⃣  Load Queue from File", lambda: _execute_queue_from_file())
-        submenu.add_item("3️⃣  Create Custom Queue Interactively", lambda: _create_custom_queue())
+        submenu.add_item("2️⃣  Run Parameter Exploration (25 configs, ~3 hours)", lambda: _execute_parameter_exploration())
+        submenu.add_item("3️⃣  Load Queue from File", lambda: _execute_queue_from_file())
+        submenu.add_item("4️⃣  Create Custom Queue Interactively", lambda: _create_custom_queue())
         
         submenu.display()
     
     except Exception as e:
         print_error(f"Error loading GA queue functionality: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _execute_parameter_exploration():
+    """Execute the 25-configuration parameter exploration matrix"""
+    from core.ga_runs_queue import create_parameter_exploration_queue
+    from datetime import datetime
+    
+    print_header("Parameter Exploration Matrix", "25 configurations covering iteration/population space")
+    
+    queue = create_parameter_exploration_queue()
+    
+    console.print(f"[bold]Parameter Exploration Queue:[/bold]")
+    console.print(f"Total configurations: {len(queue.runs)}")
+    console.print(f"Estimated runtime: ~3 hours")
+    console.print(f"All runs use: stagnant_limit=3, max_concurrent_processes=1")
+    console.print()
+    
+    console.print("[bold]Configuration matrix:[/bold]\n")
+    
+    # Display in a table format
+    from rich.table import Table
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Iterations", justify="right", width=10)
+    table.add_column("Population", justify="right", width=10)
+    table.add_column("Purpose", width=30)
+    
+    for i, run in enumerate(queue.runs, 1):
+        table.add_row(
+            str(i),
+            str(run['max_iterations']),
+            str(run['population_size']),
+            run['name'].split('_', 3)[-1].replace('_', ' ')
+        )
+    
+    console.print(table)
+    console.print()
+    
+    if not confirm_action("Execute all 25 configurations?", default=True):
+        print_warning("Cancelled")
+        return
+    
+    try:
+        console.print()
+        print_info("Starting parameter exploration...")
+        results = queue.execute(verbose=True)
+        
+        # Save results
+        timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+        results_file = f"output/ga_queue_results/param_exploration_{timestamp}.json"
+        queue.save_results(results_file)
+        
+        console.print()
+        print_success(f"Parameter exploration complete! Results saved to {results_file}")
+        
+    except Exception as e:
+        console.print()
+        print_error(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
 

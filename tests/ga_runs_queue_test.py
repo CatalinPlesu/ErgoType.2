@@ -158,6 +158,31 @@ class TestGARunsQueue(unittest.TestCase):
             self.assertIn('name', run)
             self.assertGreater(run['population_size'], 0)
             self.assertGreater(run['max_iterations'], 0)
+    
+    def test_create_parameter_exploration_queue(self):
+        """Test the parameter exploration queue creation"""
+        from core.ga_runs_queue import create_parameter_exploration_queue
+        
+        queue = create_parameter_exploration_queue()
+        
+        # Should have exactly 25 configurations
+        self.assertEqual(len(queue.runs), 25)
+        
+        # All should have stagnant_limit=3 and max_concurrent_processes=1
+        for run in queue.runs:
+            self.assertEqual(run['stagnant_limit'], 3)
+            self.assertEqual(run['max_concurrent_processes'], 1)
+            self.assertIn('name', run)
+            self.assertGreater(run['population_size'], 0)
+            self.assertGreater(run['max_iterations'], 0)
+        
+        # Check parameter coverage
+        iterations = set(r['max_iterations'] for r in queue.runs)
+        populations = set(r['population_size'] for r in queue.runs)
+        
+        # Should cover multiple levels
+        self.assertGreaterEqual(len(iterations), 8)
+        self.assertGreaterEqual(len(populations), 6)
 
 
 class TestIndividualIDReset(unittest.TestCase):

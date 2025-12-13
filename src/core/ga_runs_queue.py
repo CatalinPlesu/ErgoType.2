@@ -265,6 +265,63 @@ def create_example_queue() -> GARunsQueue:
     return queue
 
 
+def create_parameter_exploration_queue() -> GARunsQueue:
+    """
+    Create a 25-configuration matrix for parameter space exploration.
+    
+    Optimized for ~3 hours runtime with maximum parameter coverage.
+    All runs use stagnation_threshold=3 and processes=1.
+    
+    Explores:
+    - Iterations: 5 to 300 (10 levels)
+    - Population: 5 to 300 (7 levels)
+    
+    Returns:
+        GARunsQueue with 25 predefined configurations
+    """
+    queue = GARunsQueue()
+    
+    # Configuration matrix: (iterations, population, purpose)
+    configs = [
+        (5, 5, "Sanity check"),
+        (5, 150, "Wide shallow search"),
+        (5, 300, "Max width minimal depth"),
+        (50, 5, "Narrow deep search"),
+        (50, 30, "Small balanced"),
+        (50, 70, "Reference baseline"),
+        (50, 150, "Wide quick search"),
+        (50, 300, "Max population test"),
+        (75, 50, "Balanced small-medium"),
+        (75, 110, "Sweet spot candidate"),
+        (100, 30, "Reference point"),
+        (100, 70, "Medium balanced"),
+        (100, 150, "Large pop moderate iter"),
+        (150, 30, "Deep narrow"),
+        (150, 70, "Balanced medium-large"),
+        (150, 110, "Sweet spot"),
+        (175, 50, "Deep moderate width"),
+        (200, 30, "Very deep narrow"),
+        (200, 70, "Deep balanced"),
+        (200, 110, "Large thorough"),
+        (250, 50, "Very deep moderate"),
+        (250, 70, "Max depth moderate pop"),
+        (275, 30, "Extreme depth narrow"),
+        (300, 50, "Max depth moderate"),
+        (300, 70, "Max depth good pop"),
+    ]
+    
+    for i, (iterations, population, purpose) in enumerate(configs, 1):
+        queue.add_run(create_run_config(
+            name=f"Config{i:02d}_I{iterations}_P{population}_{purpose.replace(' ', '_')}",
+            population_size=population,
+            max_iterations=iterations,
+            stagnant_limit=3,
+            max_concurrent_processes=1
+        ))
+    
+    return queue
+
+
 if __name__ == "__main__":
     # Example usage
     queue = create_example_queue()
