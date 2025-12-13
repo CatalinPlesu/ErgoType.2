@@ -435,6 +435,8 @@ def run_genetic_algorithm(
         "use_rabbitmq": use_rabbitmq,
         "num_layers": num_layers,
         "max_layers": max_layers,
+        "mutation_rate": mutation_rate,
+        "layer_mutation_rate": layer_mutation_rate,
         "best_fitness": best_individual.fitness,
         "best_layout_name": best_individual.name,
         "best_layout": best_chromosome_serialized,

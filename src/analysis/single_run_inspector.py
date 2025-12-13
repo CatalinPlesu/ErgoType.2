@@ -184,13 +184,27 @@ class SingleRunInspector:
             evaluator.load_keyoard(metadata['keyboard_file'])
             evaluator.load_layout()
             
-            # Get chromosome
+            # Get chromosome (handle both single-layer and multi-layer)
             chromosome = individual.get('chromosome', [])
             if isinstance(chromosome, str):
-                chromosome = list(chromosome)
+                chromosome = [list(chromosome)]  # Wrap in list for single-layer
+            elif isinstance(chromosome, list) and len(chromosome) > 0:
+                if isinstance(chromosome[0], str):
+                    chromosome = [list(chromosome)]  # Single-layer as string list
+                # else: already multi-layer list of lists
             
-            # Remap layout
-            evaluator.layout.remap(list(LAYOUT_DATA["qwerty"]), chromosome)
+            # Remap ALL chromosome layers to layout mapper
+            qwerty_layer = list(LAYOUT_DATA["qwerty"])
+            num_chromosome_layers = len(chromosome) if isinstance(chromosome, list) else 1
+            
+            for layer_idx in range(num_chromosome_layers):
+                chromosome_layer = chromosome[layer_idx]
+                if layer_idx == 0:
+                    # Base layer: Standard remap
+                    evaluator.layout.remap(qwerty_layer, chromosome_layer)
+                else:
+                    # Upper layers: Remap to layer-specific positions
+                    evaluator.layout.remap_to_layer(qwerty_layer, chromosome_layer, layer_idx)
             
             # Generate config
             config_gen = CSharpFitnessConfig(
@@ -223,14 +237,10 @@ class SingleRunInspector:
                 f.write(stats_json)
             print_success(f"Saved stats: {stats_path}")
             
-            # Generate visualizations for each layer
-            layers = []
-            for key_id, layer_idx in evaluator.layout.mapper.data.keys():
-                if layer_idx not in layers:
-                    layers.append(layer_idx)
-            layers = sorted(layers) if layers else [0]
+            # Generate visualizations for ALL chromosome layers
+            layers_to_visualize = list(range(num_chromosome_layers))
             
-            for layer_idx in layers:
+            for layer_idx in layers_to_visualize:
                 layout_svg, press_svg, hover_svg = generate_all_visualizations(
                     stats_json=stats_json,
                     keyboard=evaluator.keyboard,
