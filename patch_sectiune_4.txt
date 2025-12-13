@@ -1,0 +1,601 @@
+# SECTION 4. IMPLEMENTAREA ȘI REZULTATELE EXPERIMENTALE - UPDATE
+
+## 4. IMPLEMENTAREA ȘI REZULTATELE EXPERIMENTALE
+
+### 4.0 Arhitectură Sistem și Structură Proiect
+
+#### 4.0.1 Arhitectură Generală
+
+Proiectul ErgoType.2 este organizat modular, cu o arhitectură clară care separă responsabilitățile între diferite componente. Diagrama UML de componente este următoarea:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Interfață Utilizator                     │
+├─────────────────────────────────────────────────────────────┤
+│  rich_menu.py  │ preferences.py │ progress_tracker.py      │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Logică Aplicație                       │
+├─────────────────────────────────────────────────────────────┤
+│   main.py    │ ga.py  │ run_ga.py │ job_queue.py           │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Nucleu Sistem                            │
+├─────────────────────────────────────────────────────────────┤
+│ evaluator.py │ layout.py │ keyboard.py │ distance_calculator│
+│              │ mapper.py │ typer.py  │ clr_loader_helper.py │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Configurare                            │
+├─────────────────────────────────────────────────────────────┤
+│  config.py   │ file_paths.py │ finger_strength.py           │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Date & Resurse                         │
+├─────────────────────────────────────────────────────────────┤
+│  keyboards/   │ layouts/   │ text/     │ distance/          │
+│  helpers/     │ notebooks/ │ ui/       │                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 4.0.2 Structura Director
+
+```
+src/
+├── ui/                          # Interfață utilizator
+│   ├── rich_menu.py            # Meniuri interactive cu Rich
+│   ├── preferences.py          # Management preferințe utilizator
+│   └── progress_tracker.py     # Progres rulări
+├── core/                       # Nucleul aplicației
+│   ├── ga.py                   # Algoritm genetic
+│   ├── evaluator.py            # Evaluare layout-uri
+│   ├── layout.py               # Management layout-uri
+│   ├── keyboard.py             # Reprezentare tastaturi
+│   ├── distance_calculator.py  # Calcul distanțe Fitts
+│   ├── mapper.py               # Mapare taste
+│   ├── typer.py                # Simulare tastare
+│   ├── clr_loader_helper.py    # Integrare C#
+│   └── job_queue.py            # Coada job-uri distribuite
+├── config/                     # Configurări
+│   ├── config.py               # Parametri sistem
+│   ├── file_paths.py           # Căi fișiere
+│   └── finger_strength.py      # Coeficienți forță degete
+├── data/                       # Date experimentale
+│   ├── keyboards/              # Modele tastaturi fizice
+│   ├── layouts/                # Layout-uri logice
+│   ├── text/                   # Corpusuri textuale
+│   └── distance/               # Cache distanțe
+├── helpers/                    # Instrumente auxiliare
+│   ├── keyboards/              # Adnotare tastaturi GUI
+│   ├── text/                   # Procesare text
+│   └── layouts/                # Generare euristică
+└── notebooks/                  # Analize și vizualizări
+```
+
+#### 4.0.3 Flux Date
+
+1. **Colectare date**: Scripturi Python colectează și procesează corpusuri textuale
+2. **Preprocesare**: Textul este curățat, unificat și analizat frecvențial
+3. **Reprezentare tastaturi**: Modele fizice JSON cu coordonate și asignare degete
+4. **Generare populație**: Layout-uri inițiale (euristice + aleatoare)
+5. **Evaluare paralelă**: Calcul fitness distribuit pe procesoare
+6. **Evolutie**: Selecție, crossover, mutație iterativă
+7. **Rezultate**: Layout-uri optimizate și analize comparative
+
+### 4.1 Colectare și Preprocesare Date
+
+#### 4.1.1 Automatizare Colectare
+
+Procesul de colectare a seturilor de date este complet automatizat prin scripturi Python specializate:
+
+```bash
+# Descărcare corpusuri (figura 4.1)
+python src/helpers/text/scrapers/get_100_cartigratis.py
+python src/helpers/text/scrapers/get_top_100_gutenberg_books.py
+python src/helpers/text/scrapers/newsgroup_20.py
+python src/helpers/text/scrapers/the_algorithms.py
+python src/helpers/text/scrapers/wikipedia_simple_english.py
+```
+
+Fiecare script este responsabil pentru un anumit corpus:
+- **Cartigratis**: 100 de cărți în limba română
+- **Gutenberg**: Top 100 cărți Project Gutenberg în engleză
+- **Newsgroup 20**: Articole științifice din 20 categorii
+- **The Algorithms**: Cod sursă în multiple limbaje de programare
+- **Simple English Wikipedia**: Articole enciclopedice simplificate
+
+#### 4.1.2 Procesare Text
+
+După descărcare, textul este procesat și consolidat:
+
+```bash
+# Consolidare corpusuri (figura 4.2)
+bash src/helpers/text/scrapers/main.sh
+```
+
+Acest script:
+- Parcurge toate fișierele din fiecare director corpus
+- Extrage conținutul valid (elimină caractere necorespunzătoare)
+- Unește într-un singur fișier TXT reprezentativ
+- Facilită procesarea ulterioară și generarea statisticilor
+
+#### 4.1.3 Analiză Frecvențială
+
+Datele procesate sunt analizate pentru a genera statistici de frecvență:
+
+```python
+# src/helpers/text/processors/frequency_analyzer.py
+def analyze_corpus(text_file, output_file):
+    """
+    Analizează un corpus textual și generează statistici de frecvență.
+    
+    Args:
+        text_file: Fișier text sursă
+        output_file: Fișier JSON pentru rezultate
+        
+    Returns:
+        Dict cu frecvențe caractere, bigrame, trigramă
+    """
+    # Calcul frecvențe caractere
+    # Calcul frecvențe bigrame  
+    # Calcul frecvențe trigramă
+    # Normalizare și salvare rezultate
+```
+
+Rezultatele sunt stocate în `src/data/text/processed/` și includ:
+- `simple_wikipedia_analysis.json` - frecvențe pentru text natural
+- `the_algorithms_code_analysis.json` - frecvențe pentru cod sursă
+- `frequency_analysis.pkl` - date serializate pentru procesare rapidă
+
+### 4.2 Reprezentare Tastaturi Fizice
+
+#### 4.2.1 Modele JSON KLE
+
+Fiecare model de tastatură este reprezentat printr-un fișier JSON conform standardului Keyboard Layout Editor (KLE), permițând compatibilitatea cu instrumente existente de vizualizare și editare.
+
+Modele implementate:
+
+1. **ANSI 60%** (`src/data/keyboards/ansi_60_percent.json`)
+   - Model compact, frecvent folosit pentru testarea eficienței layout-urilor
+   - 65 de taste, fără bloc numeric
+   - Coordonate precise pentru calculul distanțelor
+
+2. **ANSI 60% ThinkPad** (`src/data/keyboards/ansi_60_percent_thinkpad.json`)
+   - Variantă adaptată pentru laptopuri cu trackpoint
+   - Diferențe minore în aranjament față de ANSI standard
+
+3. **Dactyl Manuform 6x6** (`src/data/keyboards/dactyl_manuform_6x6_4.json`)
+   - Tastatură ergonomic-curbată, cu taste aranjate în matrice 6x6
+   - Concepută pentru a reduce tensiunea degetelor și a mâinilor
+   - Formă neobișnuită care testează comportamentul layout-urilor pe geometrii non-standard
+
+4. **Ferris Sweep** (`src/data/keyboards/ferris_sweep.json`)
+   - Design „split" și curbat, cu taste dispuse pe mai multe rânduri
+   - Optimizat pentru o distribuție naturală a degetelor
+   - Permite analiza impactului ergonomiei asupra distanțelor parcurse
+
+#### 4.2.2 Adnotare Interactive GUI
+
+Fiecare tastatură este extinsă cu informații suplimentare esențiale pentru simulare:
+
+```python
+# src/helpers/keyboards/annotator_gui.py
+class KeyboardAnnotator:
+    """
+    Instrument GUI pentru adnotarea tastaturilor cu:
+    - Degetul utilizat pentru fiecare tastă
+    - Mâna (stânga/dreapta)
+    - Homing key-uri (taste de referință)
+    """
+    
+    def __init__(self, keyboard_file):
+        # Încărcare model tastatură KLE
+        # Inițializare interfață grafică
+        # Setup evenimente input
+        
+    def annotate_key(self, key_id, finger, hand, is_homing=False):
+        """Adnotare tastă cu informații ergonomice"""
+        # Validare input
+        # Actualizare metadata tastă
+        # Refresh vizualizare
+        
+    def save_annotations(self, output_file):
+        """Salvare date adnotate în JSON"""
+        # Serializare metadata
+        # Export fișier compatibil evaluator
+```
+
+Această adnotare interactivă permite:
+- Calcularea precisă a distanțelor parcurse de degete
+- Verificarea corectitudinii mapărilor între layoutul fizic și cel logic
+- Referință clară la layoutul standard QWERTY
+
+#### 4.2.3 Sistem Coordonate și Distanțe
+
+Pentru calculul distanțelor, fiecare tastă este reprezentată prin coordonate carteziene:
+
+```python
+# src/core/keyboard.py
+class Key:
+    def __init__(self, x, y, width=1, height=1, label=""):
+        self.x = x           # Coordonată X (unități KLE)
+        self.y = y           # Coordonată Y (unități KLE)  
+        self.width = width   # Lățime tastă (unități)
+        self.height = height # Înălțime tastă (unități)
+        self.label = label   # Etichetă vizuală
+        self.finger = None   # Deget asignat (după adnotare)
+        self.hand = None     # Mâna (stânga/dreapta)
+        
+class Keyboard:
+    def __init__(self, kle_file):
+        self.keys = []       # Lista tastelor
+        self.home_keys = []  # Taste de referință (homing)
+        self.load_kle_file(kle_file)
+        
+    def get_key_coordinates(self, key_id):
+        """Returnează coordonatele absolute ale unei taste"""
+        key = self.keys[key_id]
+        center_x = key.x + key.width / 2
+        center_y = key.y + key.height / 2
+        return (center_x, center_y)
+```
+
+### 4.3 Layout-uri Logice și Sistem Mapare
+
+#### 4.3.1 Layout-uri Predefinite
+
+Toate layouturile predefinite sunt stocate într-un fișier Python ca dicționar:
+
+```python
+# src/data/layouts/keyboard_genotypes.py
+LAYOUT_DATA = {
+    "qwerty": list("QWERTYUIOPASDFGHJKLZXCVBNM"),
+    "dvorak": list("PYFGCRLAOEUIDHTNSQJKXBMWVZ"),
+    "colemak": list("QWFPGJLUYARSTDHNEIOZXCVMKB"),
+    "workman": list("QDRTYFGHASEWUCIOPVXNZJBKM"),
+    "minimak": list("QWERTYUIOASDFGHJKLPZXCVBNM"),
+    "norman": list("QWERTYUIOPASDFGHJKLZXCVBNM"),
+    "asset": list("ASDFUIOPQWERTGHJKLZXCVBNMY")
+}
+```
+
+Această structură:
+- Ușurează încărcarea și selectarea layouturilor
+- Permite rularea simulărilor fără modificări manuale ale fișierelor JSON
+- Asigură consistența ordonii tastelor cu standardul QWERTY
+
+#### 4.3.2 Sistem Mapare Avansat
+
+Sistemul de mapare transformă un layout logic în coordonate fizice:
+
+```python
+# src/core/mapper.py
+class LayoutMapper:
+    def __init__(self, keyboard, layout):
+        self.keyboard = keyboard
+        self.layout = layout
+        self.char_to_key = {}  # Mapare caracter → tastă fizică
+        self.key_to_char = {}  # Mapare tastă fizică → caracter
+        
+    def build_mapping(self):
+        """Construiește maparea dintre caractere și taste fizice"""
+        for i, char in enumerate(self.layout):
+            if i < len(self.keyboard.keys):
+                key = self.keyboard.keys[i]
+                self.char_to_key[char] = key
+                self.key_to_char[key] = char
+                
+    def get_key_for_char(self, char):
+        """Returnează tasta fizică pentru un caracter"""
+        return self.char_to_key.get(char.upper())
+        
+    def get_coordinates_for_char(self, char):
+        """Returnează coordonatele pentru un caracter"""
+        key = self.get_key_for_char(char)
+        if key:
+            return self.keyboard.get_key_coordinates(key)
+        return None
+```
+
+### 4.4 Interfață Utilizator - Meniu Rich
+
+#### 4.4.1 Arhitectură Interfață
+
+Interfața principală este implementată folosind biblioteca Rich, oferind o experiență utilizator modernă și interactivă:
+
+```python
+# src/ui/rich_menu.py
+class RichMenu:
+    """Meniu interactiv cu suport pentru navigare keyboard"""
+    
+    def __init__(self, title="Meniu"):
+        self.title = title
+        self.items = []        # Opțiuni meniu
+        self.selected = 0      # Index opțiune selectată
+        self.console = Console()
+        
+    def add_option(self, label, callback):
+        """Adaugă o opțiune în meniu"""
+        self.items.append((label, callback))
+        
+    def display(self):
+        """Afișează meniul cu highlight pe opțiunea selectată"""
+        table = Table(show_header=False, box=box.ROUNDED)
+        for i, (label, _) in enumerate(self.items):
+            if i == self.selected:
+                table.add_row(f"[bold green]→ {label}[/bold green]")
+            else:
+                table.add_row(f"  {label}")
+        
+        panel = Panel(table, title=self.title, border_style="blue")
+        self.console.print(panel)
+```
+
+#### 4.4.2 Funcționalități Meniu
+
+Meniul oferă următoarele opțiuni principale:
+
+1. **Rulează Algoritm Genetic**
+   - Selectare tastatură fizică
+   - Selectare set date
+   - Configurare parametri GA
+   - Rulare distribuită
+
+2. **Instrument Adnotare Tastaturi**
+   - Încărcare model KLE
+   - Asignare degete/mâini
+   - Marcare homing key-uri
+   - Salvare anotări
+
+3. **Analiză Dataseturi**
+   - Statistici frecvență
+   - Distribuții bigrame
+   - Comparații între corpusuri
+
+4. **Evaluare Layout-uri**
+   - Evaluare individuală
+   - Comparații multiple
+   - Generare rapoarte
+
+5. **Vizualizare Genotipuri**
+   - Reprezentare layout-uri
+   - Diferențe față de QWERTY
+   - Heatmap-uri utilizare
+
+6. **Inspectare Tastaturi Fizice**
+   - Vizualizare modele
+   - Informații tehnice
+   - Coordonate și dimensiuni
+
+#### 4.4.3 Management Preferințe
+
+Sistemul salvează preferințele utilizatorului pentru experiențe future:
+
+```python
+# src/ui/preferences.py
+class Preferences:
+    """Gestionează preferințele utilizatorului"""
+    
+    def __init__(self):
+        self.config_file = Path.home() / ".ergotype_config.json"
+        self.data = self._load()
+        
+    def get(self, key, default=None):
+        """Obține o preferință"""
+        return self.data.get(key, default)
+        
+    def set(self, key, value):
+        """Setează o preferință"""
+        self.data[key] = value
+        self.save()
+        
+    def save(self):
+        """Salvează preferințele în fișier"""
+        with open(self.config_file, 'w') as f:
+            json.dump(self.data, f, indent=2)
+```
+
+Preferințele salvate includ:
+- Ultima tastatură selectată
+- Ultimul set de date ales
+- Parametri algoritm genetic
+- Setări interfață (temă, fonturi)
+
+### 4.5 Evaluare Paralelă și Distribuită
+
+#### 4.5.1 Arhitectură Evaluare
+
+Sistemul utilizează o arhitectură paralelă pentru evaluarea eficientă a populației:
+
+```python
+# src/core/ga.py
+class GeneticAlgorithm:
+    def __init__(self, config):
+        self.config = config
+        self.job_queue = JobQueue()  # Coada job-uri distribuite
+        
+    def evaluate_population_parallel(self, population, keyboard_file, text_file):
+        """Evaluează populația folosind procesare paralelă"""
+        
+        # Creare workeri
+        with ProcessPoolExecutor(max_workers=self.config.num_workers) as executor:
+            # Submit joburi
+            futures = []
+            for i, individual in enumerate(population):
+                future = executor.submit(
+                    _evaluate_individual_worker,
+                    (i, individual.chromosome, individual.name),
+                    keyboard_file,
+                    text_file,
+                    self.config.finger_coefficients,
+                    self.config.fitts_a,
+                    self.config.fitts_b
+                )
+                futures.append(future)
+                
+            # Colectare rezultate
+            results = []
+            for future in as_completed(futures):
+                individual_id, fitness, chromosome, name = future.result()
+                results.append(Individual(chromosome, fitness, name))
+                
+        return results
+```
+
+#### 4.5.2 Worker Evaluare
+
+Fiecare worker este responsabil pentru evaluarea unui singur individ:
+
+```python
+def _evaluate_individual_worker(individual_data, keyboard_file, text_file, 
+                               finger_coefficients, fitts_a, fitts_b):
+    """Worker function - each process evaluates ONE individual then exits"""
+    try:
+        individual_id, chromosome, name = individual_data
+        
+        # Initialize C# în acest proces
+        from core.clr_loader_helper import load_csharp_fitness_library
+        Fitness, _ = load_csharp_fitness_library(PROJECT_ROOT)
+        
+        # Creare evaluator
+        evaluator = Evaluator(debug=False)
+        evaluator.load_keyboard(keyboard_file)
+        evaluator.load_layout()
+
+        # Asigură că cromozomul este listă
+        if isinstance(chromosome, str):
+            chromosome = list(chromosome)
+
+        # Remapează layout
+        qwerty_base = list(LAYOUT_DATA["qwerty"])
+        evaluator.layout.remap(qwerty_base, chromosome)
+        
+        # Generează configurație C# și evaluează
+        config = evaluator.generate_csharp_fitness_config(
+            text_file, finger_coefficients, fitts_a, fitts_b
+        )
+        fitness_result = Fitness.EvaluateLayout(config)
+        
+        return individual_id, fitness_result.TotalFitness, chromosome, name
+        
+    except Exception as e:
+        print(f"Worker {os.getpid()}: Error evaluating individual: {e}")
+        return individual_id, float('inf'), chromosome, name
+```
+
+#### 4.5.3 Integrare C# pentru Performanță
+
+Pentru calculele intensive de fitness, se utilizează o bibliotecă C#:
+
+```csharp
+// cs/KeyboardFitness/KeyboardFitness.cs
+public class Fitness
+{
+    public static FitnessResult EvaluateLayout(FitnessConfig config)
+    {
+        // Calcul distanțe Euclidiene
+        // Aplicare Legea lui Fitts
+        // Agregare rezultate
+        // Returnează metrici complete
+    }
+}
+```
+
+Această abordare oferă:
+- Performanță superioară pentru calcule matematice intensive
+- Tipuri de date optimizate
+- Acces la biblioteci .NET pentru calcule științifice
+
+### 4.6 Sistem Testare și Calitate
+
+#### 4.6.1 Teste Unitare
+
+Proiectul include un set complet de teste unitare pentru validarea funcțiilor critice:
+
+```python
+# tests/
+├── layout_evaluation_test.py    # Teste evaluare layout
+├── genetic_algorithm_test.py    # Teste algoritm genetic  
+├── distance_calculator_test.py  # Teste calcul distanțe
+├── key_mapping_test.py          # Teste mapare taste
+├── layout_phenotype_test.py     # Teste fenotip layout
+├── enums_test.py                # Teste tipuri enumerare
+├── fingers_test.py              # Teste asignare degete
+├── cost_calculator_test.py      # Teste calcul costuri
+├── distributed_path_test.py     # Teste căi distribuite
+├── path_conversion_test.py      # Teste conversie căi
+├── genetic_algorithm_test.py    # Teste GA avansate
+├── parallel_logic_test.py       # Teste logică paralelă
+└── processpool_test.py          # Teste ProcessPool
+```
+
+#### 4.6.2 Rulare Teste
+
+```bash
+# Rulează toate testele
+python -m pytest tests/ -v
+
+# Rulează testele unui modul specific
+python -m pytest tests/layout_evaluation_test.py -v
+
+# Generează raport acoperire
+python -m pytest tests/ --cov=src --cov-report=html
+```
+
+### 4.7 Management Proiect și Reproducibilitate
+
+#### 4.7.1 Control Versiuni Git
+
+Proiectul utilizează Git pentru gestionarea versiunilor, asigurând urmărirea completă a modificărilor:
+
+```bash
+# Structură repo GitHub
+git status
+git log --oneline -10
+git diff HEAD~5..HEAD --name-only
+```
+
+#### 4.7.2 Repository Public
+
+Codul sursă și toate resursele sunt disponibile public pe GitHub:
+
+**URL**: https://github.com/CatalinPlesu/ErgoType.2
+
+Repository-ul include:
+- Structura completă a proiectului
+- Dataseturi colectate și procesate
+- Layouturi tastaturilor fizice și logice
+- Scripturi de preprocesare și colectare date
+- Instrumente GUI pentru adnotare
+- Notebook-uri de analiză și vizualizare
+- Documentație și instrucțiuni de instalare
+
+#### 4.7.3 Reproducibilitate Experiment
+
+Pentru a asigura reproducibilitatea completă a experimentelor:
+
+1. **Scripturi automate**: Toate etapele de colectare și procesare sunt automatizate
+2. **Configurații versionate**: Parametrii sistemului sunt stocați în fișiere de config
+3. **Dependency management**: Cerințele Python sunt specificate în `requirements.txt`
+4. **Docker (opțional)**: Container pentru mediu consistent de execuție
+
+#### 4.7.4 Best Practices Implementare
+
+Proiectul urmează standarde de dezvoltare software:
+
+- **Modularitate**: Separare clară responsabilități între module
+- **Documentație**: Docstrings detaliate pentru toate funcțiile importante
+- **Logging**: Sistem de logging pentru depanare și monitorizare
+- **Erori tratate**: Management excepții complet pentru robustețe
+- **Performance**: Optimizări pentru calcule intensive (cache, paralelism)
+- **Extensibilitate**: Arhitectură deschisă pentru extinderi viitoare
+
+Această implementare asigură stabilitate, facilită extinderea ulterioară a proiectului și oferă o bază solidă pentru cercetarea în domeniul optimizării layout-urilor de tastatură.

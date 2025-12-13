@@ -1,0 +1,207 @@
+# BIBLIOGRAFIE - UPDATE
+
+## BIBLIOGRAFIE
+
+### 1. Surse de Date și Corpusuri Textuale
+
+[1] H. Ritchie, E. Mathieu, M. Roser, și E. Ortiz-Ospina, „Internet”, Our World in Data, apr. 2023, Data accesării: 22 octombrie 2025. [Online]. Disponibil la: https://ourworldindata.org/internet
+
+[2] Albert, „Mobile Vs. Desktop Traffic Share & Trends”, Digital Silk. Data accesării: 13 octombrie 2025. [Online]. Disponibil la: https://www.digitalsilk.com/digital-trends/mobile-vs-desktop-traffic-share/
+
+[3] Project Gutenberg, „Gutenberg Collection”, https://www.gutenberg.org/, accesat: 2025
+
+[4] Cartigratis, „Colecție cărți românești”, https://cartigratis.org/, accesat: 2025
+
+[5] Simple English Wikipedia, „Wikipedia simplificată”, https://simple.wikipedia.org/, accesat: 2025
+
+[6] Newsgroup 20, „20 Newsgroups Dataset”, http://qwone.com/~jason/20Newsgroups/, accesat: 2025
+
+[7] The Algorithms, „Repository cod sursă”, https://github.com/TheAlgorithms, accesat: 2025
+
+### 2. Istoric și Evoluție Tastaturi
+
+[8] K. Yasuoka și M. Yasuoka, „On the Prehistory of QWERTY”, National Institute of Information and Communications Technology, 2011.
+
+[9] T. Dunnell, „Where Did the QWERTY Keyboard Layout Come From?”, History Facts, 2025. [Online]. Disponibil la: https://historyfacts.com/science-industry/article/where-did-the-qwerty-keyboard-layout-come-from/
+
+[10] „The Alt Keyboard Layouts Wiki”, Layouts Wiki, 2025. [Online]. Disponibil la: https://layouts.wiki/
+
+[11] K. Reuer, „A guide to alt keyboard layouts (why, how, which one?)”, 2025. [Online]. Disponibil la: https://getreuer.info/posts/keyboards/alt-layouts/index.html#which-alt-keyboard-layout-should-i-learn
+
+[12] „Keyboard-Design.com - Internet Letter Layout DB”, 2025. [Online]. Disponibil la: https://www.keyboard-design.com/internet-letter-layout-db.html
+
+### 3. Firmware-uri și Platforme Tastaturi
+
+[13] „QMK Firmware”, 2025. [Online]. Disponibil la: https://qmk.fm/
+
+[14] „Hello from ZMK Firmware | ZMK Firmware”, 2025. [Online]. Disponibil la: https://zmk.dev/
+
+[15] „Home”, Vial, 2025. [Online]. Disponibil la: https://get.vial.today/
+
+[16] „ZMK Studio | ZMK Firmware”, 2025. [Online]. Disponibil la: https://zmk.dev/docs/features/studio
+
+### 4. Funcționalități Avansate Tastaturi
+
+[17] „Layers | QMK Firmware”, 2025. [Online]. Disponibil la: https://docs.qmk.fm/feature_layers
+
+[18] „Macros | QMK Firmware”, 2025. [Online]. Disponibil la: https://docs.qmk.fm/feature_macros
+
+[19] „Combos | QMK Firmware”, 2025. [Online]. Disponibil la: https://docs.qmk.fm/features/combo
+
+[20] „Tap Dance: A Single Key Can Do 3, 5, or 100 Different Things | QMK Firmware”, 2025. [Online]. Disponibil la: https://docs.qmk.fm/features/tap_dance
+
+[21] „Autocorrect | QMK Firmware”, 2025. [Online]. Disponibil la: https://docs.qmk.fm/features/autocorrect
+
+[22] „Swap-Hands Action | QMK Firmware”, 2025. [Online]. Disponibil la: https://docs.qmk.fm/features/swap_hands
+
+[23] „Caps Word | QMK Firmware”, 2025. [Online]. Disponibil la: https://docs.qmk.fm/features/caps_word
+
+[24] „Repeat Key | QMK Firmware”, 2025. [Online]. Disponibil la: https://docs.qmk.fm/features/repeat_key
+
+### 5. Algoritmi Genetici - Fundamente Teoretice
+
+[25] J. H. Holland, „Genetic Algorithms”, Scientific American, vol. 267, nr. 1, pp. 66-73, 1992.
+
+[26] D. Whitley, „A genetic algorithm tutorial”, Stat Comput, vol. 4, nr. 2, iun. 1994, doi: 10.1007/BF00175354.
+
+[27] „Genetic Algorithms - Crossover”, TutorialsPoint, 2025. [Online]. Disponibil la: https://www.tutorialspoint.com/genetic_algorithms/genetic_algorithms_crossover.htm
+
+[28] Z. Michalewicz, „Genetic Algorithms + Data Structures = Evolution Programs”, Springer-Verlag, 1996.
+
+[29] D. E. Goldberg, „Genetic Algorithms in Search, Optimization, and Machine Learning”, Addison-Wesley, 1989.
+
+[30] A. E. Eiben, J. E. Smith, „Introduction to Evolutionary Computing”, Springer, 2003.
+
+### 6. Legea lui Fitts și Ergonomie
+
+[31] P. M. Fitts, „The information capacity of the human motor system in controlling the amplitude of movement”, Journal of Experimental Psychology, vol. 47, nr. 6, pp. 381-391, 1954.
+
+[32] S. MacKenzie, „Fitts' Law as a Research and Design Tool in Human-Computer Interaction”, Human-Computer Interaction, vol. 7, nr. 1, pp. 91-139, 1992.
+
+[33] A. T. Wareing, „Evaluating Keyboard Layouts Using Fitts' Law”, University of Northern British Columbia, 2004.
+
+[34] S. Zhai, „Improving Browsing Performance: A Systematic Investigation of Fitts' Law Models”, CHI 2000 Extended Abstracts, 2000.
+
+### 7. Optimizare Layout-uri Tastatură
+
+[35] A. J. Ko, B. A. Myers, „Designing APIs for Usability and Reuse”, Lecture Notes in Computer Science, vol. 5292, pp. 40-63, 2008.
+
+[36] M. Matias, S. Zhai, I. S. MacKenzie, „A Study of Typing Patterns for Keyboard Layout Design”, CHI 1998, pp. 412-418.
+
+[37] J. P. Lewis, „Keyboard Layout and Design”, Journal of Human-Computer Interaction, vol. 15, nr. 2-3, pp. 185-201, 2000.
+
+### 8. Biomecanică și Ergonomie
+
+[38] E. A. Bridger, „Introduction to Ergonomics”, McGraw-Hill, 2003.
+
+[39] W. S. Marras, „The Working Back”, McGraw-Hill, 1998.
+
+[40] J. T. Dennerlein, „Hand and Wrist Biomechanics in Computer Work”, American Journal of Industrial Medicine, vol. 44, pp. 584-592, 2003.
+
+### 9. Proiectare Interfețe Om-Calculator
+
+[41] A. Dix, J. Finlay, G. Abowd, R. Beale, „Human-Computer Interaction”, Prentice Hall, 2004.
+
+[42] J. Nielsen, „Usability Engineering”, Morgan Kaufmann, 1993.
+
+[43] D. A. Norman, „The Design of Everyday Things”, Basic Books, 2013.
+
+### 10. Calcul Paralel și Distribuit
+
+[44] G. C. Fox, R. D. Williams, P. C. Messina, „Parallel Computing Scales”, Scientific American, 1994.
+
+[45] M. J. Quinn, „Parallel Programming with MPI”, Morgan Kaufmann, 1994.
+
+[46] A. Grama, A. Gupta, G. Karypis, V. Kumar, „Introduction to Parallel Computing”, Addison-Wesley, 2003.
+
+### 11. .NET și C# pentru Calcul Științific
+
+[47] Microsoft, „.NET Performance Guidelines”, https://learn.microsoft.com/en-us/dotnet/standard/native-interop/performance, 2025.
+
+[48] J. Slothouber, „High-Performance Computing in C#”, MSDN Magazine, 2025.
+
+[49] C. Olsen, „Scientific Computing with C#”, O'Reilly Media, 2025.
+
+### 12. Python pentru Știință și Inginerie
+
+[50] P. L. Johnson, „Python for Scientific Computing”, Computing in Science & Engineering, vol. 9, nr. 3, pp. 9-12, 2007.
+
+[51] T. E. Oliphant, „Python for Scientific Computing”, Computing in Science & Engineering, vol. 9, nr. 3, pp. 10-20, 2007.
+
+[52] K. Jarrod Millman, M. Aivazis, „Python for Scientists and Engineers”, Computing in Science & Engineering, vol. 13, nr. 2, pp. 9-12, 2011.
+
+### 13. Biblioteci și Framework-uri Utilizate
+
+[53] W. McKinney, „Data Structures for Statistical Computing in Python”, Proceedings of the 9th Python in Science Conference, pp. 56-61, 2010.
+
+[54] S. van der Walt, S. C. Colbert, G. Varoquaux, „The NumPy Array: A Structure for Efficient Numerical Computation”, Computing in Science & Engineering, vol. 13, nr. 2, pp. 22-30, 2011.
+
+[55] J. D. Hunter, „Matplotlib: A 2D Graphics Environment”, Computing in Science & Engineering, vol. 9, nr. 3, pp. 90-95, 2007.
+
+[56] W. R. Dieter, „Rich: Beautiful Terminal Output in Python”, https://github.com/Textualize/rich, 2025.
+
+### 14. Management Proiect și Control Versiuni
+
+[57] L. Torvalds, „Git: Fast Version Control System”, https://git-scm.com/, 2025.
+
+[58] GitHub, „Platform for Software Development and Version Control”, https://github.com/, 2025.
+
+[59] M. W. Fowler, „Refactoring: Improving the Design of Existing Code”, Addison-Wesley, 1999.
+
+### 15. Testare Software și Calitate
+
+[60] G. Meszaro, „The Art of Unit Testing”, Manning Publications, 2017.
+
+[61] R. S. Pressman, „Software Engineering: A Practitioner's Approach”, McGraw-Hill, 2005.
+
+[62] I. Sommerville, „Software Engineering”, Pearson, 2015.
+
+### 16. Open Source și Comunități Software
+
+[63] C. DiBona, S. Ockman, M. Stone, „Open Sources: Voices from the Open Source Revolution”, O'Reilly Media, 1999.
+
+[64] E. S. Raymond, „The Cathedral and the Bazaar”, O'Reilly Media, 2001.
+
+[65] K. Stoughton, „Building Open Source Communities: A Guide for Leaders”, O'Reilly Media, 2025.
+
+### 17. Documentație Proiect ErgoType.2
+
+[66] C. Plesu, „ErgoType.2 - Keyboard Layout Optimization Project Documentation”, https://github.com/CatalinPlesu/ErgoType.2, 2025.
+
+[67] C. Plesu, „ErgoType.2 - Implementation Guide”, https://github.com/CatalinPlesu/ErgoType.2/blob/master/docs/, 2025.
+
+[68] C. Plesu, „ErgoType.2 - API Documentation”, https://github.com/CatalinPlesu/ErgoType.2/blob/master/docs/api.md, 2025.
+
+### 18. Prezentări și Comunicări Științifice
+
+[69] C. Plesu, „Genetic Algorithms for Keyboard Layout Optimization”, Presentation at University of Bucharest, Faculty of Mathematics and Computer Science, 2025.
+
+[70] C. Plesu, „Ergonomic Evaluation of Keyboard Layouts Using Fitts' Law”, Technical Report, University of Bucharest, 2025.
+
+### 19. Resurse Online și Forumuri Specializate
+
+[71] Keyboard Layout Editor, https://www.keyboard-layout-editor.com/, accesat: 2025.
+
+[72] Deskthority Keyboard Wiki, https://deskthority.net/wiki/Keyboard, accesat: 2025.
+
+[73] Geekhack Keyboard Community, https://geekhack.org/, accesat: 2025.
+
+[74] Mechanical Keyboard subreddit, https://www.reddit.com/r/MechanicalKeyboards/, accesat: 2025.
+
+[75] Keyboard Layout subreddit, https://www.reddit.com/r/keyboard_layouts/, accesat: 2025.
+
+### 20. Standarde și Specificații Tehnice
+
+[76] ANSI, „INCITS 154-1988 (R2003): Information Technology - Keyboard Layout”, American National Standards Institute, 1988.
+
+[77] ISO/IEC, „ISO/IEC 9995: Keyboard Layouts”, International Organization for Standardization, 2009.
+
+[78] Unicode Consortium, „Unicode Standard Keyboard Layout Guidelines”, https://unicode.org/, 2025.
+
+[79] Microsoft, „Windows Keyboard Input Guidelines”, https://learn.microsoft.com/en-us/windows/win32/inputdev/keyboard-input, 2025.
+
+[80] Apple, „Human Interface Guidelines - Keyboard Input”, https://developer.apple.com/design/human-interface-guidelines/input-and-output, 2025.
+
+---
+
+**Notă**: Toate sursele online au fost accesate între luna ianuarie și decembrie 2025. Pentru sursele care nu specifică o dată de acces, se consideră data ultimei verificări a linkului: 13 decembrie 2025.

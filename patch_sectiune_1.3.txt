@@ -1,0 +1,73 @@
+# SECTION 1.3 - CLASIFICAREA TASTATURILOR - UPDATE
+
+## 1.3 Clasificarea Tastaturilor
+
+Tastatura poate fi analizată din două perspective: fizică, care cuprinde tastele, mecanismele și circuitele, și logică, care descrie modul în care apăsarea tastelor se transformă în acțiuni sau caractere. Acestea lucrează împreună pentru a asigura funcționarea dispozitivului.
+
+### 1.3.1 Clasificare Fizică
+
+Configurația fizică a unei tastaturi reprezintă primul factor care influențează confortul și viteza utilizatorului pe termen lung. Deși nu există un consens științific ferm care să lege direct un anumit layout de îmbunătățirea stării de sănătate, mulți utilizatori de layout-uri alternative susțin că acestea sunt mai comode, mai ergonomice și le diminuează riscul de afecțiuni precum RSI.
+
+#### Standarde Geometrice
+
+Taxonomia fizică include standardele geometrice de bază, precum ANSI și ISO. Diferența cea mai vizibilă constă în forma tastei Enter: un dreptunghi vertical la ANSI față de o cheie în formă de „L" răsturnat la ISO. O altă diferență notabilă este lungimea tastei Shift stânga, mai scurtă la ISO pentru a acomoda o tastă suplimentară. Deși ANSI este mai răspândit global, în special pe laptopuri, majoritatea dispozitivelor portabile nu implementează un standard pur, ci variante modificate pentru a se adapta constrângerilor severe de spațiu.
+
+#### Form Factors și Procentaje
+
+Un alt aspect al taxonomiei fizice este reprezentat de formele factor și procentajele asociate. Pe lângă standardul complet 100%, cu 104-105 taste, piața oferă o diversitate de compromisuri între funcționalitate și amprentă:
+
+- TKL ~80%
+- 75%
+- 65%
+- 60%
+- 40%
+
+Tastaturile TKL elimină blocul numeric dedicat, păstrând funcționalitatea completă a celoralte zone. Formatul 75% compactează layout-ul TKL prin reducerea spațiilor dintre clustere. Varianta 65% elimină rândul de funcții F1-F12 și blocul de navigare dedicat, păstrând însă tastele săgeți. Tastaturile 60% elimină și săgețile, mutând toate funcțiile secundare pe straturi logice accesate prin combinații de taste. Formatul 40% reprezintă o dimensiune și mai extremă, reducând drastic numărul de taste fizice și maximizând dependența de straturi logice.
+
+#### Tastaturi Ergonomice și Neconvenționale
+
+Tastaturile ergonomice și neconvenționale abordează în mod proactiv deficiențele design-ului standard, care perpetuează o geometrie eșalonată moștenită de la mașinile de scris mecanice. Principiile de design ergonomic sunt:
+
+- Împărțire fizică
+- Înclinare și tentare
+- Aranjare ortoliniară
+- Cluster pentru degetul mare
+
+În această categorie extinsă pot fi considerate și tastaturile DIY, create de membrii comunității. Împărțirea fizică permite o poziționare naturală a mâinilor la lățimea umerilor, reducând rotația internă a antebrațului. Înclinarea și tentarea referă la posibilitatea de a ridica centrul tastaturii, creând un profil în formă de „V" sau „cort" care minimizează pronația încheieturii. Aranjarea ortoliniară elimină eșalonarea tradițională, aliniind tastele pe coloane verticale care corespund mișcării naturale a degetelor. Cluster-ul pentru degetul mare redistribuie sarcinile de la degetul mic (care pe tastaturile convenționale acționează modificatorii) către degetul mare, cel mai puternic și abil dintre degete.
+
+### 1.3.2 Clasificare Logică
+
+Indiferent de forma fizică, funcțiile primare ale tastaturii pot fi clasificate sistemic în funcționalități logice standard, gestionate de sistemul de operare și BIOS. O clasificare a acestora după scop include:
+
+- Introducere simboluri
+- Caractere de spațiere
+- Modificatori de simbol
+- Editare și navigare text
+- Control OS/aplicație
+- Bloc numeric
+- Control media și sistem
+- Straturi logice standard
+
+Introducerea simbolurilor cuprinde caractere alfanumerice, cifre, punctuație și simboluri speciale, a căror mapare este dictată de layout-ul logic activ. Caracterele de spațiere, precum Spațiu, Tab și Enter, acționează asupra formatării și structurării textului, Enter având și rolul de confirmare în interfețe. Modificatorii de simbol includ Shift, Caps Lock și Num Lock, ultimele două fiind taste comutatoare care persistă starea până la o nouă acționare.
+
+Tastele de editare și navigare text, cum ar fi Backspace, Delete, Insert, săgețile și grupul Home/End/Page Up/Down, facilitează manipularea textuală fără a recurge la mouse. Tastele de control OS/aplicație, inclusiv Ctrl, Alt, Meta/Super/Windows, Escape și tastele funcție F1-F24, formează baza comenzilor rapide, multe dintre acestea e.g., Ctrl+C/V, fiind poziționate ergonomic pe layout-ul QWERTY tradițional.
+
+Blocul numeric reprezintă o zonă dedicată cu cifre aranjate în stil calculator, tastele sale având coduri scan diferite de cifrele din rândul superior al tastaturii principale. Tastele de control media și sistem permit reglarea volumului, luminozității și controlul redării multimedia. Straturile logice reprezintă un concept modern care permite tastelor să aibă funcții multiple, schimbate prin apăsarea unor taste de modificare sau prin aplicații de firmware.
+
+### 1.3.3 Implementare în Proiect
+
+În cadrul proiectului ErgoType.2, au fost implementate următoarele modele fizice de tastaturi:
+
+- **ANSI 60%** - model compact, frecvent folosit pentru testarea eficienței layout-urilor compacte
+- **ANSI 60% ThinkPad** - variantă adaptată pentru laptopuri cu trackpoint
+- **Dactyl Manuform 6x6** - tastatură ergonomic-curbată, cu taste aranjate în matrice 6x6 pe fiecare jumătate
+- **Ferris Sweep** - design „split" și curbat, cu taste dispuse pe mai multe rânduri și diagonale
+
+Aceste modele sunt stocate ca fișiere JSON conform standardului Keyboard Layout Editor (KLE) în directorul `src/data/keyboards/` și includ informații suplimentare despre:
+
+- Coordonatele exacte ale fiecărei taste
+- Degetul și mâna utilizată pentru fiecare tastă
+- Indicarea homing key-urilor (tastele F și J)
+- Aria de acțiune a fiecărui deget
+
+Această reprezentare detaliată permite calcularea precisă a distanțelor parcurse de degete în timpul simulării și oferă o bază solidă pentru evaluarea ergonomiei diferitelor layout-uri.

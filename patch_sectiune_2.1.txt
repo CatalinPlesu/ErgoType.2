@@ -1,0 +1,86 @@
+# SECTION 2.1 - TERMINOLOGIE DE BAZĂ - UPDATE
+
+## 2.1 Terminologie de Bază
+
+Înainte de a detalia mecanica Algoritmilor Genetici [23], este necesară familiarizarea cu conceptele fundamentale care definesc vocabularul și logica acestei metode. Populația reprezintă ansamblul de soluții candidate disponibile la un moment dat, fiind un subset al tuturor configuraților posibile. Fiecare soluție individuală din populație poartă denumirea de cromozom și este compusă din gene, adică poziții elementare care pot lua diferite valori numite alele. Distincția între genotip și fenotip este esențială pentru înțelegerea modului de funcționare: genotipul reprezintă forma codificată a soluției în spațiul computațional, ușor de manipulat de sistem, în timp ce fenotipul corespunde soluției în forma sa reală, aplicabilă problemei concrete. Transformarea dintre aceste două reprezentări se realizează prin codificare și decodificare, procese care trebuie să fie eficiente întrucât se efectuează repetat la fiecare evaluare. Funcția de fitness măsoară calitatea fiecărei soluții, cuantificând performanța acesteia în raport cu problema dată. Operatorii genetici, care includ recombinarea, mutația și selecția, sunt mecanismele prin care compoziția genetică a populației este modificată sistematic pentru explorarea spațiului de căutare.
+
+### 2.1.1 Reprezentarea Cromozomială pentru Probleme de Permutare
+
+Structura generică a unui Algoritm Genetic emulează procesul evoluției biologice prin parcurgerea unei serii de etape repetitive, numite generații, până la îndeplinirea unui criteriu de oprire. Algoritmul pornește cu trei faze fundamentale. Prima este inițializarea populației, unde se creează ansamblul inițial de soluții candidate, generat aleatoriu sau incluzând soluții cunoscute de calitate. Urmează calculul fitness-ului, în care se evaluează adecvarea fiecărui individ din populație. Apoi se inițiază ciclul evolutiv, bucla principală care se repetă până la îndeplinirea criteriului de terminare.
+
+Ciclul evolutiv parcurge patru etape distincte la fiecare generație. Selecția părinților alege indivizii care vor participa la reproducere, conferind șanse crescute celor cu performanțe superioare. Aplicarea operatorilor genetici folosește crossover-ul și mutația pentru a genera descendenți noi prin combinarea și modificarea materialului genetic al părinților. Evaluarea descendenților presupune decodificarea și calculul fitness-ului noilor soluții. Selecția supraviețuitorilor decide modul în care descendenții înlocuiesc indivizii existenți în populație.
+
+Alegerea metodei de reprezentare a cromozomilor este o decizie fundamentală care influențează semnificativ performanța algoritmului. O reprezentare neadecvată poate compromite succesul întregii abordări, motiv pentru care definirea precisă a reprezentării și cartografierea corectă între spațiul fenotip și cel genotip sunt esențiale. Reprezentarea optimă este întotdeauna specifică problemei abordate.
+
+### 2.1.2 Operatori Specializați pentru Permutări
+
+Cele mai frecvent utilizate tipuri sunt următoarele:
+
+- reprezentarea binară
+- reprezentarea cu valori reale
+- reprezentarea cu numere întregi
+- reprezentarea prin permutare
+
+Pentru problema optimizării layout-urilor de tastatură, reprezentarea prin permutare este cea mai potrivită, deoarece fiecare soluție reprezintă o rearanjare unică a caracterelor pe tastele fizice. Această reprezentare asigură că fiecare caracter apare exact o dată în layout, respectând constrângerile problemei.
+
+### 2.1.3 Arhitectură Implementare Specifică
+
+În implementarea proiectului ErgoType.2, au fost dezvoltați operatori specializați pentru problemele de permutare:
+
+#### Crossover Operatori
+- **PMX (Partially Mapped Crossover)**: păstrează relațiile de vecinătate între caractere
+- **Cycle Crossover**: menține pozițiile absolute ale genelor din părinți
+- **Order Crossover**: păstrează ordinea relativă a genelor
+
+#### Operatori de Mutație
+- **Swap Mutation**: schimbă două caractere între ele
+- **Reverse Mutation**: inversează ordinea unui subset de caractere
+- **Insertion Mutation**: mută un caracter pe o altă poziție
+
+### 2.1.4 Evaluare Paralelă și Distribuită
+
+Implementarea utilizează o arhitectură paralelă pentru evaluarea fitness-ului:
+
+```python
+# Arhitectură evaluare paralelă
+def _evaluate_individual_worker(individual_data, keyboard_file, text_file, 
+                               finger_coefficients, fitts_a, fitts_b):
+    """Worker function - each process evaluates ONE individual then exits"""
+    # Inițializare C# în fiecare proces
+    from core.clr_loader_helper import load_csharp_fitness_library
+    Fitness, _ = load_csharp_fitness_library(PROJECT_ROOT)
+    
+    # Evaluare individual
+    # Returnează fitness
+```
+
+Sistemul folosește:
+- **ProcessPoolExecutor** pentru evaluare paralelă
+- **CLR/.NET** pentru calculul intensiv de fitness în C#
+- **Distribuție job-uri** prin sistemul de coadă
+
+### 2.1.5 Gestionarea Populației
+
+Gestiunea populației constituie un aspect critic al algoritmului, performanța finală fiind puternic influențată de mărimea, diversitatea și metodele de înlocuire. Două considerente majore ghidează această gestiune: diversitatea și dimensiunea populației. Diversitatea populației este vitală pentru menținerea varietății genetice, o diversitate scăzută conducând la convergența prematură către un optim local și împiedicând explorarea completă a spațiului de căutare. Dimensiunea populației trebuie stabilită printr-un compromis, întrucât o populație prea mare încetinește algoritmul, în timp ce o populație prea mică nu asigură un bazin suficient de diversificat pentru reproducere.
+
+Există două strategii principale de generare a populației inițiale:
+
+- inițializarea aleatorie
+- inițializarea euristică
+
+Inițializarea aleatorie generează populația cu soluții complet aleatorii, garantând o diversitate maximă. Inițializarea euristică include soluții bazate pe cunoștințe prealabile sau pe modele existente. Abordarea optimă constă în însămânțarea populației cu un număr mic de soluții euristice de înaltă calitate, completând restul cu soluții aleatorii. Acest amestec permite atât exploatarea cunoștințelor existente, cât și explorarea spațiului de soluții necunoscut.
+
+### 2.1.6 Configurare Parametri
+
+Parametrii utilizați în implementare:
+
+```python
+# Configurare parametri algoritm genetic
+POPULATION_SIZE = 50        # Mărime populație
+GENERATIONS = 100          # Număr generații
+CROSSOVER_RATE = 0.8       # Probabilitate crossover
+MUTATION_RATE = 0.2        # Probabilitate mutație
+ELITISM_COUNT = 5          # Număr indivizi elită
+```
+
+Această implementare asigură o explorare eficientă a spațiului de soluții pentru problemele de optimizare complexe precum aranjarea layout-urilor de tastatură.
