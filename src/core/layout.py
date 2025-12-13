@@ -159,8 +159,17 @@ class Layout:
         for key_id, char in keys_to_add:
             # Create the layer-specific key_id
             layer_key_id = (key_id, target_layer)
-            # Add the character to this layer
-            self.mapper[layer_key_id] = Key(KeyType.CHAR, char)
+            
+            # Determine shifted version of the character
+            if char.islower():
+                shifted_char = char.upper()
+            elif char.isupper():
+                shifted_char = char.lower()
+            else:
+                shifted_char = char  # For symbols, use same character
+            
+            # Add the character to this layer as a tuple (unshifted, shifted)
+            self.mapper[layer_key_id] = Key(KeyType.CHAR, (char, shifted_char))
             self._print(f"  Added '{char}' to layer {target_layer} at key {key_id}")
 
     def apply_language_layout(self, remap):
@@ -211,17 +220,26 @@ class Layout:
         unshifted_symbols = []
         for (key_id, layer_id), key_obj in self.mapper.data.items():
             if key_obj.key_type == KeyType.CHAR:
-                unshifted_symbols.append(key_obj.value[0])
+                if isinstance(key_obj.value, tuple):
+                    unshifted_symbols.append(key_obj.value[0])
+                elif isinstance(key_obj.value, str):
+                    # Handle single character case (fallback for backwards compatibility)
+                    unshifted_symbols.append(key_obj.value)
             elif key_obj.key_type == KeyType.SPECIAL_CHAR:
-                char, _name = key_obj.value
-                unshifted_symbols.append(char)
+                if isinstance(key_obj.value, tuple):
+                    char, _name = key_obj.value
+                    unshifted_symbols.append(char)
         return unshifted_symbols
 
     def get_shifted_symbols(self):
         shifted_symbols = []
         for (key_id, layer_id), key_obj in self.mapper.data.items():
             if key_obj.key_type == KeyType.CHAR:
-                shifted_symbols.append(key_obj.value[1])
+                if isinstance(key_obj.value, tuple) and len(key_obj.value) > 1:
+                    shifted_symbols.append(key_obj.value[1])
+                elif isinstance(key_obj.value, str):
+                    # Handle single character case (fallback for backwards compatibility)
+                    shifted_symbols.append(key_obj.value.upper() if key_obj.value.islower() else key_obj.value)
 
         return shifted_symbols
 
