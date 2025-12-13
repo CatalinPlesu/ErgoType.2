@@ -91,7 +91,8 @@ class Layout:
         # Stage 1: Collect all keys that need to be remapped
         keys_to_update = []
         for before, after in remap:
-            if before == after:
+            # Skip None values (sparse multi-layer chromosomes can have None in layers)
+            if after is None or before == after:
                 continue
             char_keys = self.mapper.filter_data(
                 lambda key_id, layer_id, value: value.key_type == KeyType.CHAR and value.value[0] == before)
@@ -100,6 +101,10 @@ class Layout:
 
         # Stage 2: Apply all remappings
         for key_id, before, after in keys_to_update:
+            # Skip if after is None (defensive check, should be filtered in stage 1)
+            if after is None:
+                continue
+                
             # Get the original key to determine how to map the shifted version
             original_key_obj = self.mapper[key_id]
             if original_key_obj.key_type == KeyType.CHAR and isinstance(original_key_obj.value, tuple):
@@ -118,6 +123,45 @@ class Layout:
                 new_upper = after.upper()
 
             self.mapper[key_id] = Key(KeyType.CHAR, (after, new_upper))
+
+    def remap_to_layer(self, symbols_before, symbols_after, target_layer):
+        """
+        Remap characters to a specific layer (for multi-layer chromosomes).
+        This adds characters from the chromosome to upper layers in the mapper.
+        
+        Args:
+            symbols_before: QWERTY base layer positions (for position mapping)
+            symbols_after: Characters to place at those positions in the target layer
+            target_layer: Which layer to remap to (0 = base, 1 = AltGr, etc.)
+        """
+        if len(symbols_before) != len(symbols_after):
+            self._print(f"Can't remap layers with different length")
+            return
+        
+        remap = zip(symbols_before, symbols_after)
+        
+        # Stage 1: Collect all keys that need to be added to the target layer
+        keys_to_add = []
+        for before, after in remap:
+            # Skip None values (sparse multi-layer chromosomes can have None in layers)
+            if after is None or before == after:
+                continue
+            
+            # Find the keyboard key that had 'before' character in base layer
+            char_keys = self.mapper.filter_data(
+                lambda key_id, layer_id, value: layer_id == BASE_LAYER and value.key_type == KeyType.CHAR and value.value[0] == before)
+            
+            for char_key in char_keys:
+                key_id = char_key[0][0]  # Extract just the key position (not layer)
+                keys_to_add.append((key_id, after))
+        
+        # Stage 2: Add characters to the target layer
+        for key_id, char in keys_to_add:
+            # Create the layer-specific key_id
+            layer_key_id = (key_id, target_layer)
+            # Add the character to this layer
+            self.mapper[layer_key_id] = Key(KeyType.CHAR, char)
+            self._print(f"  Added '{char}' to layer {target_layer} at key {key_id}")
 
     def apply_language_layout(self, remap):
         self._print(f"Applying: '{remap['name']}' language layout")

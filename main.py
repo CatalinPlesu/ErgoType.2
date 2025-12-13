@@ -46,6 +46,52 @@ def get_available_text_files():
     return text_files
 
 
+def get_available_language_layouts():
+    """Get list of available language layout remappings"""
+    layouts_dir = Path(__file__).parent / "src" / "data" / "languages"
+    language_layouts = [("None (English/Default)", None)]  # Add default option
+    
+    if not layouts_dir.exists():
+        return language_layouts
+    
+    for file in layouts_dir.glob("*.py"):
+        if file.name == "__init__.py":
+            continue
+        
+        # Convert filename to display name
+        # e.g., "romanian_programmers.py" -> "Romanian Programmers"
+        name = file.stem.replace('_', ' ').title()
+        module_path = f"data.languages.{file.stem}"
+        language_layouts.append((name, module_path))
+    
+    return language_layouts
+
+
+def detect_language_layout_layers(language_layout):
+    """
+    Detect how many layers a language layout needs.
+    Returns (num_layers, max_layers) tuple.
+    """
+    if not language_layout:
+        return 1, 3  # Default: single layer, allow up to 3
+    
+    try:
+        # Import the language layout module
+        import importlib
+        module = importlib.import_module(language_layout)
+        layout = module.get_layout()
+        
+        # Check if it has altgr_remaps (indicates multi-layer)
+        if 'altgr_remaps' in layout and layout['altgr_remaps']:
+            # Has AltGr layer, so needs at least 2 layers
+            return 2, 3  # Start with 2, allow up to 3
+        else:
+            return 1, 3  # Single layer
+    except Exception as e:
+        print_warning(f"Could not detect language layout layers: {e}")
+        return 1, 3  # Default on error
+
+
 def print_app_header():
     """Print application header"""
     print_header(
@@ -101,8 +147,26 @@ def item_run_genetic():
     print_success(f"Selected: {text_file}")
     console.print()
 
+    # Language layout selection
+    console.print("[bold]Step 3: Select Language Layout Remapping (Optional)[/bold]\n")
+    language_layouts = get_available_language_layouts()
+    
+    default_language = prefs.get_last_language_layout()
+    result = select_from_list("Available Language Layouts", language_layouts, default_language)
+    if result is None:
+        print_warning("Cancelled")
+        return
+    _, language_layout = result
+    prefs.set_last_language_layout(language_layout)
+    
+    if language_layout:
+        print_success(f"Selected: {language_layout}")
+    else:
+        print_success("Selected: None (English/Default)")
+    console.print()
+
     # Get GA parameters
-    console.print("[bold]Step 3: Configure GA Parameters[/bold]\n")
+    console.print("[bold]Step 4: Configure GA Parameters[/bold]\n")
     saved_params = prefs.get_ga_params()
     
     # Import the new function
@@ -124,6 +188,19 @@ def item_run_genetic():
     max_iterations = ga_params['Max iterations']
     stagnant_limit = ga_params['Stagnation limit']
     max_processes = ga_params['Max parallel processes']
+    
+    # Group 1b: Mutation Parameters
+    mutation_params = get_parameter_group(
+        "Mutation Parameters",
+        [
+            {'name': 'Base mutation rate', 'default': 0.20, 'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0},
+            {'name': 'Layer mutation rate', 'default': 0.15, 'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0},
+        ],
+        saved_params
+    )
+    
+    mutation_rate = mutation_params['Base mutation rate']
+    layer_mutation_rate = mutation_params['Layer mutation rate']
     
     # Group 2: Fitts's Law Parameters
     fitts_params = get_parameter_group(
@@ -168,6 +245,11 @@ def item_run_genetic():
     finger_coefficients = [finger_left_params[f'Left Finger {i+1}'] for i in range(5)] + \
                           [finger_right_params[f'Right Finger {i+1}'] for i in range(5, 10)]
     
+    # Auto-detect number of layers based on language layout
+    num_layers, max_layers = detect_language_layout_layers(language_layout)
+    if num_layers > 1:
+        print_info(f"Detected multi-layer layout: starting with {num_layers} layers (max: {max_layers})")
+    
     # Simply use rabbitmq if it is on
     use_rabbitmq = True
 
@@ -177,6 +259,8 @@ def item_run_genetic():
         'Max iterations': max_iterations,
         'Stagnation limit': stagnant_limit,
         'Max parallel processes': max_processes,
+        'Base mutation rate': mutation_rate,
+        'Layer mutation rate': layer_mutation_rate,
         "Fitts's Law constant 'a'": fitts_a,
         "Fitts's Law constant 'b'": fitts_b,
         'finger_coefficients': finger_coefficients
@@ -186,14 +270,19 @@ def item_run_genetic():
     CONFIG = {
         'keyboard_file': keyboard_file,
         'text_file': text_file,
+        'language_layout': language_layout,
         'population_size': population_size,
         'max_iterations': max_iterations,
         'stagnant_limit': stagnant_limit,
         'max_concurrent_processes': max_processes,
+        'mutation_rate': mutation_rate,
+        'layer_mutation_rate': layer_mutation_rate,
         'fitts_a': fitts_a,
         'fitts_b': fitts_b,
         'finger_coefficients': finger_coefficients,
-        'use_rabbitmq': use_rabbitmq
+        'use_rabbitmq': use_rabbitmq,
+        'num_layers': num_layers,
+        'max_layers': max_layers
     }
     
     console.print()

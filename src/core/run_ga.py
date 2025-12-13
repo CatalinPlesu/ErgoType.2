@@ -249,9 +249,22 @@ def run_genetic_algorithm(
     stagnant_limit=15,
     max_concurrent_processes=4,
     use_rabbitmq=True,
-    save_heuristics=True
+    save_heuristics=True,
+    num_layers=1,
+    max_layers=3,
+    language_layout=None,
+    mutation_rate=0.20,
+    layer_mutation_rate=0.15
 ):
-    """Run the genetic algorithm with C# simulation and distributed processing"""
+    """Run the genetic algorithm with C# simulation and distributed processing
+    
+    Args:
+        num_layers: Initial number of layers for chromosomes (default: 1)
+        max_layers: Maximum number of layers allowed during evolution (default: 3)
+        language_layout: Module path for language layout remapping (e.g., 'data.languages.romanian_programmers')
+        mutation_rate: Probability that an individual gets mutated (default: 0.20 = 20%)
+        layer_mutation_rate: Probability of layer add/remove mutations (default: 0.15 = 15%)
+    """
     try:
         from rich.console import Console
         from rich.table import Table
@@ -271,6 +284,7 @@ def run_genetic_algorithm(
         table.add_column("Value", style="yellow")
         table.add_row("Keyboard", keyboard_file)
         table.add_row("Text file", text_file)
+        table.add_row("Language layout", language_layout if language_layout else "None (English/Default)")
         table.add_row("Fitts's Law", f"a={fitts_a}, b={fitts_b}")
         table.add_row("Population size", str(population_size))
         table.add_row("Max iterations", str(max_iterations))
@@ -278,6 +292,8 @@ def run_genetic_algorithm(
         table.add_row("Max processes", str(max_concurrent_processes))
         table.add_row("Use RabbitMQ", str(use_rabbitmq))
         table.add_row("Save heuristics", str(save_heuristics))
+        table.add_row("Initial layers", str(num_layers))
+        table.add_row("Max layers", str(max_layers))
         table.add_row("Start time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         console.print(table)
         console.print()
@@ -287,6 +303,7 @@ def run_genetic_algorithm(
         print("="*80)
         print(f"Keyboard: {keyboard_file}")
         print(f"Text file: {text_file}")
+        print(f"Language layout: {language_layout if language_layout else 'None (English/Default)'}")
         print(f"Fitts's Law: a={fitts_a}, b={fitts_b}")
         print(f"Population size: {population_size}")
         print(f"Max iterations: {max_iterations}")
@@ -294,6 +311,8 @@ def run_genetic_algorithm(
         print(f"Max processes: {max_concurrent_processes}")
         print(f"Use RabbitMQ: {use_rabbitmq}")
         print(f"Save heuristics: {save_heuristics}")
+        print(f"Initial layers: {num_layers}")
+        print(f"Max layers: {max_layers}")
         print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*80)
         print()
@@ -306,6 +325,11 @@ def run_genetic_algorithm(
         fitts_b=fitts_b,
         population_size=population_size,
         finger_coefficients=finger_coefficients,
+        num_layers=num_layers,
+        max_layers=max_layers,
+        language_layout=language_layout,
+        mutation_rate=mutation_rate,
+        layer_mutation_rate=layer_mutation_rate,
         max_concurrent_processes=max_concurrent_processes,
         use_rabbitmq=use_rabbitmq,
         is_worker=False  # Master mode
@@ -344,12 +368,21 @@ def run_genetic_algorithm(
         result_table.add_row("Fitness Score", f"{best_individual.fitness:.6f}")
         result_table.add_row("Raw Distance", f"{best_individual.distance:.2f}")
         result_table.add_row("Raw Time", f"{best_individual.time_taken:.2f}")
+        result_table.add_row("Layers", str(len(best_individual.chromosome)))
         parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ['Initial Population']
         result_table.add_row("Parents", ', '.join(parent_names))
         console.print(result_table)
         console.print()
-        console.print("[bold]Optimized Layout:[/bold]")
-        console.print(f"[green]{''.join(best_individual.chromosome)}[/green]")
+        console.print("[bold]Optimized Layout (Multi-Layer):[/bold]")
+        for layer_idx, layer in enumerate(best_individual.chromosome):
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            none_count = sum(1 for c in layer if c is None)
+            utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+            modifier = best_individual.get_modifier_for_layer(layer_idx)
+            if modifier:
+                console.print(f"[cyan]Layer {layer_idx} ({modifier}):[/cyan] [green]{layer_str}[/green] [dim]({utilization:.1f}% utilized)[/dim]")
+            else:
+                console.print(f"[cyan]Layer {layer_idx}:[/cyan] [green]{layer_str}[/green] [dim]({utilization:.1f}% utilized)[/dim]")
         console.print()
     else:
         print("\n" + "="*80)
@@ -359,16 +392,34 @@ def run_genetic_algorithm(
         print(f"Fitness Score: {best_individual.fitness:.6f}")
         print(f"Raw Distance: {best_individual.distance:.2f}")
         print(f"Raw Time: {best_individual.time_taken:.2f}")
+        print(f"Layers: {len(best_individual.chromosome)}")
         parent_names = [ga.get_individual_name(p) for p in best_individual.parents] if best_individual.parents else ['Initial Population']
         print(f"Parent Names: {', '.join(parent_names)}")
-        print(f"\nOptimized Layout:")
-        print(''.join(best_individual.chromosome))
+        print(f"\nOptimized Layout (Multi-Layer):")
+        for layer_idx, layer in enumerate(best_individual.chromosome):
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            none_count = sum(1 for c in layer if c is None)
+            utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+            modifier = best_individual.get_modifier_for_layer(layer_idx)
+            if modifier:
+                print(f"Layer {layer_idx} ({modifier}): {layer_str} ({utilization:.1f}% utilized)")
+            else:
+                print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
         print()
 
     # Get the top 3 best individuals
     sorted_population = sorted(ga.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
     top_3_individuals = sorted_population[:3]
 
+    # Serialize best individual chromosome (handle None values)
+    if isinstance(best_individual.chromosome[0], list):
+        best_chromosome_serialized = []
+        for layer in best_individual.chromosome:
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            best_chromosome_serialized.append(layer_str)
+    else:
+        best_chromosome_serialized = [''.join(c if c is not None else '∅' for c in best_individual.chromosome)]
+    
     # Save GA run metadata
     ga_run_data = {
         "timestamp": timestamp,
@@ -379,11 +430,17 @@ def run_genetic_algorithm(
         "finger_coefficients": finger_coefficients if finger_coefficients else [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07],
         "population_size": population_size,
         "max_iterations": max_iterations,
+        "actual_iterations": ga.actual_iterations if hasattr(ga, 'actual_iterations') else max_iterations,
         "stagnant_limit": stagnant_limit,
         "use_rabbitmq": use_rabbitmq,
+        "num_layers": num_layers,
+        "max_layers": max_layers,
+        "mutation_rate": mutation_rate,
+        "layer_mutation_rate": layer_mutation_rate,
         "best_fitness": best_individual.fitness,
         "best_layout_name": best_individual.name,
-        "best_layout": ''.join(best_individual.chromosome),
+        "best_layout": best_chromosome_serialized,
+        "best_layout_num_layers": len(best_individual.chromosome),
         "total_individuals_evaluated": len(ga.evaluated_individuals),
         "total_unique_individuals": len(ga.all_individuals)
     }
@@ -413,7 +470,8 @@ def run_genetic_algorithm(
                 'fitness': best_individual.fitness,
                 'distance': best_individual.distance,
                 'time_taken': best_individual.time_taken,
-                'chromosome': ''.join(best_individual.chromosome),
+                'chromosome': best_chromosome_serialized,
+                'num_layers': len(best_individual.chromosome),
                 'generation': best_individual.generation,
                 'parents': best_individual.parents
             }
@@ -458,9 +516,27 @@ def run_genetic_algorithm(
         print(f"Fitness: {individual.fitness:.6f}")
         print(f"Distance: {individual.distance:.2f}")
         print(f"Time: {individual.time_taken:.2f}")
-        print(f"Layout: {''.join(individual.chromosome)}")
+        print(f"Layers: {len(individual.chromosome)}")
+        for layer_idx, layer in enumerate(individual.chromosome):
+            layer_str = ''.join(c if c is not None else '∅' for c in layer)
+            none_count = sum(1 for c in layer if c is None)
+            utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+            modifier = individual.get_modifier_for_layer(layer_idx)
+            if modifier:
+                print(f"Layer {layer_idx} ({modifier}): {layer_str} ({utilization:.1f}% utilized)")
+            else:
+                print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
         
         parent_names = [ga.get_individual_name(p) for p in individual.parents] if individual.parents else []
+
+        # Serialize chromosome properly (handle None values)
+        if isinstance(individual.chromosome[0], list):
+            chromosome_serialized = []
+            for layer in individual.chromosome:
+                layer_str = ''.join(c if c is not None else '∅' for c in layer)
+                chromosome_serialized.append(layer_str)
+        else:
+            chromosome_serialized = [''.join(c if c is not None else '∅' for c in individual.chromosome)]
 
         json_data = {
             "timestamp": timestamp,
@@ -470,11 +546,11 @@ def run_genetic_algorithm(
             "fitness": individual.fitness,
             "distance": individual.distance,
             "time_taken": individual.time_taken,
-            "chromosome": individual.chromosome,
+            "chromosome": chromosome_serialized,
+            "num_layers": len(individual.chromosome),
             "parents": parent_names,
             "parent_ids": individual.parents,
             "generation": individual.generation,
-            "layout_string": ''.join(individual.chromosome),
             "keyboard_file": keyboard_file,
             "text_file": text_file
         }
@@ -489,7 +565,38 @@ def run_genetic_algorithm(
             evaluator = Evaluator(debug=False)
             evaluator.load_keyoard(ga.keyboard_file)
             evaluator.load_layout()
-            evaluator.layout.remap(LAYOUT_DATA["qwerty"], individual.chromosome)
+            
+            # Remap ALL layers of the multi-layer chromosome
+            num_chromosome_layers = len(individual.chromosome)
+            
+            # Remap each chromosome layer to its corresponding mapper layer
+            for layer_idx in range(num_chromosome_layers):
+                chromosome_layer = individual.chromosome[layer_idx]
+                # Filter out None values for remapping
+                qwerty_layer = LAYOUT_DATA["qwerty"]
+                
+                # Create a version of chromosome layer with None filtered for remapping
+                # Map position-to-position (QWERTY position -> new char at that position)
+                if layer_idx == 0:
+                    # Base layer: Use standard remap (handles uppercase/lowercase pairs)
+                    evaluator.layout.remap(qwerty_layer, chromosome_layer)
+                else:
+                    # Upper layers: Remap to AltGr layer in mapper
+                    # This adds characters to the AltGr layer at corresponding keyboard positions
+                    evaluator.layout.remap_to_layer(qwerty_layer, chromosome_layer, layer_idx)
+            
+            # Apply language layout if specified (for evolved layouts with custom language)
+            # This further modifies the mapper to add language-specific characters
+            if language_layout:
+                try:
+                    from importlib import import_module
+                    language_module = import_module(language_layout)
+                    if hasattr(language_module, 'get_layout'):
+                        lang_layout_data = language_module.get_layout()
+                        evaluator.layout.apply_language_layout(lang_layout_data)
+                        print(f"✅ Applied language layout: {lang_layout_data.get('name', language_layout)}")
+                except Exception as lang_err:
+                    print(f"⚠️  Could not apply language layout: {lang_err}")
 
             config_gen = CSharpFitnessConfig(
                 keyboard=evaluator.keyboard,
@@ -504,21 +611,28 @@ def run_genetic_algorithm(
             )
 
             print(f"📊 Generating statistics...")
-            fitness_calculator = Fitness(json_string)
-            stats_json = fitness_calculator.ComputeStats()
-            
-            stats_path = run_dir / f"{file_name}_stats.json"
-            with open(stats_path, 'w', encoding='utf-8') as f:
-                f.write(stats_json)
-            print(f"✅ Saved Stats: {stats_path.name}")
+            try:
+                fitness_calculator = Fitness(json_string)
+                stats_json = fitness_calculator.ComputeStats()
+                
+                if not stats_json or stats_json.strip() == "":
+                    raise ValueError("ComputeStats returned empty or null result")
+                
+                stats_path = run_dir / f"{file_name}_stats.json"
+                with open(stats_path, 'w', encoding='utf-8') as f:
+                    f.write(stats_json)
+                print(f"✅ Saved Stats: {stats_path.name}")
+            except Exception as stats_err:
+                print(f"⚠️  Could not generate stats for {layout_name}: {stats_err}")
+                print(f"   Skipping stats and visualizations for this layout.")
+                continue
 
-            layers = []
-            for key_id, layer_idx in evaluator.layout.mapper.data.keys():
-                if layer_idx not in layers:
-                    layers.append(layer_idx)
-            layers = sorted(layers) if layers else [0]
+            # Determine which layers to visualize
+            # Generate visualizations for ALL chromosome layers (not just what's in mapper)
+            layers_to_visualize = list(range(num_chromosome_layers))
+            print(f"📸 Generating visualizations for {num_chromosome_layers} layer(s)...")
 
-            for layer_idx in layers:
+            for layer_idx in layers_to_visualize:
                 save_layout_visualizations(
                     stats_json=stats_json,
                     keyboard=evaluator.keyboard,
@@ -566,7 +680,16 @@ if __name__ == "__main__":
     print(f"Fitness: {best.fitness:.6f}")
     print(f"Distance: {best.distance:.2f}")
     print(f"Time: {best.time_taken:.2f}")
-    print(f"Layout: {''.join(best.chromosome)}")
+    print(f"Layers: {len(best.chromosome)}")
+    for layer_idx, layer in enumerate(best.chromosome):
+        layer_str = ''.join(c if c is not None else '∅' for c in layer)
+        none_count = sum(1 for c in layer if c is None)
+        utilization = ((len(layer) - none_count) / len(layer)) * 100 if layer else 0
+        modifier = best.get_modifier_for_layer(layer_idx)
+        if modifier:
+            print(f"Layer {layer_idx} ({modifier}): {layer_str} ({utilization:.1f}% utilized)")
+        else:
+            print(f"Layer {layer_idx}: {layer_str} ({utilization:.1f}% utilized)")
     print("="*80)
     
     print("\n💡 To use different parameters, modify the CONFIG dictionary")
