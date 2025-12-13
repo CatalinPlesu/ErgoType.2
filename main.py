@@ -189,6 +189,19 @@ def item_run_genetic():
     stagnant_limit = ga_params['Stagnation limit']
     max_processes = ga_params['Max parallel processes']
     
+    # Group 1b: Mutation Parameters
+    mutation_params = get_parameter_group(
+        "Mutation Parameters",
+        [
+            {'name': 'Base mutation rate', 'default': 0.20, 'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0},
+            {'name': 'Layer mutation rate', 'default': 0.15, 'param_type': 'float', 'min_val': 0.0, 'max_val': 1.0},
+        ],
+        saved_params
+    )
+    
+    mutation_rate = mutation_params['Base mutation rate']
+    layer_mutation_rate = mutation_params['Layer mutation rate']
+    
     # Group 2: Fitts's Law Parameters
     fitts_params = get_parameter_group(
         "Fitts's Law Parameters",
@@ -246,6 +259,8 @@ def item_run_genetic():
         'Max iterations': max_iterations,
         'Stagnation limit': stagnant_limit,
         'Max parallel processes': max_processes,
+        'Base mutation rate': mutation_rate,
+        'Layer mutation rate': layer_mutation_rate,
         "Fitts's Law constant 'a'": fitts_a,
         "Fitts's Law constant 'b'": fitts_b,
         'finger_coefficients': finger_coefficients
@@ -260,6 +275,8 @@ def item_run_genetic():
         'max_iterations': max_iterations,
         'stagnant_limit': stagnant_limit,
         'max_concurrent_processes': max_processes,
+        'mutation_rate': mutation_rate,
+        'layer_mutation_rate': layer_mutation_rate,
         'fitts_a': fitts_a,
         'fitts_b': fitts_b,
         'finger_coefficients': finger_coefficients,

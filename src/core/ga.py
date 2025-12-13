@@ -1202,7 +1202,11 @@ class GeneticAlgorithmSimulation:
             base_layer[base_pos], upper_layer[upper_pos] = upper_layer[upper_pos], base_layer[base_pos]
     
     def add_layer_mutation_exponential(self, individual):
-        """Type 7: Add new sparse layer with exponentially decreasing probability"""
+        """Type 7: Add new sparse layer with exponentially decreasing probability
+        
+        Also attempts to place a modifier key on the base layer to access the new layer.
+        If the modifier key would replace an indispensable key, that key is moved to the new layer.
+        """
         if not individual.chromosome or len(individual.chromosome) == 0:
             return
         
@@ -1222,15 +1226,50 @@ class GeneticAlgorithmSimulation:
             # Create sparse new layer (mostly None)
             new_layer = [None] * len(base_layer)
             
-            # Seed with 1-3 random characters
-            num_seeds = random.randint(1, 3)
-            seed_positions = random.sample(range(len(base_layer)), min(num_seeds, len(base_layer)))
-            available_chars = [c for c in base_layer if c is not None]
-            random.shuffle(available_chars)
+            # Try to find a position for the layer modifier key on base layer
+            # Prefer positions with less important keys (not letters)
+            letter_positions = []
+            non_letter_positions = []
             
-            for i, pos in enumerate(seed_positions):
-                if i < len(available_chars):
-                    new_layer[pos] = available_chars[i]
+            for i, char in enumerate(base_layer):
+                if char is not None:
+                    if char.isalpha():
+                        letter_positions.append(i)
+                    else:
+                        non_letter_positions.append(i)
+            
+            # Attempt to place modifier on a non-letter key position
+            modifier_position = None
+            replaced_key = None
+            
+            if non_letter_positions:
+                # Prefer replacing non-letter keys
+                modifier_position = random.choice(non_letter_positions)
+                replaced_key = base_layer[modifier_position]
+            elif letter_positions:
+                # If no non-letter positions, use a letter position
+                modifier_position = random.choice(letter_positions)
+                replaced_key = base_layer[modifier_position]
+            
+            # If we found a position and replaced a key, move that key to the new layer
+            if modifier_position is not None and replaced_key is not None:
+                # Move the replaced key to the new layer at the same position
+                new_layer[modifier_position] = replaced_key
+                # Mark base layer position as having a modifier (using a special marker)
+                # Note: In actual implementation, the modifier is metadata, not in the chromosome
+                # The chromosome position could remain the same or be marked differently
+            
+            # Seed new layer with 1-3 additional random characters
+            num_seeds = random.randint(1, 3)
+            available_positions = [i for i in range(len(base_layer)) if new_layer[i] is None]
+            if available_positions:
+                seed_positions = random.sample(available_positions, min(num_seeds, len(available_positions)))
+                available_chars = [c for c in base_layer if c is not None]
+                random.shuffle(available_chars)
+                
+                for i, pos in enumerate(seed_positions):
+                    if i < len(available_chars):
+                        new_layer[pos] = available_chars[i]
             
             individual.chromosome.append(new_layer)
             
@@ -1244,7 +1283,10 @@ class GeneticAlgorithmSimulation:
                 individual.layer_modifiers[new_layer_idx] = 'Ctrl+Alt'
             
             modifier = individual.layer_modifiers.get(new_layer_idx, '?')
-            print(f"  ➕ Added sparse layer {new_layer_idx} to {individual.name}: now has {len(individual.chromosome)} layers (accessed via {modifier})")
+            if modifier_position is not None and replaced_key is not None:
+                print(f"  ➕ Added sparse layer {new_layer_idx} to {individual.name}: now has {len(individual.chromosome)} layers (accessed via {modifier}, moved '{replaced_key}' to new layer)")
+            else:
+                print(f"  ➕ Added sparse layer {new_layer_idx} to {individual.name}: now has {len(individual.chromosome)} layers (accessed via {modifier})")
     
     def remove_layer_mutation(self, individual):
         """Remove a layer from an individual's chromosome (never remove base layer)"""
