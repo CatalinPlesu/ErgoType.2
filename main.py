@@ -559,6 +559,286 @@ def item_generate_heuristics():
         print_error(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
+def item_run_ga_queue():
+    """Execute a queue of GA runs sequentially"""
+    try:
+        from core.ga_runs_queue import GARunsQueue, create_run_config, create_parameter_exploration_queue
+        from pathlib import Path
+        
+        print_header("Execute GA Runs Queue", "Run multiple GA configurations sequentially")
+        
+        console.print("[bold]About this feature:[/bold]")
+        console.print("Execute multiple GA runs with different parameters sequentially.")
+        console.print("The Individual ID counter is automatically reset between runs.")
+        console.print()
+        
+        # Create a sub-menu for queue options
+        submenu = RichMenu("📋 GA Runs Queue - Select Option")
+        submenu.add_item("1️⃣  Run Parameter Exploration (25 configs, ~3 hours)", lambda: _execute_parameter_exploration())
+        submenu.add_item("2️⃣  Load Queue from File", lambda: _execute_queue_from_file())
+        submenu.add_item("3️⃣  Create Custom Queue Interactively", lambda: _create_custom_queue())
+        
+        submenu.display()
+    
+    except Exception as e:
+        print_error(f"Error loading GA queue functionality: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _execute_parameter_exploration():
+    """Execute the 25-configuration parameter exploration matrix"""
+    from core.ga_runs_queue import create_parameter_exploration_queue
+    from datetime import datetime
+    
+    print_header("Parameter Exploration Matrix", "25 configurations covering iteration/population space")
+    
+    queue = create_parameter_exploration_queue()
+    
+    console.print(f"[bold]Parameter Exploration Queue:[/bold]")
+    console.print(f"Total configurations: {len(queue.runs)}")
+    console.print(f"Estimated runtime: ~3 hours")
+    console.print(f"All runs use: stagnant_limit=3, max_concurrent_processes=1")
+    console.print()
+    
+    console.print("[bold]Configuration matrix:[/bold]\n")
+    
+    # Display in a table format
+    from rich.table import Table
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Iterations", justify="right", width=10)
+    table.add_column("Population", justify="right", width=10)
+    table.add_column("Purpose", width=30)
+    
+    for i, run in enumerate(queue.runs, 1):
+        table.add_row(
+            str(i),
+            str(run['max_iterations']),
+            str(run['population_size']),
+            run['name'].split('_', 3)[-1].replace('_', ' ')
+        )
+    
+    console.print(table)
+    console.print()
+    
+    if not confirm_action("Execute all 25 configurations?", default=True):
+        print_warning("Cancelled")
+        return
+    
+    try:
+        console.print()
+        print_info("Starting parameter exploration...")
+        results = queue.execute(verbose=True)
+        
+        # Save results
+        timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+        results_file = f"output/ga_queue_results/param_exploration_{timestamp}.json"
+        queue.save_results(results_file)
+        
+        console.print()
+        print_success(f"Parameter exploration complete! Results saved to {results_file}")
+        
+    except Exception as e:
+        console.print()
+        print_error(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _execute_queue_from_file():
+    """Load and execute a queue from a JSON file"""
+    from core.ga_runs_queue import GARunsQueue
+    from datetime import datetime
+    # Import Prompt locally to avoid dependency when queue feature isn't used
+    from rich.prompt import Prompt
+    import os
+    
+    print_header("Load Queue from File", "Execute a saved queue configuration")
+    
+    # Check for saved queue files
+    queue_dir = Path("output/ga_queues")
+    if queue_dir.exists():
+        queue_files = list(queue_dir.glob("*.json"))
+        if queue_files:
+            console.print("[bold]Available queue files:[/bold]\n")
+            for i, qf in enumerate(queue_files, 1):
+                console.print(f"  {i}. {qf.name}")
+            console.print()
+    
+    # Ask for file path
+    file_path = Prompt.ask("Enter queue file path", default="output/example_ga_queue.json")
+    
+    if not os.path.exists(file_path):
+        print_error(f"File not found: {file_path}")
+        return
+    
+    try:
+        queue = GARunsQueue()
+        queue.load_from_file(file_path)
+        
+        print_success(f"Loaded queue from {file_path}")
+        console.print(f"\n[bold]Queue contains {len(queue.runs)} runs:[/bold]\n")
+        for i, run in enumerate(queue.runs, 1):
+            console.print(f"  {i}. [cyan]{run['name']}[/cyan]")
+            console.print(f"     Population: {run['population_size']}, Iterations: {run['max_iterations']}")
+        console.print()
+        
+        if not confirm_action("Execute this queue?", default=True):
+            print_warning("Cancelled")
+            return
+        
+        console.print()
+        print_info("Starting queue execution...")
+        results = queue.execute(verbose=True)
+        
+        # Save results
+        timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+        results_file = f"output/ga_queue_results/queue_{timestamp}.json"
+        queue.save_results(results_file)
+        
+        console.print()
+        print_success(f"Queue execution complete! Results saved to {results_file}")
+        
+    except Exception as e:
+        console.print()
+        print_error(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _create_custom_queue():
+    """Interactively create and execute a custom queue"""
+    from core.ga_runs_queue import GARunsQueue, create_run_config
+    from datetime import datetime
+    # Import Prompt locally to avoid dependency when queue feature isn't used
+    from rich.prompt import Prompt
+    
+    print_header("Create Custom Queue", "Define multiple GA runs interactively")
+    
+    prefs = Preferences()
+    queue = GARunsQueue()
+    
+    # Get available keyboards and text files
+    keyboards = get_available_keyboards()
+    text_files = get_available_text_files()
+    
+    if not keyboards or not text_files:
+        print_error("No keyboards or text files found!")
+        return
+    
+    console.print("[bold]Add runs to the queue[/bold]")
+    console.print("[dim]You can add multiple runs with different parameters[/dim]\n")
+    
+    while True:
+        run_number = len(queue.runs) + 1
+        console.print(f"\n[bold cyan]Configuring Run #{run_number}[/bold cyan]\n")
+        
+        # Get run name
+        default_name = f"Run {run_number}"
+        run_name = Prompt.ask("Run name", default=default_name)
+        
+        # Keyboard selection
+        console.print("\n[bold]Select Keyboard:[/bold]")
+        default_keyboard = prefs.get_last_keyboard()
+        result = select_from_list("Available Keyboards", keyboards, default_keyboard)
+        if result is None:
+            print_warning("Using default keyboard")
+            keyboard_file = 'src/data/keyboards/ansi_60_percent.json'
+        else:
+            _, keyboard_file = result
+        
+        # Text file selection
+        console.print("\n[bold]Select Text File:[/bold]")
+        default_text = prefs.get_last_text_file()
+        result = select_from_list("Available Text Files", text_files, default_text, show_size=True)
+        if result is None:
+            print_warning("Using default text file")
+            text_file = 'src/data/text/raw/simple_wikipedia_dataset.txt'
+        else:
+            _, text_file = result
+        
+        # Get GA parameters
+        console.print("\n[bold]GA Parameters:[/bold]")
+        saved_params = prefs.get_ga_params()
+        
+        from ui.rich_menu import get_parameter_group
+        
+        ga_params = get_parameter_group(
+            "GA Parameters",
+            [
+                {'name': 'Population size', 'default': saved_params.get('Population size', 30), 
+                 'param_type': 'int', 'min_val': 1, 'max_val': 500},
+                {'name': 'Max iterations', 'default': saved_params.get('Max iterations', 50), 
+                 'param_type': 'int', 'min_val': 1, 'max_val': 1000},
+                {'name': 'Stagnation limit', 'default': saved_params.get('Stagnation limit', 10), 
+                 'param_type': 'int', 'min_val': 1, 'max_val': 100},
+                {'name': 'Max parallel processes', 'default': saved_params.get('Max parallel processes', 4), 
+                 'param_type': 'int', 'min_val': 1, 'max_val': 32},
+            ],
+            saved_params
+        )
+        
+        # Create run configuration as a dictionary
+        run_config = create_run_config(
+            name=run_name,
+            keyboard_file=keyboard_file,
+            text_file=text_file,
+            population_size=ga_params['Population size'],
+            max_iterations=ga_params['Max iterations'],
+            stagnant_limit=ga_params['Stagnation limit'],
+            max_concurrent_processes=ga_params['Max parallel processes']
+        )
+        
+        queue.add_run(run_config)
+        print_success(f"Added run: {run_name}")
+        
+        # Ask if user wants to add more runs
+        console.print()
+        if not confirm_action("Add another run to the queue?", default=False):
+            break
+    
+    # Show queue summary
+    console.print(f"\n[bold]Queue Summary:[/bold]")
+    console.print(f"Total runs: {len(queue.runs)}\n")
+    for i, run in enumerate(queue.runs, 1):
+        console.print(f"  {i}. [cyan]{run['name']}[/cyan]")
+        console.print(f"     Population: {run['population_size']}, Iterations: {run['max_iterations']}")
+    console.print()
+    
+    # Ask to save queue configuration
+    if confirm_action("Save queue configuration to file?", default=True):
+        timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+        queue_file = f"output/ga_queues/custom_queue_{timestamp}.json"
+        Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
+        queue.save_to_file(queue_file)
+        print_success(f"Queue saved to {queue_file}")
+        console.print()
+    
+    # Execute the queue
+    if confirm_action("Execute this queue now?", default=True):
+        try:
+            console.print()
+            print_info("Starting queue execution...")
+            results = queue.execute(verbose=True)
+            
+            # Save results
+            timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            results_file = f"output/ga_queue_results/queue_{timestamp}.json"
+            queue.save_results(results_file)
+            
+            console.print()
+            print_success(f"Queue execution complete! Results saved to {results_file}")
+            
+        except Exception as e:
+            console.print()
+            print_error(f"ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print_warning("Queue execution cancelled")
+
+
 def item_analyze_ga_runs():
     """Analyze GA Runs - Sub-menu for inspection and comparison"""
     print_header("Analyze GA Runs", "Inspect and compare genetic algorithm results")
@@ -594,6 +874,7 @@ def main():
     
     # Register all menu item functions
     menu.add_item("🚀 Run Genetic Algorithm (Master Mode)", item_run_genetic)
+    menu.add_item("📋 Execute GA Runs Queue", item_run_ga_queue)
     menu.add_item("🔧 Run as Worker Node (Distributed Processing)", item_run_worker)
     menu.add_item("🎯 Generate All Heuristic Heatmaps", item_generate_heuristics)
     menu.add_item("🔬 Analyze GA Runs", item_analyze_ga_runs)
