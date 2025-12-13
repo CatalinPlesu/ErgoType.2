@@ -110,6 +110,10 @@ class GARunsQueue:
         
         self.results.clear()
         
+        # Track overall execution metrics
+        queue_start_time = datetime.now()
+        total_individuals_processed = 0
+        
         for i, run_config in enumerate(self.runs, 1):
             if verbose:
                 print(f"\n{'='*80}")
@@ -134,6 +138,10 @@ class GARunsQueue:
                 end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 
+                # Calculate individuals processed in this run
+                individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                total_individuals_processed += individuals_this_run
+                
                 # Store results
                 result = {
                     'run_number': i,
@@ -141,6 +149,7 @@ class GARunsQueue:
                     'start_time': start_time.isoformat(),
                     'end_time': end_time.isoformat(),
                     'duration_seconds': duration,
+                    'individuals_processed': individuals_this_run,
                     'success': True,
                     'best_fitness': best_individual.fitness if best_individual and hasattr(best_individual, 'fitness') else None,
                     'best_layout': ''.join(best_individual.chromosome) if best_individual and hasattr(best_individual, 'chromosome') else None,
@@ -154,10 +163,22 @@ class GARunsQueue:
                     print(f"   Duration: {duration:.2f} seconds")
                     if best_individual:
                         print(f"   Best fitness: {best_individual.fitness:.6f}")
+                    
+                    # Print progress banner
+                    self._print_progress_banner(
+                        i, 
+                        len(self.runs), 
+                        queue_start_time, 
+                        total_individuals_processed
+                    )
                 
             except Exception as e:
                 end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
+                
+                # Estimate individuals processed (may be less if failed early)
+                individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                total_individuals_processed += individuals_this_run
                 
                 if verbose:
                     print(f"\n❌ Run {i} failed: {e}")
@@ -170,17 +191,92 @@ class GARunsQueue:
                     'start_time': start_time.isoformat(),
                     'end_time': end_time.isoformat(),
                     'duration_seconds': duration,
+                    'individuals_processed': individuals_this_run,
                     'success': False,
                     'error': str(e),
                     'config': run_config
                 }
                 
                 self.results.append(result)
+                
+                if verbose:
+                    # Print progress banner even for failed runs
+                    self._print_progress_banner(
+                        i, 
+                        len(self.runs), 
+                        queue_start_time, 
+                        total_individuals_processed
+                    )
         
         if verbose:
             self._print_summary()
         
         return self.results
+    
+    def _print_progress_banner(self, completed: int, total: int, start_time: datetime, total_individuals: int):
+        """
+        Print a detailed progress banner after each run completion.
+        
+        Args:
+            completed: Number of runs completed
+            total: Total number of runs
+            start_time: When the queue execution started
+            total_individuals: Total individuals processed so far
+        """
+        elapsed = (datetime.now() - start_time).total_seconds()
+        elapsed_str = self._format_duration(elapsed)
+        
+        # Calculate time per individual
+        time_per_individual = elapsed / total_individuals if total_individuals > 0 else 0
+        
+        # Estimate remaining individuals to process
+        remaining_individuals = 0
+        for i in range(completed, total):
+            run = self.runs[i]
+            remaining_individuals += run['population_size'] * run['max_iterations']
+        
+        # Estimate remaining time
+        estimated_remaining = remaining_individuals * time_per_individual if time_per_individual > 0 else 0
+        remaining_str = self._format_duration(estimated_remaining)
+        
+        # Calculate percentage
+        percentage = (completed / total) * 100
+        
+        # Create progress bar
+        bar_width = 50
+        filled = int(bar_width * completed / total)
+        bar = '█' * filled + '░' * (bar_width - filled)
+        
+        # Print banner
+        print("\n" + "╔" + "═"*78 + "╗")
+        print("║" + " "*78 + "║")
+        print("║" + f"{'QUEUE EXECUTION PROGRESS':^78}" + "║")
+        print("║" + " "*78 + "║")
+        print("╠" + "═"*78 + "╣")
+        print("║" + " "*78 + "║")
+        print("║" + f"  Progress: [{bar}] {percentage:>5.1f}%".ljust(78) + "║")
+        print("║" + f"  Completed: {completed}/{total} runs".ljust(78) + "║")
+        print("║" + " "*78 + "║")
+        print("║" + f"  ⏱️  Elapsed Time:    {elapsed_str}".ljust(78) + "║")
+        print("║" + f"  ⏳ Estimated Remaining: {remaining_str}".ljust(78) + "║")
+        print("║" + " "*78 + "║")
+        print("║" + f"  📊 Individuals Processed: {total_individuals:,}".ljust(78) + "║")
+        print("║" + f"  ⚡ Time per Individual:   {time_per_individual*1000:.2f} ms".ljust(78) + "║")
+        print("║" + " "*78 + "║")
+        print("╚" + "═"*78 + "╝")
+    
+    def _format_duration(self, seconds: float) -> str:
+        """Format duration in seconds to a human-readable string."""
+        if seconds < 60:
+            return f"{seconds:.0f}s"
+        elif seconds < 3600:
+            mins = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f"{mins}m {secs}s"
+        else:
+            hours = int(seconds // 3600)
+            mins = int((seconds % 3600) // 60)
+            return f"{hours}h {mins}m"
     
     def _print_summary(self):
         """Print summary of all runs"""
