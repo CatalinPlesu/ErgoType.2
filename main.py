@@ -562,7 +562,7 @@ def item_generate_heuristics():
 def item_run_ga_queue():
     """Execute a queue of GA runs sequentially"""
     try:
-        from core.ga_runs_queue import GARunsQueue, GARunConfig, create_example_queue
+        from core.ga_runs_queue import GARunsQueue, create_run_config, create_example_queue
         from pathlib import Path
         
         print_header("Execute GA Runs Queue", "Run multiple GA configurations sequentially")
@@ -597,8 +597,8 @@ def _execute_example_queue():
     
     console.print(f"[bold]Queue contains {len(queue.runs)} runs:[/bold]\n")
     for i, run in enumerate(queue.runs, 1):
-        console.print(f"  {i}. [cyan]{run.name}[/cyan]")
-        console.print(f"     Population: {run.population_size}, Iterations: {run.max_iterations}")
+        console.print(f"  {i}. [cyan]{run['name']}[/cyan]")
+        console.print(f"     Population: {run['population_size']}, Iterations: {run['max_iterations']}")
     console.print()
     
     if not confirm_action("Execute this queue?", default=True):
@@ -659,8 +659,8 @@ def _execute_queue_from_file():
         print_success(f"Loaded queue from {file_path}")
         console.print(f"\n[bold]Queue contains {len(queue.runs)} runs:[/bold]\n")
         for i, run in enumerate(queue.runs, 1):
-            console.print(f"  {i}. [cyan]{run.name}[/cyan]")
-            console.print(f"     Population: {run.population_size}, Iterations: {run.max_iterations}")
+            console.print(f"  {i}. [cyan]{run['name']}[/cyan]")
+            console.print(f"     Population: {run['population_size']}, Iterations: {run['max_iterations']}")
         console.print()
         
         if not confirm_action("Execute this queue?", default=True):
@@ -688,7 +688,7 @@ def _execute_queue_from_file():
 
 def _create_custom_queue():
     """Interactively create and execute a custom queue"""
-    from core.ga_runs_queue import GARunsQueue, GARunConfig
+    from core.ga_runs_queue import GARunsQueue, create_run_config
     from datetime import datetime
     # Import Prompt locally to avoid dependency when queue feature isn't used
     from rich.prompt import Prompt
@@ -758,8 +758,8 @@ def _create_custom_queue():
             saved_params
         )
         
-        # Create run configuration
-        run_config = GARunConfig(
+        # Create run configuration as a dictionary
+        run_config = create_run_config(
             name=run_name,
             keyboard_file=keyboard_file,
             text_file=text_file,
@@ -781,8 +781,8 @@ def _create_custom_queue():
     console.print(f"\n[bold]Queue Summary:[/bold]")
     console.print(f"Total runs: {len(queue.runs)}\n")
     for i, run in enumerate(queue.runs, 1):
-        console.print(f"  {i}. [cyan]{run.name}[/cyan]")
-        console.print(f"     Population: {run.population_size}, Iterations: {run.max_iterations}")
+        console.print(f"  {i}. [cyan]{run['name']}[/cyan]")
+        console.print(f"     Population: {run['population_size']}, Iterations: {run['max_iterations']}")
     console.print()
     
     # Ask to save queue configuration

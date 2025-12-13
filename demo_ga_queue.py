@@ -129,26 +129,26 @@ def demonstrate_queue_usage():
     print("DEMONSTRATION: Creating a Queue with Multiple Runs")
     print("=" * 80)
     
-    from core.ga_runs_queue import GARunsQueue, GARunConfig
+    from core.ga_runs_queue import GARunsQueue, create_run_config
     
     queue = GARunsQueue()
     
-    # Add multiple runs
-    queue.add_run(GARunConfig(
+    # Add multiple runs using create_run_config helper
+    queue.add_run(create_run_config(
         name="Quick Test",
         population_size=5,
         max_iterations=3,
         stagnant_limit=2
     ))
     
-    queue.add_run(GARunConfig(
+    queue.add_run(create_run_config(
         name="Medium Run",
         population_size=10,
         max_iterations=5,
         stagnant_limit=3
     ))
     
-    queue.add_run(GARunConfig(
+    queue.add_run(create_run_config(
         name="Fitts Experiment",
         population_size=8,
         max_iterations=4,
@@ -156,14 +156,38 @@ def demonstrate_queue_usage():
         fitts_b=0.4
     ))
     
+    # Alternative: Add run as a plain dictionary
+    queue.add_run({
+        'name': 'Direct Dictionary Run',
+        'population_size': 12,
+        'max_iterations': 6
+    })
+    
     print(f"\nCreated queue with {len(queue.runs)} runs:")
     
     for i, run in enumerate(queue.runs, 1):
-        print(f"\n{i}. {run.name}")
-        print(f"   Population: {run.population_size}")
-        print(f"   Iterations: {run.max_iterations}")
-        print(f"   Stagnation: {run.stagnant_limit}")
-        print(f"   Fitts: a={run.fitts_a}, b={run.fitts_b}")
+        print(f"\n{i}. {run['name']}")
+        print(f"   Population: {run['population_size']}")
+        print(f"   Iterations: {run['max_iterations']}")
+        print(f"   Stagnation: {run['stagnant_limit']}")
+        print(f"   Fitts: a={run['fitts_a']}, b={run['fitts_b']}")
+    
+    # Demonstrate easy manipulation
+    print("\n" + "=" * 80)
+    print("DEMONSTRATION: Easy Queue Manipulation")
+    print("=" * 80)
+    
+    print("\nOriginal queue has", len(queue.runs), "runs")
+    
+    # Remove a run by index
+    print("\nRemoving run at index 1 (Medium Run)...")
+    queue.remove_run(1)
+    print(f"Queue now has {len(queue.runs)} runs")
+    
+    # Directly modify a run in the list
+    print("\nModifying the first run's population size...")
+    queue.runs[0]['population_size'] = 15
+    print(f"First run now has population size: {queue.runs[0]['population_size']}")
     
     # Save to file
     Path('output').mkdir(exist_ok=True)
@@ -178,7 +202,7 @@ def demonstrate_queue_usage():
     print("  2. Run 'Quick Test' with specified parameters")
     print("  3. Save results")
     print("  4. Reset Individual._next_id = 0")
-    print("  5. Run 'Medium Run' with specified parameters")
+    print("  5. Run 'Direct Dictionary Run' with specified parameters")
     print("  6. Save results")
     print("  7. Reset Individual._next_id = 0")
     print("  8. Run 'Fitts Experiment' with specified parameters")

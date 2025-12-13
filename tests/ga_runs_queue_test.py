@@ -13,65 +13,42 @@ from pathlib import Path
 # Add src to import path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from core.ga_runs_queue import GARunsQueue, GARunConfig, create_example_queue
+from core.ga_runs_queue import GARunsQueue, create_run_config, create_example_queue, DEFAULT_PARAMS
 
 
-class TestGARunConfig(unittest.TestCase):
-    """Test GARunConfig class"""
+class TestCreateRunConfig(unittest.TestCase):
+    """Test create_run_config helper function"""
     
     def test_create_config(self):
         """Test creating a run configuration"""
-        config = GARunConfig(
+        config = create_run_config(
             name="Test Run",
             population_size=20,
             max_iterations=30
         )
         
-        self.assertEqual(config.name, "Test Run")
-        self.assertEqual(config.population_size, 20)
-        self.assertEqual(config.max_iterations, 30)
+        self.assertEqual(config['name'], "Test Run")
+        self.assertEqual(config['population_size'], 20)
+        self.assertEqual(config['max_iterations'], 30)
     
-    def test_to_dict(self):
-        """Test converting config to dictionary"""
-        config = GARunConfig(
-            name="Test Run",
-            population_size=20,
-            max_iterations=30
-        )
-        
-        config_dict = config.to_dict()
-        
-        self.assertIn('population_size', config_dict)
-        self.assertIn('max_iterations', config_dict)
-        self.assertEqual(config_dict['population_size'], 20)
-        self.assertEqual(config_dict['max_iterations'], 30)
-    
-    def test_to_json(self):
-        """Test converting config to JSON-serializable dict"""
-        config = GARunConfig(
+    def test_config_with_defaults(self):
+        """Test that config merges with defaults"""
+        config = create_run_config(
             name="Test Run",
             population_size=20
         )
         
-        json_data = config.to_json()
-        
-        self.assertIn('name', json_data)
-        self.assertEqual(json_data['name'], "Test Run")
-        self.assertEqual(json_data['population_size'], 20)
+        # Should have default values for other params
+        self.assertIn('max_iterations', config)
+        self.assertEqual(config['max_iterations'], DEFAULT_PARAMS['max_iterations'])
+        self.assertIn('fitts_a', config)
+        self.assertEqual(config['fitts_a'], DEFAULT_PARAMS['fitts_a'])
     
-    def test_from_dict(self):
-        """Test creating config from dictionary"""
-        data = {
-            'name': 'Test Run',
-            'population_size': 25,
-            'max_iterations': 40
-        }
+    def test_config_is_dict(self):
+        """Test that config is a dictionary"""
+        config = create_run_config(name="Test Run")
         
-        config = GARunConfig.from_dict(data)
-        
-        self.assertEqual(config.name, "Test Run")
-        self.assertEqual(config.population_size, 25)
-        self.assertEqual(config.max_iterations, 40)
+        self.assertIsInstance(config, dict)
 
 
 class TestGARunsQueue(unittest.TestCase):
@@ -84,25 +61,52 @@ class TestGARunsQueue(unittest.TestCase):
         self.assertEqual(len(queue.runs), 0)
         self.assertEqual(len(queue.results), 0)
     
-    def test_add_run(self):
-        """Test adding runs to queue"""
+    def test_add_run_with_dict(self):
+        """Test adding runs to queue using dictionaries"""
         queue = GARunsQueue()
         
-        config1 = GARunConfig(name="Run 1", population_size=10)
-        config2 = GARunConfig(name="Run 2", population_size=20)
+        config1 = {'name': 'Run 1', 'population_size': 10}
+        config2 = {'name': 'Run 2', 'population_size': 20}
         
         queue.add_run(config1)
         queue.add_run(config2)
         
         self.assertEqual(len(queue.runs), 2)
-        self.assertEqual(queue.runs[0].name, "Run 1")
-        self.assertEqual(queue.runs[1].name, "Run 2")
+        self.assertEqual(queue.runs[0]['name'], "Run 1")
+        self.assertEqual(queue.runs[1]['name'], "Run 2")
+    
+    def test_add_run_with_helper(self):
+        """Test adding runs to queue using create_run_config"""
+        queue = GARunsQueue()
+        
+        queue.add_run(create_run_config(name="Run 1", population_size=10))
+        queue.add_run(create_run_config(name="Run 2", population_size=20))
+        
+        self.assertEqual(len(queue.runs), 2)
+        self.assertEqual(queue.runs[0]['name'], "Run 1")
+        self.assertEqual(queue.runs[1]['name'], "Run 2")
+    
+    def test_remove_run(self):
+        """Test removing runs from queue"""
+        queue = GARunsQueue()
+        
+        queue.add_run({'name': 'Run 1'})
+        queue.add_run({'name': 'Run 2'})
+        queue.add_run({'name': 'Run 3'})
+        
+        self.assertEqual(len(queue.runs), 3)
+        
+        queue.remove_run(1)  # Remove Run 2
+        
+        self.assertEqual(len(queue.runs), 2)
+        self.assertEqual(queue.runs[0]['name'], "Run 1")
+        self.assertEqual(queue.runs[1]['name'], "Run 3")
     
     def test_clear(self):
         """Test clearing queue"""
         queue = GARunsQueue()
-        queue.add_run(GARunConfig(name="Run 1"))
-        queue.add_run(GARunConfig(name="Run 2"))
+        queue.add_run({'name': 'Run 1'})
+        queue.add_run({'name': 'Run 2'})
         
         self.assertEqual(len(queue.runs), 2)
         
@@ -114,8 +118,8 @@ class TestGARunsQueue(unittest.TestCase):
     def test_save_and_load(self):
         """Test saving and loading queue from file"""
         queue = GARunsQueue()
-        queue.add_run(GARunConfig(name="Run 1", population_size=15))
-        queue.add_run(GARunConfig(name="Run 2", population_size=25))
+        queue.add_run(create_run_config(name="Run 1", population_size=15))
+        queue.add_run(create_run_config(name="Run 2", population_size=25))
         
         # Save to temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
@@ -133,10 +137,10 @@ class TestGARunsQueue(unittest.TestCase):
             
             # Verify loaded queue matches original
             self.assertEqual(len(queue2.runs), 2)
-            self.assertEqual(queue2.runs[0].name, "Run 1")
-            self.assertEqual(queue2.runs[0].population_size, 15)
-            self.assertEqual(queue2.runs[1].name, "Run 2")
-            self.assertEqual(queue2.runs[1].population_size, 25)
+            self.assertEqual(queue2.runs[0]['name'], "Run 1")
+            self.assertEqual(queue2.runs[0]['population_size'], 15)
+            self.assertEqual(queue2.runs[1]['name'], "Run 2")
+            self.assertEqual(queue2.runs[1]['population_size'], 25)
             
         finally:
             # Clean up
@@ -151,9 +155,9 @@ class TestGARunsQueue(unittest.TestCase):
         
         # Verify all runs have names
         for run in queue.runs:
-            self.assertIsNotNone(run.name)
-            self.assertGreater(run.population_size, 0)
-            self.assertGreater(run.max_iterations, 0)
+            self.assertIn('name', run)
+            self.assertGreater(run['population_size'], 0)
+            self.assertGreater(run['max_iterations'], 0)
 
 
 class TestIndividualIDReset(unittest.TestCase):
@@ -200,7 +204,7 @@ class TestQueueConfigSerialization(unittest.TestCase):
     def test_json_serialization(self):
         """Test that queue can be serialized to JSON"""
         queue = GARunsQueue()
-        queue.add_run(GARunConfig(
+        queue.add_run(create_run_config(
             name="Test Run",
             population_size=30,
             max_iterations=50,

@@ -1,5 +1,6 @@
 """
 GA Runs Queue - Programmatically define and execute multiple GA runs sequentially.
+Queue is stored as a list of dictionaries for easy manipulation.
 """
 import json
 from pathlib import Path
@@ -7,76 +8,70 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 
-class GARunConfig:
-    """Configuration for a single GA run"""
+# Default parameter values
+DEFAULT_PARAMS = {
+    'keyboard_file': 'src/data/keyboards/ansi_60_percent.json',
+    'text_file': 'src/data/text/raw/simple_wikipedia_dataset.txt',
+    'population_size': 30,
+    'max_iterations': 50,
+    'stagnant_limit': 10,
+    'max_concurrent_processes': 4,
+    'fitts_a': 0.5,
+    'fitts_b': 0.3,
+    'finger_coefficients': [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07],
+    'use_rabbitmq': True,
+    'save_heuristics': True
+}
+
+
+def create_run_config(name: str, **kwargs) -> Dict[str, Any]:
+    """
+    Create a run configuration dictionary.
     
-    def __init__(
-        self,
-        name: str,
-        keyboard_file: str = 'src/data/keyboards/ansi_60_percent.json',
-        text_file: str = 'src/data/text/raw/simple_wikipedia_dataset.txt',
-        population_size: int = 30,
-        max_iterations: int = 50,
-        stagnant_limit: int = 10,
-        max_concurrent_processes: int = 4,
-        fitts_a: float = 0.5,
-        fitts_b: float = 0.3,
-        finger_coefficients: Optional[List[float]] = None,
-        use_rabbitmq: bool = True,
-        save_heuristics: bool = True
-    ):
-        self.name = name
-        self.keyboard_file = keyboard_file
-        self.text_file = text_file
-        self.population_size = population_size
-        self.max_iterations = max_iterations
-        self.stagnant_limit = stagnant_limit
-        self.max_concurrent_processes = max_concurrent_processes
-        self.fitts_a = fitts_a
-        self.fitts_b = fitts_b
-        self.finger_coefficients = finger_coefficients or [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07]
-        self.use_rabbitmq = use_rabbitmq
-        self.save_heuristics = save_heuristics
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for run_genetic_algorithm"""
-        return {
-            'keyboard_file': self.keyboard_file,
-            'text_file': self.text_file,
-            'population_size': self.population_size,
-            'max_iterations': self.max_iterations,
-            'stagnant_limit': self.stagnant_limit,
-            'max_concurrent_processes': self.max_concurrent_processes,
-            'fitts_a': self.fitts_a,
-            'fitts_b': self.fitts_b,
-            'finger_coefficients': self.finger_coefficients,
-            'use_rabbitmq': self.use_rabbitmq,
-            'save_heuristics': self.save_heuristics
-        }
-    
-    def to_json(self) -> Dict[str, Any]:
-        """Convert to JSON-serializable dictionary"""
-        return {
-            'name': self.name,
-            **self.to_dict()
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'GARunConfig':
-        """Create from dictionary"""
-        return cls(**data)
+    Args:
+        name: Name of the run
+        **kwargs: Any GA parameters to override defaults
+        
+    Returns:
+        Dictionary with run configuration
+    """
+    config = {'name': name}
+    config.update(DEFAULT_PARAMS)
+    config.update(kwargs)
+    return config
 
 
 class GARunsQueue:
-    """Queue of GA runs to execute sequentially"""
+    """
+    Queue of GA runs to execute sequentially.
+    Stores runs as a list of dictionaries for easy adding/removing.
+    """
     
     def __init__(self):
-        self.runs: List[GARunConfig] = []
+        self.runs: List[Dict[str, Any]] = []
         self.results: List[Dict[str, Any]] = []
     
-    def add_run(self, config: GARunConfig):
-        """Add a run configuration to the queue"""
-        self.runs.append(config)
+    def add_run(self, run_config: Dict[str, Any]):
+        """
+        Add a run configuration to the queue.
+        
+        Args:
+            run_config: Dictionary with run parameters (use create_run_config helper)
+        """
+        # Ensure name is present
+        if 'name' not in run_config:
+            run_config['name'] = f"Run {len(self.runs) + 1}"
+        
+        # Merge with defaults for any missing parameters
+        full_config = DEFAULT_PARAMS.copy()
+        full_config.update(run_config)
+        
+        self.runs.append(full_config)
+    
+    def remove_run(self, index: int):
+        """Remove a run by index"""
+        if 0 <= index < len(self.runs):
+            self.runs.pop(index)
     
     def clear(self):
         """Clear all runs from the queue"""
@@ -86,7 +81,7 @@ class GARunsQueue:
     def save_to_file(self, filepath: str):
         """Save queue configuration to a JSON file"""
         data = {
-            'runs': [run.to_json() for run in self.runs]
+            'runs': self.runs
         }
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
@@ -98,7 +93,7 @@ class GARunsQueue:
         
         self.runs.clear()
         for run_data in data.get('runs', []):
-            self.runs.append(GARunConfig.from_dict(run_data))
+            self.add_run(run_data)
     
     def execute(self, verbose: bool = True):
         """
@@ -118,7 +113,7 @@ class GARunsQueue:
         for i, run_config in enumerate(self.runs, 1):
             if verbose:
                 print(f"\n{'='*80}")
-                print(f"RUN {i}/{len(self.runs)}: {run_config.name}")
+                print(f"RUN {i}/{len(self.runs)}: {run_config['name']}")
                 print(f"{'='*80}")
             
             # CRITICAL: Reset Individual ID counter before each run
@@ -130,8 +125,11 @@ class GARunsQueue:
             start_time = datetime.now()
             
             try:
+                # Extract parameters for run_genetic_algorithm (exclude 'name')
+                run_params = {k: v for k, v in run_config.items() if k != 'name'}
+                
                 # Execute the GA run
-                best_individual = run_genetic_algorithm(**run_config.to_dict())
+                best_individual = run_genetic_algorithm(**run_params)
                 
                 end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
@@ -139,14 +137,14 @@ class GARunsQueue:
                 # Store results
                 result = {
                     'run_number': i,
-                    'name': run_config.name,
+                    'name': run_config['name'],
                     'start_time': start_time.isoformat(),
                     'end_time': end_time.isoformat(),
                     'duration_seconds': duration,
                     'success': True,
                     'best_fitness': best_individual.fitness if best_individual and hasattr(best_individual, 'fitness') else None,
                     'best_layout': ''.join(best_individual.chromosome) if best_individual and hasattr(best_individual, 'chromosome') else None,
-                    'config': run_config.to_json()
+                    'config': run_config
                 }
                 
                 self.results.append(result)
@@ -168,13 +166,13 @@ class GARunsQueue:
                 
                 result = {
                     'run_number': i,
-                    'name': run_config.name,
+                    'name': run_config['name'],
                     'start_time': start_time.isoformat(),
                     'end_time': end_time.isoformat(),
                     'duration_seconds': duration,
                     'success': False,
                     'error': str(e),
-                    'config': run_config.to_json()
+                    'config': run_config
                 }
                 
                 self.results.append(result)
@@ -236,7 +234,7 @@ def create_example_queue() -> GARunsQueue:
     queue = GARunsQueue()
     
     # Example 1: Small population, quick test
-    queue.add_run(GARunConfig(
+    queue.add_run(create_run_config(
         name="Quick Test - Small Population",
         population_size=10,
         max_iterations=20,
@@ -245,7 +243,7 @@ def create_example_queue() -> GARunsQueue:
     ))
     
     # Example 2: Medium population
-    queue.add_run(GARunConfig(
+    queue.add_run(create_run_config(
         name="Medium Run - Standard Parameters",
         population_size=30,
         max_iterations=50,
@@ -254,7 +252,7 @@ def create_example_queue() -> GARunsQueue:
     ))
     
     # Example 3: Different Fitts's Law parameters
-    queue.add_run(GARunConfig(
+    queue.add_run(create_run_config(
         name="Custom Fitts Parameters",
         population_size=20,
         max_iterations=30,
@@ -273,7 +271,7 @@ if __name__ == "__main__":
     
     print(f"Created queue with {len(queue.runs)} runs:")
     for i, run in enumerate(queue.runs, 1):
-        print(f"{i}. {run.name}")
+        print(f"{i}. {run['name']}")
     
     # Save queue configuration
     queue.save_to_file("output/example_ga_queue.json")
