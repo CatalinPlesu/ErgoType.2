@@ -18,7 +18,6 @@ from ui.rich_menu import (
     print_error, print_info, print_warning
 )
 from ui.preferences import Preferences
-from rich.prompt import Prompt
 
 
 def get_available_keyboards():
@@ -562,23 +561,29 @@ def item_generate_heuristics():
         traceback.print_exc()
 def item_run_ga_queue():
     """Execute a queue of GA runs sequentially"""
-    from core.ga_runs_queue import GARunsQueue, GARunConfig, create_example_queue
-    from pathlib import Path
+    try:
+        from core.ga_runs_queue import GARunsQueue, GARunConfig, create_example_queue
+        from pathlib import Path
+        
+        print_header("Execute GA Runs Queue", "Run multiple GA configurations sequentially")
+        
+        console.print("[bold]About this feature:[/bold]")
+        console.print("Execute multiple GA runs with different parameters sequentially.")
+        console.print("The Individual ID counter is automatically reset between runs.")
+        console.print()
+        
+        # Create a sub-menu for queue options
+        submenu = RichMenu("📋 GA Runs Queue - Select Option")
+        submenu.add_item("1️⃣  Run Example Queue (3 preconfigured runs)", lambda: _execute_example_queue())
+        submenu.add_item("2️⃣  Load Queue from File", lambda: _execute_queue_from_file())
+        submenu.add_item("3️⃣  Create Custom Queue Interactively", lambda: _create_custom_queue())
+        
+        submenu.display()
     
-    print_header("Execute GA Runs Queue", "Run multiple GA configurations sequentially")
-    
-    console.print("[bold]About this feature:[/bold]")
-    console.print("Execute multiple GA runs with different parameters sequentially.")
-    console.print("The Individual ID counter is automatically reset between runs.")
-    console.print()
-    
-    # Create a sub-menu for queue options
-    submenu = RichMenu("📋 GA Runs Queue - Select Option")
-    submenu.add_item("1️⃣  Run Example Queue (3 preconfigured runs)", lambda: _execute_example_queue())
-    submenu.add_item("2️⃣  Load Queue from File", lambda: _execute_queue_from_file())
-    submenu.add_item("3️⃣  Create Custom Queue Interactively", lambda: _create_custom_queue())
-    
-    submenu.display()
+    except Exception as e:
+        print_error(f"Error loading GA queue functionality: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def _execute_example_queue():
@@ -624,6 +629,7 @@ def _execute_queue_from_file():
     """Load and execute a queue from a JSON file"""
     from core.ga_runs_queue import GARunsQueue
     from datetime import datetime
+    from rich.prompt import Prompt
     import os
     
     print_header("Load Queue from File", "Execute a saved queue configuration")
@@ -683,6 +689,7 @@ def _create_custom_queue():
     """Interactively create and execute a custom queue"""
     from core.ga_runs_queue import GARunsQueue, GARunConfig
     from datetime import datetime
+    from rich.prompt import Prompt
     
     print_header("Create Custom Queue", "Define multiple GA runs interactively")
     

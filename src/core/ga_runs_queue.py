@@ -143,8 +143,8 @@ class GARunsQueue:
                     'end_time': end_time.isoformat(),
                     'duration_seconds': duration,
                     'success': True,
-                    'best_fitness': best_individual.fitness if best_individual else None,
-                    'best_layout': ''.join(best_individual.chromosome) if best_individual else None,
+                    'best_fitness': best_individual.fitness if best_individual and hasattr(best_individual, 'fitness') else None,
+                    'best_layout': ''.join(best_individual.chromosome) if best_individual and hasattr(best_individual, 'chromosome') else None,
                     'config': run_config.to_json()
                 }
                 
@@ -157,6 +157,9 @@ class GARunsQueue:
                         print(f"   Best fitness: {best_individual.fitness:.6f}")
                 
             except Exception as e:
+                end_time = datetime.now()
+                duration = (end_time - start_time).total_seconds() if 'start_time' in locals() else 0
+                
                 if verbose:
                     print(f"\n❌ Run {i} failed: {e}")
                     import traceback
@@ -165,7 +168,9 @@ class GARunsQueue:
                 result = {
                     'run_number': i,
                     'name': run_config.name,
-                    'start_time': datetime.now().isoformat(),
+                    'start_time': start_time.isoformat() if 'start_time' in locals() else datetime.now().isoformat(),
+                    'end_time': end_time.isoformat(),
+                    'duration_seconds': duration,
                     'success': False,
                     'error': str(e),
                     'config': run_config.to_json()
