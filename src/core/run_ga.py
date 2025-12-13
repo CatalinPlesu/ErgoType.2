@@ -611,13 +611,21 @@ def run_genetic_algorithm(
             )
 
             print(f"📊 Generating statistics...")
-            fitness_calculator = Fitness(json_string)
-            stats_json = fitness_calculator.ComputeStats()
-            
-            stats_path = run_dir / f"{file_name}_stats.json"
-            with open(stats_path, 'w', encoding='utf-8') as f:
-                f.write(stats_json)
-            print(f"✅ Saved Stats: {stats_path.name}")
+            try:
+                fitness_calculator = Fitness(json_string)
+                stats_json = fitness_calculator.ComputeStats()
+                
+                if not stats_json or stats_json.strip() == "":
+                    raise ValueError("ComputeStats returned empty or null result")
+                
+                stats_path = run_dir / f"{file_name}_stats.json"
+                with open(stats_path, 'w', encoding='utf-8') as f:
+                    f.write(stats_json)
+                print(f"✅ Saved Stats: {stats_path.name}")
+            except Exception as stats_err:
+                print(f"⚠️  Could not generate stats for {layout_name}: {stats_err}")
+                print(f"   Skipping stats and visualizations for this layout.")
+                continue
 
             # Determine which layers to visualize
             # Generate visualizations for ALL chromosome layers (not just what's in mapper)
