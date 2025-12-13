@@ -1216,9 +1216,10 @@ class GeneticAlgorithmSimulation:
         if current_layers >= self.max_layers:
             return
         
-        # Exponential decay probability: 5% / (2^(n-1))
-        # Layer 2: 5%, Layer 3: 2.5%, Layer 4: 1.25%
-        probability = 0.05 / (2 ** (current_layers - 1))
+        # Exponential decay probability based on layer_mutation_rate
+        # Use layer_mutation_rate as base instead of hardcoded 0.05
+        # Layer 2: layer_mutation_rate, Layer 3: layer_mutation_rate/2, Layer 4: layer_mutation_rate/4
+        probability = self.layer_mutation_rate / (2 ** (current_layers - 1))
         
         if random.random() < probability:
             base_layer = individual.chromosome[0]
