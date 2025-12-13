@@ -226,45 +226,6 @@ class GARunsQueue:
         print(f"\n✅ Results saved to: {filepath}")
 
 
-def create_example_queue() -> GARunsQueue:
-    """
-    Create an example queue with multiple GA runs for demonstration.
-    Users can modify this function or create their own queues programmatically.
-    """
-    queue = GARunsQueue()
-    
-    # Example 1: Small population, quick test
-    queue.add_run(create_run_config(
-        name="Quick Test - Small Population",
-        population_size=10,
-        max_iterations=20,
-        stagnant_limit=5,
-        max_concurrent_processes=4
-    ))
-    
-    # Example 2: Medium population
-    queue.add_run(create_run_config(
-        name="Medium Run - Standard Parameters",
-        population_size=30,
-        max_iterations=50,
-        stagnant_limit=10,
-        max_concurrent_processes=4
-    ))
-    
-    # Example 3: Different Fitts's Law parameters
-    queue.add_run(create_run_config(
-        name="Custom Fitts Parameters",
-        population_size=20,
-        max_iterations=30,
-        stagnant_limit=8,
-        fitts_a=0.6,
-        fitts_b=0.4,
-        max_concurrent_processes=4
-    ))
-    
-    return queue
-
-
 def create_parameter_exploration_queue() -> GARunsQueue:
     """
     Create a 25-configuration matrix for parameter space exploration.
@@ -323,16 +284,16 @@ def create_parameter_exploration_queue() -> GARunsQueue:
 
 
 if __name__ == "__main__":
-    # Example usage
-    queue = create_example_queue()
+    # Example usage - create parameter exploration queue
+    queue = create_parameter_exploration_queue()
     
-    print(f"Created queue with {len(queue.runs)} runs:")
+    print(f"Created parameter exploration queue with {len(queue.runs)} runs:")
     for i, run in enumerate(queue.runs, 1):
         print(f"{i}. {run['name']}")
     
     # Save queue configuration
-    queue.save_to_file("output/example_ga_queue.json")
-    print("\nQueue configuration saved to output/example_ga_queue.json")
+    queue.save_to_file("output/param_exploration_queue.json")
+    print("\nQueue configuration saved to output/param_exploration_queue.json")
     
     # Execute the queue
     # queue.execute()

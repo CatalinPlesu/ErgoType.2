@@ -562,7 +562,7 @@ def item_generate_heuristics():
 def item_run_ga_queue():
     """Execute a queue of GA runs sequentially"""
     try:
-        from core.ga_runs_queue import GARunsQueue, create_run_config, create_example_queue, create_parameter_exploration_queue
+        from core.ga_runs_queue import GARunsQueue, create_run_config, create_parameter_exploration_queue
         from pathlib import Path
         
         print_header("Execute GA Runs Queue", "Run multiple GA configurations sequentially")
@@ -574,10 +574,9 @@ def item_run_ga_queue():
         
         # Create a sub-menu for queue options
         submenu = RichMenu("📋 GA Runs Queue - Select Option")
-        submenu.add_item("1️⃣  Run Example Queue (3 preconfigured runs)", lambda: _execute_example_queue())
-        submenu.add_item("2️⃣  Run Parameter Exploration (25 configs, ~3 hours)", lambda: _execute_parameter_exploration())
-        submenu.add_item("3️⃣  Load Queue from File", lambda: _execute_queue_from_file())
-        submenu.add_item("4️⃣  Create Custom Queue Interactively", lambda: _create_custom_queue())
+        submenu.add_item("1️⃣  Run Parameter Exploration (25 configs, ~3 hours)", lambda: _execute_parameter_exploration())
+        submenu.add_item("2️⃣  Load Queue from File", lambda: _execute_queue_from_file())
+        submenu.add_item("3️⃣  Create Custom Queue Interactively", lambda: _create_custom_queue())
         
         submenu.display()
     
@@ -639,45 +638,6 @@ def _execute_parameter_exploration():
         
         console.print()
         print_success(f"Parameter exploration complete! Results saved to {results_file}")
-        
-    except Exception as e:
-        console.print()
-        print_error(f"ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-
-
-def _execute_example_queue():
-    """Execute the example queue with 3 preconfigured runs"""
-    from core.ga_runs_queue import create_example_queue
-    from datetime import datetime
-    
-    print_header("Execute Example Queue", "3 preconfigured GA runs")
-    
-    queue = create_example_queue()
-    
-    console.print(f"[bold]Queue contains {len(queue.runs)} runs:[/bold]\n")
-    for i, run in enumerate(queue.runs, 1):
-        console.print(f"  {i}. [cyan]{run['name']}[/cyan]")
-        console.print(f"     Population: {run['population_size']}, Iterations: {run['max_iterations']}")
-    console.print()
-    
-    if not confirm_action("Execute this queue?", default=True):
-        print_warning("Cancelled")
-        return
-    
-    try:
-        console.print()
-        print_info("Starting queue execution...")
-        results = queue.execute(verbose=True)
-        
-        # Save results
-        timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
-        results_file = f"output/ga_queue_results/queue_{timestamp}.json"
-        queue.save_results(results_file)
-        
-        console.print()
-        print_success(f"Queue execution complete! Results saved to {results_file}")
         
     except Exception as e:
         console.print()

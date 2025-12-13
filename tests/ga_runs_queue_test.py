@@ -13,7 +13,7 @@ from pathlib import Path
 # Add src to import path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from core.ga_runs_queue import GARunsQueue, create_run_config, create_example_queue, DEFAULT_PARAMS
+from core.ga_runs_queue import GARunsQueue, create_run_config, DEFAULT_PARAMS
 
 
 class TestCreateRunConfig(unittest.TestCase):
@@ -146,18 +146,6 @@ class TestGARunsQueue(unittest.TestCase):
             # Clean up
             if Path(temp_path).exists():
                 Path(temp_path).unlink()
-    
-    def test_create_example_queue(self):
-        """Test the example queue creation"""
-        queue = create_example_queue()
-        
-        self.assertGreater(len(queue.runs), 0)
-        
-        # Verify all runs have names
-        for run in queue.runs:
-            self.assertIn('name', run)
-            self.assertGreater(run['population_size'], 0)
-            self.assertGreater(run['max_iterations'], 0)
     
     def test_create_parameter_exploration_queue(self):
         """Test the parameter exploration queue creation"""
