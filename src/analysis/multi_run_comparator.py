@@ -217,6 +217,7 @@ class MultiRunComparator:
     def _generate_3d_correlation_plot(self, output_dir: Path):
         """Generate 3D correlation: population size x actual iterations -> fitness"""
         import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 - Required for 3D projection
         
         pop_sizes = [s['population_size'] for s in self.summaries]
         actual_gens = [s['total_generations'] for s in self.summaries]
@@ -318,10 +319,17 @@ class MultiRunComparator:
         fitness_matrix = np.full((len(unique_actual_gens), len(unique_pop_sizes)), np.nan)
         
         # Fill in the matrix with fitness values
+        # If multiple runs have the same (pop_size, actual_gen), use the best fitness
         for summary in self.summaries:
             pop_idx = pop_size_to_idx[summary['population_size']]
             gen_idx = gen_to_idx[summary['total_generations']]
-            fitness_matrix[gen_idx, pop_idx] = summary['best_fitness']
+            current_value = fitness_matrix[gen_idx, pop_idx]
+            
+            # Take the minimum (best) fitness if there are duplicates
+            if np.isnan(current_value):
+                fitness_matrix[gen_idx, pop_idx] = summary['best_fitness']
+            else:
+                fitness_matrix[gen_idx, pop_idx] = min(current_value, summary['best_fitness'])
         
         # Create figure
         fig, ax = plt.subplots(figsize=(max(10, len(unique_pop_sizes) * 0.8), 
