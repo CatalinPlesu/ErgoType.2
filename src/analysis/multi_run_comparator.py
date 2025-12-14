@@ -54,6 +54,7 @@ class MultiRunComparator:
         table = Table(box=box.ROUNDED, show_header=True, header_style="bold magenta")
         table.add_column("#", style="cyan", justify="right", width=3)
         table.add_column("Run", style="white")
+        table.add_column("Mode", style="dim", width=6)
         table.add_column("Pop Size", justify="right", style="yellow")
         table.add_column("Max Iter", justify="right", style="yellow")
         table.add_column("Gens", justify="right", style="yellow")
@@ -62,10 +63,21 @@ class MultiRunComparator:
         
         for idx, summary in enumerate(self.summaries, 1):
             run_name = Path(summary['run_dir']).name
+            mode = summary.get('mode', 'std')[:6]  # Truncate to 6 chars
+            mode_display = "phases" if mode == "popula" else "std"
+            
+            # Format population size - show as avg if phases mode
+            pop_size = summary.get('population_size', 0)
+            if summary.get('mode') == 'population_phases':
+                pop_size_str = f"~{pop_size:.0f}"  # Show average with ~
+            else:
+                pop_size_str = str(int(pop_size))
+            
             table.add_row(
                 str(idx),
                 run_name,
-                str(summary['population_size']),
+                mode_display,
+                pop_size_str,
                 str(summary['max_iterations']),
                 str(summary['total_generations']),
                 f"{summary['best_fitness']:.6f}",

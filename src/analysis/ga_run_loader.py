@@ -105,7 +105,7 @@ class GARunLoader:
         
         by_gen = self.get_individuals_by_generation()
         
-        return {
+        summary = {
             'run_dir': str(self.run_dir),
             'timestamp': self.metadata.get('timestamp'),
             'keyboard_file': self.metadata.get('keyboard_file'),
@@ -121,6 +121,21 @@ class GARunLoader:
             'fitts_b': self.metadata.get('fitts_b'),
             'finger_coefficients': self.metadata.get('finger_coefficients')
         }
+        
+        # Add mode-specific information
+        mode = self.metadata.get('mode', 'standard')
+        summary['mode'] = mode
+        
+        if mode == 'population_phases':
+            summary['population_phases'] = self.metadata.get('population_phases')
+            summary['total_max_iterations'] = self.metadata.get('total_max_iterations')
+            summary['average_population'] = self.metadata.get('average_population')
+        
+        # Add actual iterations if available
+        if 'actual_iterations' in self.metadata:
+            summary['actual_iterations'] = self.metadata.get('actual_iterations')
+        
+        return summary
     
     @staticmethod
     def find_ga_runs(base_dir: Optional[Path] = None) -> List[Path]:
