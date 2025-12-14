@@ -969,7 +969,8 @@ class GeneticAlgorithmSimulation:
         from ui.progress_tracker import GAProgressTracker
         progress_tracker = GAProgressTracker(
             max_iterations=total_max_iterations,
-            stagnation_limit=stagnant
+            stagnation_limit=stagnant,
+            population_phases=population_phases  # Pass phases for accurate ETA
         )
         progress_tracker.start()
         self.progress_tracker = progress_tracker  # Store for use in fitness calculation
@@ -1121,6 +1122,11 @@ class GeneticAlgorithmSimulation:
                 self.individual_names[new_individual.id] = new_individual.name
             
             self.population_size = target_size
+            
+            # Evaluate newly expanded individuals immediately to avoid counting them twice
+            # in the next iteration's fitness calculation
+            print(f"   Evaluating {needed} newly expanded individuals...")
+            self.fitness_function_calculation()
 
 
 if __name__ == "__main__":
