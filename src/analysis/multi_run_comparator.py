@@ -300,7 +300,6 @@ class MultiRunComparator:
     def _generate_fitness_heatmap_table(self, output_dir: Path):
         """Generate heatmap table: population size (x) x actual iterations (y) with fitness gradient"""
         import matplotlib.pyplot as plt
-        import matplotlib.colors as mcolors
         
         # Prepare data
         pop_sizes = [s['population_size'] for s in self.summaries]
