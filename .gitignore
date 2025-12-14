@@ -17,3 +17,4 @@ raport.txt
 output/
 test_output/
 test_progress_bar.py
+test_crossover_fix.py
