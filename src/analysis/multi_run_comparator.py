@@ -223,18 +223,50 @@ class MultiRunComparator:
         actual_gens = [s['total_generations'] for s in self.summaries]
         best_fitness = [s['best_fitness'] for s in self.summaries]
         
+        # Remove outliers (1-3 worst outliers) to improve visualization clarity
+        # Calculate fitness mean and standard deviation
+        fitness_array = np.array(best_fitness)
+        mean_fitness = np.mean(fitness_array)
+        std_fitness = np.std(fitness_array)
+        
+        # Identify outliers (points more than 1.5 std deviations from mean)
+        # Using 1.5 std to be more aggressive in removing bad outliers
+        outlier_threshold = mean_fitness + 1.5 * std_fitness
+        
+        # Filter data to exclude outliers
+        filtered_data = []
+        outlier_count = 0
+        for i in range(len(best_fitness)):
+            if best_fitness[i] <= outlier_threshold:
+                filtered_data.append((pop_sizes[i], actual_gens[i], best_fitness[i]))
+            else:
+                outlier_count += 1
+        
+        if filtered_data:
+            # Unpack filtered data
+            pop_sizes_filtered, actual_gens_filtered, best_fitness_filtered = zip(*filtered_data)
+        else:
+            # If all points are outliers, use original data
+            pop_sizes_filtered = pop_sizes
+            actual_gens_filtered = actual_gens
+            best_fitness_filtered = best_fitness
+        
         fig = plt.figure(figsize=(12, 8))
         ax = fig.add_subplot(111, projection='3d')
         
         # Create scatter plot with color gradient based on fitness
-        scatter = ax.scatter(pop_sizes, actual_gens, best_fitness, 
-                            c=best_fitness, cmap='RdYlGn_r', s=100, alpha=0.7)
+        scatter = ax.scatter(pop_sizes_filtered, actual_gens_filtered, best_fitness_filtered, 
+                            c=best_fitness_filtered, cmap='RdYlGn_r', s=100, alpha=0.7)
         
         ax.set_xlabel('Population Size', fontsize=10)
         ax.set_ylabel('Actual Iterations', fontsize=10)
         ax.set_zlabel('Best Fitness', fontsize=10)
-        ax.set_title('3D Correlation: Population Size × Actual Iterations → Fitness', 
-                     fontsize=12, pad=20)
+        
+        # Update title to indicate outlier removal if any were removed
+        title = '3D Correlation: Population Size × Actual Iterations → Fitness'
+        if outlier_count > 0:
+            title += f'\n({outlier_count} outlier(s) removed for clarity)'
+        ax.set_title(title, fontsize=12, pad=20)
         
         # Add colorbar
         cbar = plt.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8)
@@ -244,7 +276,10 @@ class MultiRunComparator:
         plt.savefig(output_dir / 'correlation_3d_popsize_iterations_fitness.png', dpi=150, bbox_inches='tight')
         plt.close()
         
-        print_success("✓ Generated correlation_3d_popsize_iterations_fitness.png")
+        if outlier_count > 0:
+            print_success(f"✓ Generated correlation_3d_popsize_iterations_fitness.png ({outlier_count} outlier(s) removed)")
+        else:
+            print_success("✓ Generated correlation_3d_popsize_iterations_fitness.png")
     
     def _generate_popsize_iterations_correlation(self, output_dir: Path):
         """Generate correlation between population size and actual iterations based on max iterations"""
