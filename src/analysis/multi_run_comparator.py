@@ -217,7 +217,7 @@ class MultiRunComparator:
     def _generate_3d_correlation_plot(self, output_dir: Path):
         """Generate 3D correlation: population size x actual iterations -> fitness"""
         import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 - Required for 3D projection
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
         
         pop_sizes = [s['population_size'] for s in self.summaries]
         actual_gens = [s['total_generations'] for s in self.summaries]
@@ -310,7 +310,7 @@ class MultiRunComparator:
         unique_pop_sizes = sorted(set(pop_sizes))
         unique_actual_gens = sorted(set(actual_gens))
         
-        # Create index mappings for O(1) lookup
+        # Create index mappings for fast O(1) lookup during iteration
         pop_size_to_idx = {size: idx for idx, size in enumerate(unique_pop_sizes)}
         gen_to_idx = {gen: idx for idx, gen in enumerate(unique_actual_gens)}
         
@@ -335,9 +335,8 @@ class MultiRunComparator:
         fig, ax = plt.subplots(figsize=(max(10, len(unique_pop_sizes) * 0.8), 
                                         max(8, len(unique_actual_gens) * 0.6)))
         
-        # Create custom colormap: green (best) to red (worst)
-        # Lower fitness is better, so we need to reverse the color mapping
-        cmap = plt.cm.RdYlGn_r  # Red-Yellow-Green reversed (green for low/best, red for high/worst)
+        # Create custom colormap (green=best/low, red=worst/high)
+        cmap = plt.cm.RdYlGn_r  # Red-Yellow-Green reversed
         
         # Create the heatmap
         im = ax.imshow(fitness_matrix, cmap=cmap, aspect='auto', interpolation='nearest')
