@@ -290,12 +290,15 @@ class MultiRunComparator:
         actual_gens = [s['total_generations'] for s in self.summaries]
         max_iters = [s['max_iterations'] for s in self.summaries]
         
+        # Calculate convergence ratio: how close actual iterations got to max iterations
+        convergence_ratios = [actual / max_iter for actual, max_iter in zip(actual_gens, max_iters)]
+        
         fig = plt.figure(figsize=(12, 8))
         ax = fig.add_subplot(111, projection='3d')
         
-        # Create 3D scatter plot with color based on max iterations
+        # Create 3D scatter plot with color based on convergence ratio
         scatter = ax.scatter(pop_sizes, actual_gens, max_iters, 
-                            c=max_iters, cmap='viridis', s=100, alpha=0.7)
+                            c=convergence_ratios, cmap='RdYlGn', s=100, alpha=0.7)
         
         ax.set_xlabel('Population Size', fontsize=10)
         ax.set_ylabel('Actual Iterations', fontsize=10)
@@ -305,7 +308,7 @@ class MultiRunComparator:
         
         # Add colorbar
         cbar = plt.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8)
-        cbar.set_label('Max Iterations', rotation=270, labelpad=20)
+        cbar.set_label('Convergence Ratio (Actual/Max)', rotation=270, labelpad=20)
         
         plt.tight_layout()
         plt.savefig(output_dir / 'correlation_popsize_vs_iterations.png', dpi=150, bbox_inches='tight')
