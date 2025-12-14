@@ -676,6 +676,17 @@ class GeneticAlgorithmSimulation:
                 if ''.join(individual.chromosome) == chromosome_str:
                     return True
             return False
+        
+        def is_duplicate_in_lists(chromosome, population_list, children_list):
+            """Check if chromosome is duplicate without list concatenation for performance"""
+            chromosome_str = ''.join(chromosome)
+            for individual in population_list:
+                if ''.join(individual.chromosome) == chromosome_str:
+                    return True
+            for individual in children_list:
+                if ''.join(individual.chromosome) == chromosome_str:
+                    return True
+            return False
 
         if len(self.parents) < 2:
             print(f"Warning: Not enough parents. Have {len(self.parents)} parents.")
@@ -776,8 +787,8 @@ class GeneticAlgorithmSimulation:
                 num_mutations = mutation_strength + (clones_created // shortage if shortage > 0 else 0)
                 mutated_chromosome = self.mutate_permutation(cloned_chromosome, mutation_rate=CLONE_MUTATION_RATE, num_mutations=min(num_mutations, MAX_MUTATIONS))
                 
-                # Check if this clone is unique (build list once per iteration)
-                if not is_duplicate(mutated_chromosome, self.population + self.children):
+                # Check if this clone is unique (avoid list concatenation for performance)
+                if not is_duplicate_in_lists(mutated_chromosome, self.population, self.children):
                     clone = Individual(
                         chromosome=mutated_chromosome,
                         fitness=None,
@@ -809,8 +820,8 @@ class GeneticAlgorithmSimulation:
                     parent = random.choice(best_parents)
                     mutated_chromosome = self.mutate_permutation(parent.chromosome.copy(), mutation_rate=PARENT_MUTATION_RATE, num_mutations=MAX_MUTATIONS)
                     
-                    # Check if this clone is unique (build list once per iteration)
-                    if not is_duplicate(mutated_chromosome, self.population + self.children):
+                    # Check if this mutation is unique (avoid list concatenation for performance)
+                    if not is_duplicate_in_lists(mutated_chromosome, self.population, self.children):
                         child = Individual(
                             chromosome=mutated_chromosome,
                             fitness=None,
