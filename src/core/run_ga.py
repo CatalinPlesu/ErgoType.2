@@ -4,6 +4,7 @@ from core.map_json_exporter import CSharpFitnessConfig
 from core.evaluator import Evaluator
 from core.layout import Layout
 from src.helpers.layouts.visualization import generate_all_visualizations
+from core.ga_runs_queue import calculate_phases_metrics
 import sys
 import os
 from datetime import datetime
@@ -249,9 +250,17 @@ def run_genetic_algorithm(
     stagnant_limit=15,
     max_concurrent_processes=4,
     use_rabbitmq=True,
-    save_heuristics=True
+    save_heuristics=True,
+    population_phases=None
 ):
-    """Run the genetic algorithm with C# simulation and distributed processing"""
+    """
+    Run the genetic algorithm with C# simulation and distributed processing
+    
+    Args:
+        population_phases: Optional list of tuples (iterations, max_population) for dynamic phases.
+                         If provided, replaces population_size and max_iterations parameters.
+                         Example: [(30, 50), (1, 1000), (10, 50)]
+    """
     try:
         from rich.console import Console
         from rich.table import Table
@@ -272,8 +281,19 @@ def run_genetic_algorithm(
         table.add_row("Keyboard", keyboard_file)
         table.add_row("Text file", text_file)
         table.add_row("Fitts's Law", f"a={fitts_a}, b={fitts_b}")
-        table.add_row("Population size", str(population_size))
-        table.add_row("Max iterations", str(max_iterations))
+        
+        if population_phases:
+            table.add_row("Mode", "Population Phases")
+            for i, (iters, pop) in enumerate(population_phases, 1):
+                table.add_row(f"  Phase {i}", f"{iters} iterations, pop={pop}")
+            metrics = calculate_phases_metrics(population_phases)
+            table.add_row("Total max iterations", str(metrics['total_iterations']))
+            table.add_row("Average population", f"{metrics['average_population']:.1f}")
+        else:
+            table.add_row("Mode", "Standard")
+            table.add_row("Population size", str(population_size))
+            table.add_row("Max iterations", str(max_iterations))
+        
         table.add_row("Stagnation limit", str(stagnant_limit))
         table.add_row("Max processes", str(max_concurrent_processes))
         table.add_row("Use RabbitMQ", str(use_rabbitmq))
@@ -288,8 +308,19 @@ def run_genetic_algorithm(
         print(f"Keyboard: {keyboard_file}")
         print(f"Text file: {text_file}")
         print(f"Fitts's Law: a={fitts_a}, b={fitts_b}")
-        print(f"Population size: {population_size}")
-        print(f"Max iterations: {max_iterations}")
+        
+        if population_phases:
+            print(f"Mode: Population Phases")
+            for i, (iters, pop) in enumerate(population_phases, 1):
+                print(f"  Phase {i}: {iters} iterations, pop={pop}")
+            metrics = calculate_phases_metrics(population_phases)
+            print(f"Total max iterations: {metrics['total_iterations']}")
+            print(f"Average population: {metrics['average_population']:.1f}")
+        else:
+            print(f"Mode: Standard")
+            print(f"Population size: {population_size}")
+            print(f"Max iterations: {max_iterations}")
+        
         print(f"Stagnation limit: {stagnant_limit}")
         print(f"Max processes: {max_concurrent_processes}")
         print(f"Use RabbitMQ: {use_rabbitmq}")
@@ -299,21 +330,25 @@ def run_genetic_algorithm(
         print()
 
     # Initialize GA with simulation
+    # Use initial population size (either from phases or standard mode)
+    initial_pop_size = population_phases[0][1] if population_phases else population_size
+    
     ga = GeneticAlgorithmSimulation(
         keyboard_file=keyboard_file,
         text_file=text_file,
         fitts_a=fitts_a,
         fitts_b=fitts_b,
-        population_size=population_size,
+        population_size=initial_pop_size,
         finger_coefficients=finger_coefficients,
         max_concurrent_processes=max_concurrent_processes,
         use_rabbitmq=use_rabbitmq,
-        is_worker=False  # Master mode
+        is_worker=False,  # Master mode
+        population_phases=population_phases
     )
 
     # Adjust population size if needed
-    if len(ga.population) < population_size:
-        ga.population_initialization(size=population_size)
+    if len(ga.population) < initial_pop_size:
+        ga.population_initialization(size=initial_pop_size)
 
     # Create output directory
     timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
@@ -328,7 +363,8 @@ def run_genetic_algorithm(
     # Run GA
     best_individual = ga.run(
         max_iterations=max_iterations,
-        stagnant=stagnant_limit
+        stagnant=stagnant_limit,
+        population_phases=population_phases
     )
 
     # Print final results
@@ -377,8 +413,6 @@ def run_genetic_algorithm(
         "fitts_a": fitts_a,
         "fitts_b": fitts_b,
         "finger_coefficients": finger_coefficients if finger_coefficients else [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07],
-        "population_size": population_size,
-        "max_iterations": max_iterations,
         "stagnant_limit": stagnant_limit,
         "use_rabbitmq": use_rabbitmq,
         "best_fitness": best_individual.fitness,
@@ -388,9 +422,30 @@ def run_genetic_algorithm(
         "total_unique_individuals": len(ga.all_individuals)
     }
     
-    # Add timing statistics from progress tracker if available
+    # Add population configuration (standard or phases mode)
+    if population_phases:
+        ga_run_data["mode"] = "population_phases"
+        ga_run_data["population_phases"] = population_phases
+        # Calculate compatibility metrics
+        metrics = calculate_phases_metrics(population_phases)
+        ga_run_data["total_max_iterations"] = metrics['total_iterations']
+        ga_run_data["average_population"] = round(metrics['average_population'], 2)
+        # Also save for compatibility with tools expecting these fields
+        ga_run_data["population_size"] = round(metrics['average_population'], 2)
+        ga_run_data["max_iterations"] = metrics['total_iterations']
+    else:
+        ga_run_data["mode"] = "standard"
+        ga_run_data["population_size"] = population_size
+        ga_run_data["max_iterations"] = max_iterations
+    
+    # Get actual iterations completed from progress tracker
     progress_tracker = getattr(ga, 'progress_tracker', None)
     if progress_tracker:
+        # Access the iteration counter if available
+        # Note: current_iteration may not exist in older progress tracker implementations
+        actual_iterations = getattr(progress_tracker, 'current_iteration', 0)
+        ga_run_data["actual_iterations"] = actual_iterations
+        
         total_time = progress_tracker.get_total_elapsed_time()
         avg_job_time = progress_tracker.get_average_job_time()
         

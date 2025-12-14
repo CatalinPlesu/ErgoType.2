@@ -61,7 +61,7 @@ class GAProgressTracker:
     Progress is printed every 10 seconds or when a job batch/iteration completes.
     """
     
-    def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[Console] = None):
+    def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[Console] = None, population_phases: Optional[list] = None):
         """
         Initialize the progress tracker.
         
@@ -69,10 +69,12 @@ class GAProgressTracker:
             max_iterations: Maximum number of iterations
             stagnation_limit: Stagnation limit for stopping
             console: Rich Console instance (creates new if None)
+            population_phases: Optional list of (iterations, max_population) tuples for phases mode
         """
         self.max_iterations = max_iterations
         self.stagnation_limit = stagnation_limit
         self.console = console or Console()
+        self.population_phases = population_phases
         
         # Iteration tracking
         self.current_iteration = 0
@@ -158,12 +160,12 @@ class GAProgressTracker:
         text.append("Elapsed:", style="cyan")
         text.append(self._format_duration(elapsed), style="bold white")
         
-        if avg_iteration_time:
-            remaining_iterations = self.max_iterations - self.current_iteration
-            estimated_remaining = remaining_iterations * avg_iteration_time
+        # Calculate ETA based on population phases if available
+        eta = self._calculate_eta()
+        if eta is not None:
             text.append(" │ ", style="dim white")
             text.append("ETA:", style="cyan")
-            text.append(self._format_duration(estimated_remaining), style="bold green")
+            text.append(self._format_duration(eta), style="bold green")
         
         # Add stagnation with color coding
         text.append(" │ ", style="dim white")
@@ -173,6 +175,67 @@ class GAProgressTracker:
         
         # Print the styled line
         self.console.print(text)
+    
+    def _calculate_eta(self) -> Optional[float]:
+        """
+        Calculate estimated time to completion.
+        
+        If population_phases is available, estimates based on weighted average
+        of work per individual across remaining phases. Otherwise, uses simple
+        average iteration time.
+        
+        Returns:
+            Estimated time in seconds, or None if not enough data
+        """
+        if not self.iteration_times:
+            return None
+        
+        avg_iteration_time = sum(self.iteration_times) / len(self.iteration_times)
+        
+        if not self.population_phases:
+            # Standard mode: simple average iteration time
+            remaining_iterations = self.max_iterations - self.current_iteration
+            return remaining_iterations * avg_iteration_time
+        
+        # Population phases mode: estimate based on work per individual
+        # Calculate average time per individual from completed iterations
+        total_individuals_evaluated = 0
+        total_time = sum(self.iteration_times)
+        
+        # Estimate individuals per iteration (assumes population + children)
+        # We'll use job counts from recent iterations if available
+        if self.job_times:
+            # Use actual job counts from recent batches
+            avg_jobs_per_iteration = len(self.job_times) / len(self.iteration_times) if self.iteration_times else 0
+            time_per_job = sum(self.job_times) / len(self.job_times) if self.job_times else 0
+        else:
+            # Fallback: estimate based on average iteration time
+            time_per_job = 0
+        
+        # Calculate remaining work based on remaining phases
+        remaining_work = 0
+        current_iter = self.current_iteration
+        
+        for phase_iterations, phase_population in self.population_phases:
+            if current_iter >= phase_iterations:
+                # This phase is complete
+                current_iter -= phase_iterations
+            elif current_iter > 0:
+                # We're in the middle of this phase
+                remaining_in_phase = phase_iterations - current_iter
+                # Estimate: population + children (roughly 2x population work)
+                remaining_work += remaining_in_phase * phase_population * 2 * (time_per_job if time_per_job else 0.01)
+                current_iter = 0
+            else:
+                # This phase hasn't started yet
+                remaining_work += phase_iterations * phase_population * 2 * (time_per_job if time_per_job else 0.01)
+        
+        # If we don't have job timing data yet, fall back to simple average
+        if not time_per_job and avg_iteration_time:
+            remaining_iterations = self.max_iterations - self.current_iteration
+            return remaining_iterations * avg_iteration_time
+        
+        return remaining_work if remaining_work > 0 else None
     
     def _get_avg_iteration_time(self) -> Optional[float]:
         """Get average iteration time in seconds."""

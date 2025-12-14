@@ -102,30 +102,118 @@ def item_run_genetic():
     console.print()
 
     # Get GA parameters
-    console.print("[bold]Step 3: Configure GA Parameters[/bold]\n")
+    console.print("[bold]Step 3: Configure GA Mode[/bold]\n")
     saved_params = prefs.get_ga_params()
     
     # Import the new function
     from ui.rich_menu import get_parameter_group
+    from rich.prompt import Prompt, Confirm
     
-    # Group 1: Main GA Parameters
-    ga_params = get_parameter_group(
-        "Main GA Parameters",
-        [
-            {'name': 'Population size', 'default': 30, 'param_type': 'int', 'min_val': 1, 'max_val': 500},
-            {'name': 'Max iterations', 'default': 50, 'param_type': 'int', 'min_val': 1, 'max_val': 1000},
-            {'name': 'Stagnation limit', 'default': 10, 'param_type': 'int', 'min_val': 1, 'max_val': 100},
-            {'name': 'Max parallel processes', 'default': 4, 'param_type': 'int', 'min_val': 1, 'max_val': 32},
-        ],
-        saved_params
-    )
+    # Choose between standard and population phases mode
+    console.print("[bold cyan]Select GA Execution Mode:[/bold cyan]")
+    console.print("  [1] Standard Mode - Fixed population and iterations")
+    console.print("  [2] Population Phases Mode - Dynamic population with multiple phases")
+    console.print()
     
-    population_size = ga_params['Population size']
-    max_iterations = ga_params['Max iterations']
-    stagnant_limit = ga_params['Stagnation limit']
-    max_processes = ga_params['Max parallel processes']
+    use_phases = saved_params.get('use_population_phases', False)
+    default_mode = "2" if use_phases else "1"
     
-    # Group 2: Fitts's Law Parameters
+    mode_choice = Prompt.ask("Choose mode", choices=["1", "2"], default=default_mode)
+    use_population_phases = (mode_choice == "2")
+    
+    population_phases = None
+    population_size = None
+    max_iterations = None
+    
+    if use_population_phases:
+        # Population Phases Mode
+        console.print("\n[bold]Step 4: Define Population Phases[/bold]\n")
+        console.print("[dim]Define phases as (iterations, max_population) tuples.[/dim]")
+        console.print("[dim]Example: Phase 1: 30 iterations with 50 max population[/dim]\n")
+        
+        # Load saved phases if they exist
+        saved_phases = saved_params.get('population_phases', [])
+        
+        if saved_phases:
+            console.print("[bold]Previously saved phases:[/bold]")
+            for i, (iters, pop) in enumerate(saved_phases, 1):
+                console.print(f"  Phase {i}: {iters} iterations, max population {pop}")
+            console.print()
+            use_saved = Confirm.ask("Use saved phases?", default=True)
+            if use_saved:
+                population_phases = saved_phases
+        
+        if not population_phases:
+            population_phases = []
+            console.print("[bold]Add phases (enter 0 for iterations to finish):[/bold]\n")
+            
+            phase_num = 1
+            while True:
+                console.print(f"[cyan]Phase {phase_num}:[/cyan]")
+                
+                iterations = get_parameter(
+                    "  Iterations",
+                    default=30 if phase_num == 1 else 10,
+                    param_type="int",
+                    min_val=0,
+                    max_val=1000
+                )
+                
+                if iterations == 0:
+                    break
+                
+                max_pop = get_parameter(
+                    "  Max population",
+                    default=50,
+                    param_type="int",
+                    min_val=1,
+                    max_val=5000
+                )
+                
+                population_phases.append((iterations, max_pop))
+                console.print(f"  ✅ Added phase {phase_num}: {iterations} iterations, max population {max_pop}\n")
+                phase_num += 1
+            
+            if not population_phases:
+                console.print("[yellow]⚠️  No phases defined, switching to standard mode[/yellow]\n")
+                use_population_phases = False
+    
+    if not use_population_phases:
+        # Standard Mode - Group 1: Main GA Parameters
+        console.print("\n[bold]Step 4: Configure GA Parameters[/bold]\n")
+        ga_params = get_parameter_group(
+            "Main GA Parameters",
+            [
+                {'name': 'Population size', 'default': 30, 'param_type': 'int', 'min_val': 1, 'max_val': 500},
+                {'name': 'Max iterations', 'default': 50, 'param_type': 'int', 'min_val': 1, 'max_val': 1000},
+                {'name': 'Stagnation limit', 'default': 10, 'param_type': 'int', 'min_val': 1, 'max_val': 100},
+                {'name': 'Max parallel processes', 'default': 4, 'param_type': 'int', 'min_val': 1, 'max_val': 32},
+            ],
+            saved_params
+        )
+        
+        population_size = ga_params['Population size']
+        max_iterations = ga_params['Max iterations']
+        stagnant_limit = ga_params['Stagnation limit']
+        max_processes = ga_params['Max parallel processes']
+    else:
+        # For phases mode, only get stagnation limit and processes
+        console.print("\n[bold]Step 5: Configure Additional Parameters[/bold]\n")
+        ga_params = get_parameter_group(
+            "GA Control Parameters",
+            [
+                {'name': 'Stagnation limit', 'default': 10, 'param_type': 'int', 'min_val': 1, 'max_val': 100},
+                {'name': 'Max parallel processes', 'default': 4, 'param_type': 'int', 'min_val': 1, 'max_val': 32},
+            ],
+            saved_params
+        )
+        
+        stagnant_limit = ga_params['Stagnation limit']
+        max_processes = ga_params['Max parallel processes']
+    
+    # Group 2: Fitts's Law Parameters (same for both modes)
+    step_num = 5 if not use_population_phases else 6
+    console.print(f"\n[bold]Step {step_num}: Configure Fitts's Law Parameters[/bold]\n")
     fitts_params = get_parameter_group(
         "Fitts's Law Parameters",
         [
@@ -138,7 +226,10 @@ def item_run_genetic():
     fitts_a = fitts_params["Fitts's Law constant 'a'"]
     fitts_b = fitts_params["Fitts's Law constant 'b'"]
     
-    # Group 3: Finger Coefficients - Left Hand (fingers 1-5)
+    # Group 3 & 4: Finger Coefficients (same for both modes)
+    step_num = 6 if not use_population_phases else 7
+    console.print(f"\n[bold]Step {step_num}: Configure Finger Coefficients[/bold]\n")
+    
     # Default finger coefficients for 10 fingers
     default_finger_coeffs = [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07]
     saved_finger_coeffs = saved_params.get('finger_coefficients', default_finger_coeffs)
@@ -153,7 +244,6 @@ def item_run_genetic():
         {f'Left Finger {i+1}': saved_finger_coeffs[i] if i < len(saved_finger_coeffs) else default_finger_coeffs[i] for i in range(5)}
     )
     
-    # Group 4: Finger Coefficients - Right Hand (fingers 6-10)
     finger_right_params = get_parameter_group(
         "Right Hand Finger Coefficients (fingers 6-10: thumb to pinky)",
         [
@@ -172,22 +262,27 @@ def item_run_genetic():
     use_rabbitmq = True
 
     # Save parameters for next time
-    prefs.set_ga_params({
-        'Population size': population_size,
-        'Max iterations': max_iterations,
+    save_params = {
+        'use_population_phases': use_population_phases,
         'Stagnation limit': stagnant_limit,
         'Max parallel processes': max_processes,
         "Fitts's Law constant 'a'": fitts_a,
         "Fitts's Law constant 'b'": fitts_b,
         'finger_coefficients': finger_coefficients
-    })
+    }
+    
+    if use_population_phases:
+        save_params['population_phases'] = population_phases
+    else:
+        save_params['Population size'] = population_size
+        save_params['Max iterations'] = max_iterations
+    
+    prefs.set_ga_params(save_params)
     prefs.save()
     
     CONFIG = {
         'keyboard_file': keyboard_file,
         'text_file': text_file,
-        'population_size': population_size,
-        'max_iterations': max_iterations,
         'stagnant_limit': stagnant_limit,
         'max_concurrent_processes': max_processes,
         'fitts_a': fitts_a,
@@ -195,6 +290,22 @@ def item_run_genetic():
         'finger_coefficients': finger_coefficients,
         'use_rabbitmq': use_rabbitmq
     }
+    
+    # Add mode-specific parameters
+    if use_population_phases:
+        # Validate that we have at least one phase
+        if not population_phases or len(population_phases) == 0:
+            print_error("No population phases defined!")
+            return
+            
+        CONFIG['population_phases'] = population_phases
+        # Set initial population size from first phase for GA initialization
+        CONFIG['population_size'] = population_phases[0][1]
+        # Set total iterations for display/compatibility (sum of all phase iterations)
+        CONFIG['max_iterations'] = sum(p[0] for p in population_phases)
+    else:
+        CONFIG['population_size'] = population_size
+        CONFIG['max_iterations'] = max_iterations
     
     console.print()
     display_config("Final Configuration", CONFIG)

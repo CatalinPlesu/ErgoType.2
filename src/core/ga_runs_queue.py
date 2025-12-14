@@ -8,6 +8,45 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 
+def calculate_phases_metrics(population_phases: List[tuple]) -> Dict[str, Any]:
+    """
+    Calculate metrics for population phases.
+    
+    Args:
+        population_phases: List of (iterations, max_population) tuples
+        
+    Returns:
+        Dictionary with total_iterations and average_population
+        
+    Raises:
+        ValueError: If phases contain invalid data
+    """
+    if not population_phases:
+        return {'total_iterations': 0, 'average_population': 0.0}
+    
+    # Validate phase structure
+    for i, phase in enumerate(population_phases):
+        if not isinstance(phase, (tuple, list)) or len(phase) != 2:
+            raise ValueError(f"Phase {i+1} must be a tuple/list of (iterations, max_population)")
+        iterations, max_pop = phase
+        if not isinstance(iterations, int) or iterations < 0:
+            raise ValueError(f"Phase {i+1} iterations must be a non-negative integer, got {iterations}")
+        if not isinstance(max_pop, int) or max_pop <= 0:
+            raise ValueError(f"Phase {i+1} max_population must be a positive integer, got {max_pop}")
+    
+    total_iterations = sum(p[0] for p in population_phases)
+    if total_iterations == 0:
+        return {'total_iterations': 0, 'average_population': 0.0}
+    
+    weighted_sum = sum(p[0] * p[1] for p in population_phases)
+    average_population = weighted_sum / total_iterations
+    
+    return {
+        'total_iterations': total_iterations,
+        'average_population': average_population
+    }
+
+
 # Default parameter values
 DEFAULT_PARAMS = {
     'keyboard_file': 'src/data/keyboards/ansi_60_percent.json',
@@ -20,7 +59,8 @@ DEFAULT_PARAMS = {
     'fitts_b': 0.3,
     'finger_coefficients': [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07],
     'use_rabbitmq': True,
-    'save_heuristics': True
+    'save_heuristics': True,
+    'population_phases': None
 }
 
 
@@ -139,7 +179,14 @@ class GARunsQueue:
                 duration = (end_time - start_time).total_seconds()
                 
                 # Calculate individuals processed in this run
-                individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                # Handle both standard and population_phases modes
+                if run_config.get('population_phases'):
+                    # Calculate based on phases
+                    metrics = calculate_phases_metrics(run_config['population_phases'])
+                    individuals_this_run = int(metrics['total_iterations'] * metrics['average_population'])
+                else:
+                    individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                
                 total_individuals_processed += individuals_this_run
                 
                 # Store results
@@ -177,7 +224,13 @@ class GARunsQueue:
                 duration = (end_time - start_time).total_seconds()
                 
                 # Estimate individuals processed (may be less if failed early)
-                individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                # Handle both standard and population_phases modes
+                if run_config.get('population_phases'):
+                    metrics = calculate_phases_metrics(run_config['population_phases'])
+                    individuals_this_run = int(metrics['total_iterations'] * metrics['average_population'])
+                else:
+                    individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                
                 total_individuals_processed += individuals_this_run
                 
                 if verbose:
@@ -233,7 +286,12 @@ class GARunsQueue:
         remaining_individuals = 0
         for i in range(completed, total):
             run = self.runs[i]
-            remaining_individuals += run['population_size'] * run['max_iterations']
+            # Handle both standard and population_phases modes
+            if run.get('population_phases'):
+                metrics = calculate_phases_metrics(run['population_phases'])
+                remaining_individuals += int(metrics['total_iterations'] * metrics['average_population'])
+            else:
+                remaining_individuals += run['population_size'] * run['max_iterations']
         
         # Estimate remaining time
         estimated_remaining = remaining_individuals * time_per_individual if time_per_individual > 0 else 0
