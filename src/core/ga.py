@@ -752,10 +752,15 @@ class GeneticAlgorithmSimulation:
             shortage = target_children - len(self.children)
             print(f"Filling shortage of {shortage} children by cloning and mutating existing children...")
             
+            # Configuration constants for population filling
+            CLONE_ATTEMPTS_MULTIPLIER = 10
+            BEST_PARENTS_COUNT = 10
+            PARENT_MUTATION_ATTEMPTS_MULTIPLIER = 15
+            
             # Clone and mutate existing children to fill the gap
             original_children = self.children.copy()
             clones_created = 0
-            max_clone_attempts = shortage * 10  # More attempts to find unique individuals
+            max_clone_attempts = shortage * CLONE_ATTEMPTS_MULTIPLIER
             mutation_strength = 2  # Start with moderate mutation
             
             while len(self.children) < target_children and clones_created < max_clone_attempts:
@@ -765,7 +770,7 @@ class GeneticAlgorithmSimulation:
                 # Clone and mutate the chromosome with increasing mutation strength
                 cloned_chromosome = source_child.chromosome.copy()
                 # Increase mutation strength as we make more attempts to avoid duplicates
-                num_mutations = mutation_strength + (clones_created // shortage) if shortage > 0 else mutation_strength
+                num_mutations = mutation_strength + (clones_created // shortage if shortage > 0 else 0)
                 mutated_chromosome = self.mutate_permutation(cloned_chromosome, mutation_rate=0.15, num_mutations=min(num_mutations, 5))
                 
                 # Check if this clone is unique
@@ -794,9 +799,9 @@ class GeneticAlgorithmSimulation:
                 children_before_parent_mutations = len(self.children)
                 
                 # Use best parents for additional diversity
-                best_parents = sorted(self.parents, key=lambda x: x.fitness if x.fitness is not None else float('inf'))[:10]
+                best_parents = sorted(self.parents, key=lambda x: x.fitness if x.fitness is not None else float('inf'))[:BEST_PARENTS_COUNT]
                 attempts = 0
-                max_random_attempts = remaining_shortage * 15
+                max_random_attempts = remaining_shortage * PARENT_MUTATION_ATTEMPTS_MULTIPLIER
                 
                 while len(self.children) < target_children and attempts < max_random_attempts:
                     parent = random.choice(best_parents)
