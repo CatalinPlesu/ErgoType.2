@@ -20,7 +20,8 @@ DEFAULT_PARAMS = {
     'fitts_b': 0.3,
     'finger_coefficients': [0.07, 0.06, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.06, 0.07],
     'use_rabbitmq': True,
-    'save_heuristics': True
+    'save_heuristics': True,
+    'population_phases': None
 }
 
 
@@ -139,7 +140,15 @@ class GARunsQueue:
                 duration = (end_time - start_time).total_seconds()
                 
                 # Calculate individuals processed in this run
-                individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                # Handle both standard and population_phases modes
+                if run_config.get('population_phases'):
+                    # Calculate based on phases
+                    total_iters = sum(p[0] for p in run_config['population_phases'])
+                    avg_pop = sum(p[0] * p[1] for p in run_config['population_phases']) / total_iters if total_iters > 0 else 0
+                    individuals_this_run = int(total_iters * avg_pop)
+                else:
+                    individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                
                 total_individuals_processed += individuals_this_run
                 
                 # Store results
@@ -177,7 +186,14 @@ class GARunsQueue:
                 duration = (end_time - start_time).total_seconds()
                 
                 # Estimate individuals processed (may be less if failed early)
-                individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                # Handle both standard and population_phases modes
+                if run_config.get('population_phases'):
+                    total_iters = sum(p[0] for p in run_config['population_phases'])
+                    avg_pop = sum(p[0] * p[1] for p in run_config['population_phases']) / total_iters if total_iters > 0 else 0
+                    individuals_this_run = int(total_iters * avg_pop)
+                else:
+                    individuals_this_run = run_config['population_size'] * run_config['max_iterations']
+                
                 total_individuals_processed += individuals_this_run
                 
                 if verbose:
@@ -233,7 +249,13 @@ class GARunsQueue:
         remaining_individuals = 0
         for i in range(completed, total):
             run = self.runs[i]
-            remaining_individuals += run['population_size'] * run['max_iterations']
+            # Handle both standard and population_phases modes
+            if run.get('population_phases'):
+                total_iters = sum(p[0] for p in run['population_phases'])
+                avg_pop = sum(p[0] * p[1] for p in run['population_phases']) / total_iters if total_iters > 0 else 0
+                remaining_individuals += int(total_iters * avg_pop)
+            else:
+                remaining_individuals += run['population_size'] * run['max_iterations']
         
         # Estimate remaining time
         estimated_remaining = remaining_individuals * time_per_individual if time_per_individual > 0 else 0

@@ -123,15 +123,20 @@ class GeneticAlgorithmSimulation:
                  finger_coefficients=None,
                  max_concurrent_processes=None,
                  use_rabbitmq=True,
-                 is_worker=False):
+                 is_worker=False,
+                 population_phases=None):
         """
         Initialize GA with C# fitness calculator.
         
         Args:
             is_worker: If True, runs in worker mode (processes jobs from queue)
                       If False, runs as master (coordinates GA and also processes jobs)
+            population_phases: Optional list of tuples (iterations, max_population) for dynamic phases.
+                             If provided, replaces population_size and max_iterations parameters.
+                             Example: [(30, 50), (1, 1000), (10, 50)]
         """
         self.is_worker = is_worker
+        self.population_phases = population_phases
         
         if is_worker:
             print("="*80)
@@ -832,19 +837,42 @@ class GeneticAlgorithmSimulation:
         print(f"Re-normalized {total_renormalized} unique individuals")
         print(f"{'='*80}\n")
 
-    def run(self, max_iterations=100, stagnant=15):
-        """Run genetic algorithm (master only)"""
+    def run(self, max_iterations=100, stagnant=15, population_phases=None):
+        """
+        Run genetic algorithm (master only)
+        
+        Args:
+            max_iterations: Maximum iterations (ignored if population_phases is provided)
+            stagnant: Stagnation limit for termination
+            population_phases: Optional list of tuples (iterations, max_population) for dynamic phases.
+                             If provided, replaces max_iterations parameter.
+        """
         if self.is_worker:
             return None
+        
+        # Use instance population_phases if not provided as argument
+        if population_phases is None:
+            population_phases = self.population_phases
             
         # Purge queues on startup
         print("\n🧹 Purging all queues...")
         self.job_queue.purge_all()
         
+        # Calculate total max iterations for progress tracker
+        if population_phases:
+            total_max_iterations = sum(phase[0] for phase in population_phases)
+            print(f"\n📋 POPULATION PHASES MODE:")
+            print(f"   Total phases: {len(population_phases)}")
+            for i, (iters, pop) in enumerate(population_phases, 1):
+                print(f"   Phase {i}: {iters} iterations with max population {pop}")
+            print(f"   Total max iterations: {total_max_iterations}")
+        else:
+            total_max_iterations = max_iterations
+        
         # Initialize progress tracker
         from ui.progress_tracker import GAProgressTracker
         progress_tracker = GAProgressTracker(
-            max_iterations=max_iterations,
+            max_iterations=total_max_iterations,
             stagnation_limit=stagnant
         )
         progress_tracker.start()
@@ -856,32 +884,82 @@ class GeneticAlgorithmSimulation:
         self.order_fitness_values(limited=True)
 
         try:
-            while self.previous_population_iteration < stagnant and iteration < max_iterations:
-                # Update progress tracker
-                progress_tracker.start_iteration(iteration + 1, self.previous_population_iteration)
-                
-                print(f"\n{'='*80}")
-                print(f"ITERATION {iteration + 1} (Generation {self.current_generation + 1})")
-                print(f"Stagnation count: {self.previous_population_iteration}/{stagnant}")
-                print(f"{'='*80}")
+            if population_phases:
+                # Multi-phase execution
+                for phase_idx, (phase_iterations, phase_max_pop) in enumerate(population_phases, 1):
+                    print(f"\n{'='*80}")
+                    print(f"🔀 STARTING PHASE {phase_idx}/{len(population_phases)}")
+                    print(f"   Iterations: {phase_iterations}, Max Population: {phase_max_pop}")
+                    print(f"{'='*80}")
+                    
+                    # Adjust population size for this phase
+                    self._adjust_population_size(phase_max_pop)
+                    
+                    phase_start_iteration = iteration
+                    phase_end_iteration = iteration + phase_iterations
+                    
+                    while self.previous_population_iteration < stagnant and iteration < phase_end_iteration:
+                        # Update progress tracker
+                        progress_tracker.start_iteration(iteration + 1, self.previous_population_iteration)
+                        
+                        print(f"\n{'='*80}")
+                        print(f"ITERATION {iteration + 1} (Phase {phase_idx}, Local iter {iteration - phase_start_iteration + 1}/{phase_iterations})")
+                        print(f"Generation {self.current_generation + 1}, Stagnation: {self.previous_population_iteration}/{stagnant}")
+                        print(f"Current population: {len(self.population)}")
+                        print(f"{'='*80}")
 
-                self.tournament_selection()
-                self.uniform_crossover()
-                self.mutation()
-                self.current_generation += 1
-                self.survivor_selection()
-                self.order_fitness_values(limited=True)
+                        self.tournament_selection()
+                        self.uniform_crossover()
+                        self.mutation()
+                        self.current_generation += 1
+                        self.survivor_selection()
+                        self.order_fitness_values(limited=True)
 
-                if self.previous_population_ids == self.get_current_population_ids():
-                    self.previous_population_iteration += 1
-                else:
-                    self.previous_population_ids = self.get_current_population_ids()
-                    self.previous_population_iteration = 0
+                        if self.previous_population_ids == self.get_current_population_ids():
+                            self.previous_population_iteration += 1
+                        else:
+                            self.previous_population_ids = self.get_current_population_ids()
+                            self.previous_population_iteration = 0
 
-                iteration += 1
-                
-                # Mark iteration complete
-                progress_tracker.complete_iteration()
+                        iteration += 1
+                        
+                        # Mark iteration complete
+                        progress_tracker.complete_iteration()
+                    
+                    # Check if we should stop early due to stagnation
+                    if self.previous_population_iteration >= stagnant:
+                        print(f"\n⚠️  Stagnation limit reached in phase {phase_idx}, stopping early")
+                        break
+                    
+                    print(f"\n✅ Phase {phase_idx} completed")
+            else:
+                # Single-phase execution (original behavior)
+                while self.previous_population_iteration < stagnant and iteration < max_iterations:
+                    # Update progress tracker
+                    progress_tracker.start_iteration(iteration + 1, self.previous_population_iteration)
+                    
+                    print(f"\n{'='*80}")
+                    print(f"ITERATION {iteration + 1} (Generation {self.current_generation + 1})")
+                    print(f"Stagnation count: {self.previous_population_iteration}/{stagnant}")
+                    print(f"{'='*80}")
+
+                    self.tournament_selection()
+                    self.uniform_crossover()
+                    self.mutation()
+                    self.current_generation += 1
+                    self.survivor_selection()
+                    self.order_fitness_values(limited=True)
+
+                    if self.previous_population_ids == self.get_current_population_ids():
+                        self.previous_population_iteration += 1
+                    else:
+                        self.previous_population_ids = self.get_current_population_ids()
+                        self.previous_population_iteration = 0
+
+                    iteration += 1
+                    
+                    # Mark iteration complete
+                    progress_tracker.complete_iteration()
 
         except KeyboardInterrupt:
             print("\n\n🛑 Interrupted by user!")
@@ -903,6 +981,46 @@ class GeneticAlgorithmSimulation:
         self.job_queue.close()
         
         return best
+    
+    def _adjust_population_size(self, target_size):
+        """
+        Adjust population size to target_size by adding or removing individuals.
+        When shrinking, keeps the best individuals.
+        When expanding, adds random variations of the best individuals.
+        """
+        current_size = len(self.population)
+        
+        if current_size == target_size:
+            return
+        
+        if current_size > target_size:
+            # Shrink population - keep best individuals
+            print(f"   Shrinking population from {current_size} to {target_size}")
+            sorted_pop = sorted(self.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
+            self.population = sorted_pop[:target_size]
+            self.population_size = target_size
+        else:
+            # Expand population - add variations of best individuals
+            print(f"   Expanding population from {current_size} to {target_size}")
+            needed = target_size - current_size
+            sorted_pop = sorted(self.population, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
+            
+            # Use best individuals as templates
+            for i in range(needed):
+                template_idx = i % min(10, len(sorted_pop))  # Use top 10 or less
+                template = sorted_pop[template_idx]
+                
+                # Create variation by mutation
+                new_chromosome = self.mutate_permutation(template.chromosome.copy(), mutation_rate=0.1, num_mutations=2)
+                new_individual = Individual(
+                    chromosome=new_chromosome,
+                    generation=self.current_generation,
+                    parents=[template.id]
+                )
+                self.population.append(new_individual)
+                self.individual_names[new_individual.id] = new_individual.name
+            
+            self.population_size = target_size
 
 
 if __name__ == "__main__":
