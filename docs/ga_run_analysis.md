@@ -61,13 +61,15 @@ Each directory contains:
 
 - Compare multiple GA runs simultaneously
 - Re-normalize fitness values across all runs for fair comparison
-- Analyze parameter impact:
-  - Population size vs. best fitness achieved
-  - Number of generations vs. convergence speed/quality
-  - Runtime vs. fitness improvement
+- Analyze parameter impact with multiple correlation visualizations:
+  - 3D correlation: population size × actual iterations → fitness
+  - Population size vs. actual iterations (based on max iterations)
+  - Search space coverage analysis
+  - Fitness heatmap table with color gradient (green=best, red=worst)
 - Generate comprehensive visualizations:
-  - Fitness progression overlay charts
-  - Parameter correlation scatter plots
+  - 3D scatter plots showing multi-variable correlations
+  - 2D correlation plots with color-coded additional dimensions
+  - Heatmap tables for easy visual comparison
   - Statistical summary tables
 
 ### Output Location
@@ -78,8 +80,10 @@ output/analysis/multi_run_{timestamp}/
 ```
 
 Each directory contains:
-- `fitness_progression.png` - Fitness evolution over generations
-- `parameter_correlations.png` - Parameter impact analysis (4 scatter plots)
+- `correlation_3d_popsize_iterations_fitness.png` - 3D correlation showing how population size and actual iterations affect fitness
+- `correlation_popsize_vs_iterations.png` - Population size vs actual iterations (colored by max iterations)
+- `search_space_coverage.png` - Search space coverage vs quality
+- `fitness_heatmap_table.png` - Heatmap table showing fitness across population size and actual iterations (green=best, red=worst)
 - `comparison_summary.json` - Detailed statistics in JSON format
 - `comparison_summary.csv` - Detailed statistics in CSV format
 - `analysis_report.md` - Comprehensive markdown report
@@ -197,9 +201,10 @@ Multi-Run Comparison (2 runs selected)
 Generate and export comparison analysis? [Y/n]: y
 
 ✓ Re-normalized 280 individuals across 2 runs
-✓ Analyzed parameter impact
-✓ Generated fitness_progression.png
-✓ Generated parameter_correlations.png
+✓ Generated correlation_3d_popsize_iterations_fitness.png
+✓ Generated correlation_popsize_vs_iterations.png
+✓ Generated search_space_coverage.png
+✓ Generated fitness_heatmap_table.png
 ✓ Generated comparison_summary.json
 ✓ Generated comparison_summary.csv
 ✓ Generated analysis_report.md

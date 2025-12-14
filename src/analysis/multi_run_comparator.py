@@ -192,13 +192,19 @@ class MultiRunComparator:
             matplotlib.use('Agg')  # Use non-interactive backend
             import matplotlib.pyplot as plt
             
-            # 1. Fitness progression overlay chart
-            self._generate_fitness_progression_chart(output_dir, normalized_individuals)
+            # 1. 3D correlation: population size x actual iterations -> fitness
+            self._generate_3d_correlation_plot(output_dir)
             
-            # 2. Parameter correlation plots
-            self._generate_parameter_correlation_plots(output_dir)
+            # 2. Population size vs actual iterations correlation
+            self._generate_popsize_iterations_correlation(output_dir)
             
-            # 3. Statistical summary
+            # 3. Search space coverage (keep existing)
+            self._generate_search_space_plot(output_dir)
+            
+            # 4. Heatmap table: population size x actual iterations with fitness gradient
+            self._generate_fitness_heatmap_table(output_dir)
+            
+            # 5. Statistical summary
             self._generate_statistical_summary(output_dir, normalized_individuals)
             
             print_success(f"All visualizations saved to: {output_dir}")
@@ -208,91 +214,151 @@ class MultiRunComparator:
             import traceback
             traceback.print_exc()
     
-    def _generate_fitness_progression_chart(self, output_dir: Path, normalized_individuals: List[Dict[str, Any]]):
-        """Generate fitness progression overlay chart"""
+    def _generate_3d_correlation_plot(self, output_dir: Path):
+        """Generate 3D correlation: population size x actual iterations -> fitness"""
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        
+        pop_sizes = [s['population_size'] for s in self.summaries]
+        actual_gens = [s['total_generations'] for s in self.summaries]
+        best_fitness = [s['best_fitness'] for s in self.summaries]
+        
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Create scatter plot with color gradient based on fitness
+        scatter = ax.scatter(pop_sizes, actual_gens, best_fitness, 
+                            c=best_fitness, cmap='RdYlGn_r', s=100, alpha=0.7)
+        
+        ax.set_xlabel('Population Size', fontsize=10)
+        ax.set_ylabel('Actual Iterations', fontsize=10)
+        ax.set_zlabel('Best Fitness', fontsize=10)
+        ax.set_title('3D Correlation: Population Size × Actual Iterations → Fitness', 
+                     fontsize=12, pad=20)
+        
+        # Add colorbar
+        cbar = plt.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8)
+        cbar.set_label('Fitness (lower is better)', rotation=270, labelpad=20)
+        
+        plt.tight_layout()
+        plt.savefig(output_dir / 'correlation_3d_popsize_iterations_fitness.png', dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print_success("✓ Generated correlation_3d_popsize_iterations_fitness.png")
+    
+    def _generate_popsize_iterations_correlation(self, output_dir: Path):
+        """Generate correlation between population size and actual iterations based on max iterations"""
         import matplotlib.pyplot as plt
         
-        # Group by run and generation
-        run_data = {}
-        for ind in normalized_individuals:
-            run_dir = ind.get('run_dir', 'unknown')
-            gen = ind.get('generation', 0)
-            fitness = ind.get('normalized_fitness', 1.0)
-            
-            if run_dir not in run_data:
-                run_data[run_dir] = {}
-            if gen not in run_data[run_dir]:
-                run_data[run_dir][gen] = []
-            run_data[run_dir][gen].append(fitness)
+        pop_sizes = [s['population_size'] for s in self.summaries]
+        actual_gens = [s['total_generations'] for s in self.summaries]
+        max_iters = [s['max_iterations'] for s in self.summaries]
         
-        # Create plot
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(10, 6))
         
-        for run_dir, gen_data in run_data.items():
-            generations = sorted(gen_data.keys())
-            best_fitness = [min(gen_data[g]) for g in generations]
-            avg_fitness = [np.mean(gen_data[g]) for g in generations]
-            
-            run_name = Path(run_dir).name
-            ax.plot(generations, best_fitness, marker='o', label=f"{run_name} (best)", alpha=0.7)
-            ax.plot(generations, avg_fitness, marker='s', linestyle='--', label=f"{run_name} (avg)", alpha=0.5)
+        # Create scatter plot with color based on max iterations
+        scatter = ax.scatter(pop_sizes, actual_gens, c=max_iters, 
+                            cmap='viridis', s=100, alpha=0.7)
         
-        ax.set_xlabel('Generation')
-        ax.set_ylabel('Normalized Fitness (lower is better)')
-        ax.set_title('Fitness Progression Across Multiple Runs')
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.set_xlabel('Population Size', fontsize=11)
+        ax.set_ylabel('Actual Iterations', fontsize=11)
+        ax.set_title('Population Size vs Actual Iterations\n(colored by Max Iterations)', 
+                     fontsize=12)
+        ax.grid(True, alpha=0.3)
+        
+        # Add colorbar
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label('Max Iterations', rotation=270, labelpad=20)
+        
+        plt.tight_layout()
+        plt.savefig(output_dir / 'correlation_popsize_vs_iterations.png', dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print_success("✓ Generated correlation_popsize_vs_iterations.png")
+    
+    def _generate_search_space_plot(self, output_dir: Path):
+        """Generate search space coverage plot (total individuals vs fitness)"""
+        import matplotlib.pyplot as plt
+        
+        total_inds = [s['total_individuals'] for s in self.summaries]
+        best_fitness = [s['best_fitness'] for s in self.summaries]
+        
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        ax.scatter(total_inds, best_fitness, alpha=0.7, s=100, c='blue')
+        ax.set_xlabel('Total Individuals Evaluated', fontsize=11)
+        ax.set_ylabel('Best Fitness', fontsize=11)
+        ax.set_title('Search Space Coverage vs Quality', fontsize=12)
         ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.savefig(output_dir / 'fitness_progression.png', dpi=150, bbox_inches='tight')
+        plt.savefig(output_dir / 'search_space_coverage.png', dpi=150, bbox_inches='tight')
         plt.close()
         
-        print_success("✓ Generated fitness_progression.png")
+        print_success("✓ Generated search_space_coverage.png")
     
-    def _generate_parameter_correlation_plots(self, output_dir: Path):
-        """Generate parameter correlation scatter plots"""
+    def _generate_fitness_heatmap_table(self, output_dir: Path):
+        """Generate heatmap table: population size (x) x actual iterations (y) with fitness gradient"""
         import matplotlib.pyplot as plt
+        import matplotlib.colors as mcolors
         
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        
-        # 1. Population size vs best fitness
+        # Prepare data
         pop_sizes = [s['population_size'] for s in self.summaries]
-        best_fitness = [s['best_fitness'] for s in self.summaries]
-        axes[0, 0].scatter(pop_sizes, best_fitness, alpha=0.7, s=100)
-        axes[0, 0].set_xlabel('Population Size')
-        axes[0, 0].set_ylabel('Best Fitness')
-        axes[0, 0].set_title('Population Size vs Best Fitness')
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # 2. Max iterations vs generations achieved
-        max_iters = [s['max_iterations'] for s in self.summaries]
         actual_gens = [s['total_generations'] for s in self.summaries]
-        axes[0, 1].scatter(max_iters, actual_gens, alpha=0.7, s=100, c=best_fitness, cmap='viridis')
-        axes[0, 1].set_xlabel('Max Iterations')
-        axes[0, 1].set_ylabel('Actual Generations')
-        axes[0, 1].set_title('Convergence Analysis')
-        axes[0, 1].grid(True, alpha=0.3)
+        best_fitness = [s['best_fitness'] for s in self.summaries]
         
-        # 3. Generations vs best fitness
-        axes[1, 0].scatter(actual_gens, best_fitness, alpha=0.7, s=100)
-        axes[1, 0].set_xlabel('Total Generations')
-        axes[1, 0].set_ylabel('Best Fitness')
-        axes[1, 0].set_title('Generations vs Best Fitness')
-        axes[1, 0].grid(True, alpha=0.3)
+        # Get unique sorted values
+        unique_pop_sizes = sorted(set(pop_sizes))
+        unique_actual_gens = sorted(set(actual_gens))
         
-        # 4. Total individuals vs best fitness
-        total_inds = [s['total_individuals'] for s in self.summaries]
-        axes[1, 1].scatter(total_inds, best_fitness, alpha=0.7, s=100)
-        axes[1, 1].set_xlabel('Total Individuals Evaluated')
-        axes[1, 1].set_ylabel('Best Fitness')
-        axes[1, 1].set_title('Search Space Coverage vs Quality')
-        axes[1, 1].grid(True, alpha=0.3)
+        # Create a matrix for the heatmap
+        # Initialize with NaN
+        fitness_matrix = np.full((len(unique_actual_gens), len(unique_pop_sizes)), np.nan)
+        
+        # Fill in the matrix with fitness values
+        for i, summary in enumerate(self.summaries):
+            pop_idx = unique_pop_sizes.index(summary['population_size'])
+            gen_idx = unique_actual_gens.index(summary['total_generations'])
+            fitness_matrix[gen_idx, pop_idx] = summary['best_fitness']
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(max(10, len(unique_pop_sizes) * 0.8), 
+                                        max(8, len(unique_actual_gens) * 0.6)))
+        
+        # Create custom colormap: green (best) to red (worst)
+        # Lower fitness is better, so we need to reverse the color mapping
+        cmap = plt.cm.RdYlGn_r  # Red-Yellow-Green reversed (green for low/best, red for high/worst)
+        
+        # Create the heatmap
+        im = ax.imshow(fitness_matrix, cmap=cmap, aspect='auto', interpolation='nearest')
+        
+        # Set ticks and labels
+        ax.set_xticks(range(len(unique_pop_sizes)))
+        ax.set_yticks(range(len(unique_actual_gens)))
+        ax.set_xticklabels(unique_pop_sizes)
+        ax.set_yticklabels(unique_actual_gens)
+        
+        ax.set_xlabel('Population Size', fontsize=11)
+        ax.set_ylabel('Actual Iterations', fontsize=11)
+        ax.set_title('Fitness Heatmap: Population Size × Actual Iterations\n(Green=Best, Red=Worst)', 
+                     fontsize=12)
+        
+        # Add colorbar
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_label('Best Fitness', rotation=270, labelpad=20)
+        
+        # Add text annotations with fitness values
+        for i in range(len(unique_actual_gens)):
+            for j in range(len(unique_pop_sizes)):
+                if not np.isnan(fitness_matrix[i, j]):
+                    text = ax.text(j, i, f'{fitness_matrix[i, j]:.4f}',
+                                 ha="center", va="center", color="black", fontsize=8)
         
         plt.tight_layout()
-        plt.savefig(output_dir / 'parameter_correlations.png', dpi=150)
+        plt.savefig(output_dir / 'fitness_heatmap_table.png', dpi=150, bbox_inches='tight')
         plt.close()
         
-        print_success("✓ Generated parameter_correlations.png")
+        print_success("✓ Generated fitness_heatmap_table.png")
     
     def _generate_statistical_summary(self, output_dir: Path, normalized_individuals: List[Dict[str, Any]]):
         """Generate statistical summary table and export as CSV/JSON"""
@@ -384,8 +450,10 @@ class MultiRunComparator:
             "",
             "## Visualizations",
             "",
-            "- `fitness_progression.png` - Fitness evolution over generations",
-            "- `parameter_correlations.png` - Parameter impact analysis",
+            "- `correlation_3d_popsize_iterations_fitness.png` - 3D correlation showing how population size and actual iterations affect fitness",
+            "- `correlation_popsize_vs_iterations.png` - Population size vs actual iterations (colored by max iterations)",
+            "- `search_space_coverage.png` - Search space coverage vs quality",
+            "- `fitness_heatmap_table.png` - Heatmap table showing fitness across population size and actual iterations (green=best, red=worst)",
             "- `comparison_summary.csv` - Detailed statistics in CSV format",
             "- `comparison_summary.json` - Detailed statistics in JSON format",
         ])
