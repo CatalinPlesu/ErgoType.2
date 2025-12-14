@@ -686,6 +686,17 @@ class GeneticAlgorithmSimulation:
                 if ''.join(individual.chromosome) == chromosome_str:
                     return True
             return False
+        
+        def is_duplicate_in_lists(chromosome, population_list, children_list):
+            """Check if chromosome is duplicate without list concatenation for performance"""
+            chromosome_str = ''.join(chromosome)
+            for individual in population_list:
+                if ''.join(individual.chromosome) == chromosome_str:
+                    return True
+            for individual in children_list:
+                if ''.join(individual.chromosome) == chromosome_str:
+                    return True
+            return False
 
         if len(self.parents) < 2:
             print(f"Warning: Not enough parents. Have {len(self.parents)} parents.")
@@ -756,7 +767,87 @@ class GeneticAlgorithmSimulation:
             if len(self.children) >= target_children:
                 break
 
-        print(f"Created {len(self.children)} unique children (target: {target_children})")
+        # If we didn't create enough children through crossover, clone and mutate existing children
+        if len(self.children) < target_children and len(self.children) > 0:
+            print(f"Created {len(self.children)} unique children (target: {target_children})")
+            shortage = target_children - len(self.children)
+            print(f"Filling shortage of {shortage} children by cloning and mutating existing children...")
+            
+            # Configuration constants for population filling
+            CLONE_ATTEMPTS_MULTIPLIER = 10
+            BEST_PARENTS_COUNT = 10
+            PARENT_MUTATION_ATTEMPTS_MULTIPLIER = 15
+            CLONE_MUTATION_RATE = 0.15
+            PARENT_MUTATION_RATE = 0.2
+            MAX_MUTATIONS = 5
+            
+            # Clone and mutate existing children to fill the gap
+            original_children = self.children.copy()
+            clones_created = 0
+            max_clone_attempts = shortage * CLONE_ATTEMPTS_MULTIPLIER
+            mutation_strength = 2  # Start with moderate mutation
+            
+            while len(self.children) < target_children and clones_created < max_clone_attempts:
+                # Select a random child to clone (prefer different sources for diversity)
+                source_child = random.choice(original_children)
+                
+                # Clone and mutate the chromosome with increasing mutation strength
+                cloned_chromosome = source_child.chromosome.copy()
+                # Increase mutation strength as we make more attempts to avoid duplicates
+                num_mutations = mutation_strength + (clones_created // shortage if shortage > 0 else 0)
+                mutated_chromosome = self.mutate_permutation(cloned_chromosome, mutation_rate=CLONE_MUTATION_RATE, num_mutations=min(num_mutations, MAX_MUTATIONS))
+                
+                # Check if this clone is unique (avoid list concatenation for performance)
+                if not is_duplicate_in_lists(mutated_chromosome, self.population, self.children):
+                    clone = Individual(
+                        chromosome=mutated_chromosome,
+                        fitness=None,
+                        distance=None,
+                        time_taken=None,
+                        parents=source_child.parents,  # Keep same parents as source
+                        generation=self.current_generation + 1
+                    )
+                    self.children.append(clone)
+                    self.individual_names[clone.id] = clone.name
+                
+                clones_created += 1
+            
+            print(f"Added {len(self.children) - len(original_children)} cloned and mutated children")
+            
+            # If we still don't have enough, fill remaining with random mutations of best parents
+            if len(self.children) < target_children:
+                remaining_shortage = target_children - len(self.children)
+                print(f"Still short by {remaining_shortage}. Adding random mutations of best parents...")
+                
+                children_before_parent_mutations = len(self.children)
+                
+                # Use best parents for additional diversity
+                best_parents = sorted(self.parents, key=lambda x: x.fitness if x.fitness is not None else float('inf'))[:BEST_PARENTS_COUNT]
+                attempts = 0
+                max_random_attempts = remaining_shortage * PARENT_MUTATION_ATTEMPTS_MULTIPLIER
+                
+                while len(self.children) < target_children and attempts < max_random_attempts:
+                    parent = random.choice(best_parents)
+                    mutated_chromosome = self.mutate_permutation(parent.chromosome.copy(), mutation_rate=PARENT_MUTATION_RATE, num_mutations=MAX_MUTATIONS)
+                    
+                    # Check if this mutation is unique (avoid list concatenation for performance)
+                    if not is_duplicate_in_lists(mutated_chromosome, self.population, self.children):
+                        child = Individual(
+                            chromosome=mutated_chromosome,
+                            fitness=None,
+                            distance=None,
+                            time_taken=None,
+                            parents=[parent.id],
+                            generation=self.current_generation + 1
+                        )
+                        self.children.append(child)
+                        self.individual_names[child.id] = child.name
+                    
+                    attempts += 1
+                
+                print(f"Added {len(self.children) - children_before_parent_mutations} more children from parent mutations")
+        
+        print(f"Final children count: {len(self.children)} (target: {target_children})")
 
     def mutation(self):
         """Mutate children"""
