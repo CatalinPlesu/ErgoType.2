@@ -114,6 +114,11 @@ class Individual:
 
 
 class GeneticAlgorithmSimulation:
+    # Constants for population adjustment during phase transitions
+    EXPANSION_MUTATION_RATE = 0.1  # Mutation rate when expanding population
+    EXPANSION_NUM_MUTATIONS = 2     # Number of mutations when expanding population
+    EXPANSION_TEMPLATE_POOL_SIZE = 10  # Use top N individuals as templates for expansion
+    
     def __init__(self, 
                  keyboard_file='data/keyboards/ansi_60_percent.json',
                  text_file='data/text/raw/simple_wikipedia_dataset.txt',
@@ -1007,11 +1012,15 @@ class GeneticAlgorithmSimulation:
             
             # Use best individuals as templates
             for i in range(needed):
-                template_idx = i % min(10, len(sorted_pop))  # Use top 10 or less
+                template_idx = i % min(self.EXPANSION_TEMPLATE_POOL_SIZE, len(sorted_pop))  # Use top N or less
                 template = sorted_pop[template_idx]
                 
                 # Create variation by mutation
-                new_chromosome = self.mutate_permutation(template.chromosome.copy(), mutation_rate=0.1, num_mutations=2)
+                new_chromosome = self.mutate_permutation(
+                    template.chromosome.copy(), 
+                    mutation_rate=self.EXPANSION_MUTATION_RATE, 
+                    num_mutations=self.EXPANSION_NUM_MUTATIONS
+                )
                 new_individual = Individual(
                     chromosome=new_chromosome,
                     generation=self.current_generation,

@@ -4,6 +4,7 @@ from core.map_json_exporter import CSharpFitnessConfig
 from core.evaluator import Evaluator
 from core.layout import Layout
 from src.helpers.layouts.visualization import generate_all_visualizations
+from core.ga_runs_queue import calculate_phases_metrics
 import sys
 import os
 from datetime import datetime
@@ -285,10 +286,9 @@ def run_genetic_algorithm(
             table.add_row("Mode", "Population Phases")
             for i, (iters, pop) in enumerate(population_phases, 1):
                 table.add_row(f"  Phase {i}", f"{iters} iterations, pop={pop}")
-            total_iters = sum(p[0] for p in population_phases)
-            avg_pop = sum(p[0] * p[1] for p in population_phases) / total_iters if total_iters > 0 else 0
-            table.add_row("Total max iterations", str(total_iters))
-            table.add_row("Average population", f"{avg_pop:.1f}")
+            metrics = calculate_phases_metrics(population_phases)
+            table.add_row("Total max iterations", str(metrics['total_iterations']))
+            table.add_row("Average population", f"{metrics['average_population']:.1f}")
         else:
             table.add_row("Mode", "Standard")
             table.add_row("Population size", str(population_size))
@@ -313,10 +313,9 @@ def run_genetic_algorithm(
             print(f"Mode: Population Phases")
             for i, (iters, pop) in enumerate(population_phases, 1):
                 print(f"  Phase {i}: {iters} iterations, pop={pop}")
-            total_iters = sum(p[0] for p in population_phases)
-            avg_pop = sum(p[0] * p[1] for p in population_phases) / total_iters if total_iters > 0 else 0
-            print(f"Total max iterations: {total_iters}")
-            print(f"Average population: {avg_pop:.1f}")
+            metrics = calculate_phases_metrics(population_phases)
+            print(f"Total max iterations: {metrics['total_iterations']}")
+            print(f"Average population: {metrics['average_population']:.1f}")
         else:
             print(f"Mode: Standard")
             print(f"Population size: {population_size}")
@@ -428,13 +427,12 @@ def run_genetic_algorithm(
         ga_run_data["mode"] = "population_phases"
         ga_run_data["population_phases"] = population_phases
         # Calculate compatibility metrics
-        total_max_iterations = sum(p[0] for p in population_phases)
-        avg_population = sum(p[0] * p[1] for p in population_phases) / total_max_iterations if total_max_iterations > 0 else 0
-        ga_run_data["total_max_iterations"] = total_max_iterations
-        ga_run_data["average_population"] = round(avg_population, 2)
+        metrics = calculate_phases_metrics(population_phases)
+        ga_run_data["total_max_iterations"] = metrics['total_iterations']
+        ga_run_data["average_population"] = round(metrics['average_population'], 2)
         # Also save for compatibility with tools expecting these fields
-        ga_run_data["population_size"] = round(avg_population, 2)
-        ga_run_data["max_iterations"] = total_max_iterations
+        ga_run_data["population_size"] = round(metrics['average_population'], 2)
+        ga_run_data["max_iterations"] = metrics['total_iterations']
     else:
         ga_run_data["mode"] = "standard"
         ga_run_data["population_size"] = population_size

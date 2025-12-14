@@ -8,6 +8,32 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 
+def calculate_phases_metrics(population_phases: List[tuple]) -> Dict[str, Any]:
+    """
+    Calculate metrics for population phases.
+    
+    Args:
+        population_phases: List of (iterations, max_population) tuples
+        
+    Returns:
+        Dictionary with total_iterations and average_population
+    """
+    if not population_phases:
+        return {'total_iterations': 0, 'average_population': 0.0}
+    
+    total_iterations = sum(p[0] for p in population_phases)
+    if total_iterations == 0:
+        return {'total_iterations': 0, 'average_population': 0.0}
+    
+    weighted_sum = sum(p[0] * p[1] for p in population_phases)
+    average_population = weighted_sum / total_iterations
+    
+    return {
+        'total_iterations': total_iterations,
+        'average_population': average_population
+    }
+
+
 # Default parameter values
 DEFAULT_PARAMS = {
     'keyboard_file': 'src/data/keyboards/ansi_60_percent.json',
@@ -143,9 +169,8 @@ class GARunsQueue:
                 # Handle both standard and population_phases modes
                 if run_config.get('population_phases'):
                     # Calculate based on phases
-                    total_iters = sum(p[0] for p in run_config['population_phases'])
-                    avg_pop = sum(p[0] * p[1] for p in run_config['population_phases']) / total_iters if total_iters > 0 else 0
-                    individuals_this_run = int(total_iters * avg_pop)
+                    metrics = calculate_phases_metrics(run_config['population_phases'])
+                    individuals_this_run = int(metrics['total_iterations'] * metrics['average_population'])
                 else:
                     individuals_this_run = run_config['population_size'] * run_config['max_iterations']
                 
@@ -188,9 +213,8 @@ class GARunsQueue:
                 # Estimate individuals processed (may be less if failed early)
                 # Handle both standard and population_phases modes
                 if run_config.get('population_phases'):
-                    total_iters = sum(p[0] for p in run_config['population_phases'])
-                    avg_pop = sum(p[0] * p[1] for p in run_config['population_phases']) / total_iters if total_iters > 0 else 0
-                    individuals_this_run = int(total_iters * avg_pop)
+                    metrics = calculate_phases_metrics(run_config['population_phases'])
+                    individuals_this_run = int(metrics['total_iterations'] * metrics['average_population'])
                 else:
                     individuals_this_run = run_config['population_size'] * run_config['max_iterations']
                 
@@ -251,9 +275,8 @@ class GARunsQueue:
             run = self.runs[i]
             # Handle both standard and population_phases modes
             if run.get('population_phases'):
-                total_iters = sum(p[0] for p in run['population_phases'])
-                avg_pop = sum(p[0] * p[1] for p in run['population_phases']) / total_iters if total_iters > 0 else 0
-                remaining_individuals += int(total_iters * avg_pop)
+                metrics = calculate_phases_metrics(run['population_phases'])
+                remaining_individuals += int(metrics['total_iterations'] * metrics['average_population'])
             else:
                 remaining_individuals += run['population_size'] * run['max_iterations']
         

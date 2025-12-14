@@ -294,8 +294,10 @@ def item_run_genetic():
     # Add mode-specific parameters
     if use_population_phases:
         CONFIG['population_phases'] = population_phases
-        CONFIG['population_size'] = population_phases[0][1]  # Initial population for compatibility
-        CONFIG['max_iterations'] = sum(p[0] for p in population_phases)  # Total for compatibility
+        # Set initial population size from first phase for GA initialization
+        CONFIG['population_size'] = population_phases[0][1]
+        # Set total iterations for display/compatibility (sum of all phase iterations)
+        CONFIG['max_iterations'] = sum(p[0] for p in population_phases)
     else:
         CONFIG['population_size'] = population_size
         CONFIG['max_iterations'] = max_iterations
