@@ -17,9 +17,22 @@ def calculate_phases_metrics(population_phases: List[tuple]) -> Dict[str, Any]:
         
     Returns:
         Dictionary with total_iterations and average_population
+        
+    Raises:
+        ValueError: If phases contain invalid data
     """
     if not population_phases:
         return {'total_iterations': 0, 'average_population': 0.0}
+    
+    # Validate phase structure
+    for i, phase in enumerate(population_phases):
+        if not isinstance(phase, (tuple, list)) or len(phase) != 2:
+            raise ValueError(f"Phase {i+1} must be a tuple/list of (iterations, max_population)")
+        iterations, max_pop = phase
+        if not isinstance(iterations, int) or iterations < 0:
+            raise ValueError(f"Phase {i+1} iterations must be a non-negative integer, got {iterations}")
+        if not isinstance(max_pop, int) or max_pop <= 0:
+            raise ValueError(f"Phase {i+1} max_population must be a positive integer, got {max_pop}")
     
     total_iterations = sum(p[0] for p in population_phases)
     if total_iterations == 0:

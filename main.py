@@ -293,6 +293,11 @@ def item_run_genetic():
     
     # Add mode-specific parameters
     if use_population_phases:
+        # Validate that we have at least one phase
+        if not population_phases or len(population_phases) == 0:
+            print_error("No population phases defined!")
+            return
+            
         CONFIG['population_phases'] = population_phases
         # Set initial population size from first phase for GA initialization
         CONFIG['population_size'] = population_phases[0][1]

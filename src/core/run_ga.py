@@ -441,7 +441,8 @@ def run_genetic_algorithm(
     # Get actual iterations completed from progress tracker
     progress_tracker = getattr(ga, 'progress_tracker', None)
     if progress_tracker:
-        # Access the iteration counter
+        # Access the iteration counter if available
+        # Note: current_iteration may not exist in older progress tracker implementations
         actual_iterations = getattr(progress_tracker, 'current_iteration', 0)
         ga_run_data["actual_iterations"] = actual_iterations
         
