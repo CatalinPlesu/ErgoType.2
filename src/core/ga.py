@@ -756,6 +756,9 @@ class GeneticAlgorithmSimulation:
             CLONE_ATTEMPTS_MULTIPLIER = 10
             BEST_PARENTS_COUNT = 10
             PARENT_MUTATION_ATTEMPTS_MULTIPLIER = 15
+            CLONE_MUTATION_RATE = 0.15
+            PARENT_MUTATION_RATE = 0.2
+            MAX_MUTATIONS = 5
             
             # Clone and mutate existing children to fill the gap
             original_children = self.children.copy()
@@ -771,11 +774,10 @@ class GeneticAlgorithmSimulation:
                 cloned_chromosome = source_child.chromosome.copy()
                 # Increase mutation strength as we make more attempts to avoid duplicates
                 num_mutations = mutation_strength + (clones_created // shortage if shortage > 0 else 0)
-                mutated_chromosome = self.mutate_permutation(cloned_chromosome, mutation_rate=0.15, num_mutations=min(num_mutations, 5))
+                mutated_chromosome = self.mutate_permutation(cloned_chromosome, mutation_rate=CLONE_MUTATION_RATE, num_mutations=min(num_mutations, MAX_MUTATIONS))
                 
-                # Check if this clone is unique
-                all_existing = self.population + self.children
-                if not is_duplicate(mutated_chromosome, all_existing):
+                # Check if this clone is unique (build list once per iteration)
+                if not is_duplicate(mutated_chromosome, self.population + self.children):
                     clone = Individual(
                         chromosome=mutated_chromosome,
                         fitness=None,
@@ -805,10 +807,10 @@ class GeneticAlgorithmSimulation:
                 
                 while len(self.children) < target_children and attempts < max_random_attempts:
                     parent = random.choice(best_parents)
-                    mutated_chromosome = self.mutate_permutation(parent.chromosome.copy(), mutation_rate=0.2, num_mutations=5)
+                    mutated_chromosome = self.mutate_permutation(parent.chromosome.copy(), mutation_rate=PARENT_MUTATION_RATE, num_mutations=MAX_MUTATIONS)
                     
-                    all_existing = self.population + self.children
-                    if not is_duplicate(mutated_chromosome, all_existing):
+                    # Check if this clone is unique (build list once per iteration)
+                    if not is_duplicate(mutated_chromosome, self.population + self.children):
                         child = Individual(
                             chromosome=mutated_chromosome,
                             fitness=None,
