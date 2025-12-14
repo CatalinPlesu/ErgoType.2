@@ -217,7 +217,6 @@ class MultiRunComparator:
     def _generate_3d_correlation_plot(self, output_dir: Path):
         """Generate 3D correlation: population size x actual iterations -> fitness"""
         import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
         
         pop_sizes = [s['population_size'] for s in self.summaries]
         actual_gens = [s['total_generations'] for s in self.summaries]
@@ -310,14 +309,18 @@ class MultiRunComparator:
         unique_pop_sizes = sorted(set(pop_sizes))
         unique_actual_gens = sorted(set(actual_gens))
         
+        # Create index mappings for O(1) lookup
+        pop_size_to_idx = {size: idx for idx, size in enumerate(unique_pop_sizes)}
+        gen_to_idx = {gen: idx for idx, gen in enumerate(unique_actual_gens)}
+        
         # Create a matrix for the heatmap
         # Initialize with NaN
         fitness_matrix = np.full((len(unique_actual_gens), len(unique_pop_sizes)), np.nan)
         
         # Fill in the matrix with fitness values
-        for i, summary in enumerate(self.summaries):
-            pop_idx = unique_pop_sizes.index(summary['population_size'])
-            gen_idx = unique_actual_gens.index(summary['total_generations'])
+        for summary in self.summaries:
+            pop_idx = pop_size_to_idx[summary['population_size']]
+            gen_idx = gen_to_idx[summary['total_generations']]
             fitness_matrix[gen_idx, pop_idx] = summary['best_fitness']
         
         # Create figure
@@ -350,8 +353,8 @@ class MultiRunComparator:
         for i in range(len(unique_actual_gens)):
             for j in range(len(unique_pop_sizes)):
                 if not np.isnan(fitness_matrix[i, j]):
-                    text = ax.text(j, i, f'{fitness_matrix[i, j]:.4f}',
-                                 ha="center", va="center", color="black", fontsize=8)
+                    ax.text(j, i, f'{fitness_matrix[i, j]:.4f}',
+                           ha="center", va="center", color="black", fontsize=8)
         
         plt.tight_layout()
         plt.savefig(output_dir / 'fitness_heatmap_table.png', dpi=150, bbox_inches='tight')
