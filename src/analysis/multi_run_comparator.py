@@ -282,27 +282,29 @@ class MultiRunComparator:
             print_success("✓ Generated correlation_3d_popsize_iterations_fitness.png")
     
     def _generate_popsize_iterations_correlation(self, output_dir: Path):
-        """Generate correlation between population size and actual iterations based on max iterations"""
+        """Generate 3D correlation showing how population size enables GA to run longer"""
         import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
         
         pop_sizes = [s['population_size'] for s in self.summaries]
         actual_gens = [s['total_generations'] for s in self.summaries]
         max_iters = [s['max_iterations'] for s in self.summaries]
         
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
         
-        # Create scatter plot with color based on max iterations
-        scatter = ax.scatter(pop_sizes, actual_gens, c=max_iters, 
-                            cmap='viridis', s=100, alpha=0.7)
+        # Create 3D scatter plot with color based on max iterations
+        scatter = ax.scatter(pop_sizes, actual_gens, max_iters, 
+                            c=max_iters, cmap='viridis', s=100, alpha=0.7)
         
-        ax.set_xlabel('Population Size', fontsize=11)
-        ax.set_ylabel('Actual Iterations', fontsize=11)
-        ax.set_title('Population Size vs Actual Iterations\n(colored by Max Iterations)', 
-                     fontsize=12)
-        ax.grid(True, alpha=0.3)
+        ax.set_xlabel('Population Size', fontsize=10)
+        ax.set_ylabel('Actual Iterations', fontsize=10)
+        ax.set_zlabel('Max Iterations', fontsize=10)
+        ax.set_title('3D Correlation: How Population Size Enables Longer GA Runs\nPopulation Size × Actual Iterations × Max Iterations', 
+                     fontsize=12, pad=20)
         
         # Add colorbar
-        cbar = plt.colorbar(scatter, ax=ax)
+        cbar = plt.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8)
         cbar.set_label('Max Iterations', rotation=270, labelpad=20)
         
         plt.tight_layout()
