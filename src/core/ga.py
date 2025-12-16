@@ -1109,6 +1109,16 @@ class GeneticAlgorithmSimulation:
         
         iteration = 0
         print("Starting genetic algorithm...")
+        
+        # Adjust population size if needed when continuing from a previous run
+        # or when starting a new run with different size than loaded
+        if not population_phases:  # In standard mode
+            # Check if we need to adjust population size
+            current_pop_size = len(self.population)
+            if current_pop_size != self.population_size:
+                print(f"\n📊 Adjusting population size from {current_pop_size} to {self.population_size}")
+                self._adjust_population_size(self.population_size)
+        
         self.fitness_function_calculation()
         self.order_fitness_values(limited=True)
 
