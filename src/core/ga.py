@@ -1077,22 +1077,32 @@ class GeneticAlgorithmSimulation:
         self.job_queue.purge_all()
         
         # Calculate total max iterations for progress tracker
+        # When continuing from a previous run, we need to add the current generation
+        starting_iteration = self.current_generation if hasattr(self, 'current_generation') else 0
+        
         if population_phases:
-            total_max_iterations = sum(phase[0] for phase in population_phases)
+            total_max_iterations = starting_iteration + sum(phase[0] for phase in population_phases)
             print(f"\n📋 POPULATION PHASES MODE:")
             print(f"   Total phases: {len(population_phases)}")
             for i, (iters, pop) in enumerate(population_phases, 1):
                 print(f"   Phase {i}: {iters} iterations with max population {pop}")
             print(f"   Total max iterations: {total_max_iterations}")
+            if starting_iteration > 0:
+                print(f"   Starting from generation: {starting_iteration}")
         else:
-            total_max_iterations = max_iterations
+            total_max_iterations = starting_iteration + max_iterations
+            if starting_iteration > 0:
+                print(f"\n📋 Continuing from generation {starting_iteration}")
+                print(f"   Will run {max_iterations} more iterations")
+                print(f"   Total max iterations: {total_max_iterations}")
         
         # Initialize progress tracker
         from ui.progress_tracker import GAProgressTracker
         progress_tracker = GAProgressTracker(
             max_iterations=total_max_iterations,
             stagnation_limit=stagnant,
-            population_phases=population_phases  # Pass phases for accurate ETA
+            population_phases=population_phases,  # Pass phases for accurate ETA
+            starting_iteration=starting_iteration  # Pass starting iteration for continued runs
         )
         progress_tracker.start()
         self.progress_tracker = progress_tracker  # Store for use in fitness calculation

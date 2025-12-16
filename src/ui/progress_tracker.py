@@ -61,23 +61,25 @@ class GAProgressTracker:
     Progress is printed every 10 seconds or when a job batch/iteration completes.
     """
     
-    def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[Console] = None, population_phases: Optional[list] = None):
+    def __init__(self, max_iterations: int, stagnation_limit: int, console: Optional[Console] = None, population_phases: Optional[list] = None, starting_iteration: int = 0):
         """
         Initialize the progress tracker.
         
         Args:
-            max_iterations: Maximum number of iterations
+            max_iterations: Maximum number of iterations to run (total, including starting point)
             stagnation_limit: Stagnation limit for stopping
             console: Rich Console instance (creates new if None)
             population_phases: Optional list of (iterations, max_population) tuples for phases mode
+            starting_iteration: Starting iteration number (for continuing from previous run)
         """
         self.max_iterations = max_iterations
         self.stagnation_limit = stagnation_limit
         self.console = console or Console()
         self.population_phases = population_phases
+        self.starting_iteration = starting_iteration
         
         # Iteration tracking
-        self.current_iteration = 0
+        self.current_iteration = starting_iteration
         self.stagnation_count = 0
         self.iteration_start_time = None
         self.overall_start_time = None
@@ -127,7 +129,10 @@ class GAProgressTracker:
         elapsed = current_time - self.overall_start_time if self.overall_start_time else 0
         
         # Build compact single-line progress with colors
-        iter_pct = (self.current_iteration / self.max_iterations * 100) if self.max_iterations > 0 else 0
+        # Calculate progress from starting point
+        completed_iterations = self.current_iteration - self.starting_iteration
+        total_iterations_to_run = self.max_iterations - self.starting_iteration
+        iter_pct = (completed_iterations / total_iterations_to_run * 100) if total_iterations_to_run > 0 else 0
         
         # Create colorful text-based progress bar
         bar_width = 20
