@@ -155,7 +155,13 @@ def item_run_genetic():
                 else:
                     fitness_str = str(best_fitness)
                 
-                display_text = f"{run_name} | Pop: {pop_size} | Total Ind: {total_individuals} | Best Fitness: {fitness_str}"
+                # Format display with consistent spacing
+                display_text = (
+                    f"{run_name:<50} "
+                    f"Pop: {str(pop_size):>5}  "
+                    f"Individuals: {str(total_individuals):>6}  "
+                    f"Fitness: {fitness_str}"
+                )
                 run_options.append((display_text, str(run_dir)))
                 
             except Exception as e:

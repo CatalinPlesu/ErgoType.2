@@ -94,13 +94,22 @@ def _evaluate_individual_worker(individual_data, keyboard_file, text_file, finge
 class Individual:
     _next_id = 0
 
-    def __init__(self, chromosome, fitness=None, distance=None, time_taken=None, parents=None, generation=0, name=None):
+    def __init__(self, chromosome, fitness=None, distance=None, time_taken=None, parents=None, generation=0, name=None, individual_id=None):
         self.chromosome = chromosome
         self.fitness = fitness
         self.distance = distance
         self.time_taken = time_taken
-        self.id = Individual._next_id
-        Individual._next_id += 1
+        
+        # Allow explicit ID for loading saved individuals
+        if individual_id is not None:
+            self.id = individual_id
+            # Update _next_id if this ID is higher to avoid collisions
+            if individual_id >= Individual._next_id:
+                Individual._next_id = individual_id + 1
+        else:
+            self.id = Individual._next_id
+            Individual._next_id += 1
+            
         self.parents = parents or []
         self.generation = generation
         if name is None:
@@ -416,15 +425,10 @@ class GeneticAlgorithmSimulation:
         # Recreate all individuals to maintain history
         self.population = []
         self.all_individuals = {}
+        self.evaluated_individuals = []
         
-        # First, determine the highest existing individual ID to continue from
-        max_id = max((ind.get('id', 0) for ind in all_individuals_list), default=0)
-        Individual._next_id = max_id + 1
-        print(f"Continuing individual IDs from: {Individual._next_id}")
-        
-        # Recreate all individuals from history
+        # Recreate all individuals from history using explicit IDs
         for ind_data in all_individuals_list:
-            # Manually create Individual with the original ID
             chromosome = ind_data.get('chromosome')
             if isinstance(chromosome, str):
                 chromosome = list(chromosome)
@@ -437,10 +441,9 @@ class GeneticAlgorithmSimulation:
                 time_taken=ind_data.get('time_taken'),
                 parents=ind_data.get('parents', []),
                 generation=ind_data.get('generation', 0),
-                name=ind_data.get('name')
+                name=ind_data.get('name'),
+                individual_id=ind_data.get('id')  # Preserve original ID
             )
-            # Override the auto-assigned ID with the original ID
-            individual.id = ind_data.get('id')
             
             self.all_individuals[individual.id] = {
                 'id': individual.id,
@@ -454,6 +457,9 @@ class GeneticAlgorithmSimulation:
             }
             self.individual_names[individual.id] = individual.name
             
+            # Add to evaluated_individuals (reuse same Individual objects to avoid duplication)
+            self.evaluated_individuals.append(individual)
+            
             # Add last generation individuals to current population
             if individual.generation == max_gen:
                 self.population.append(individual)
@@ -464,23 +470,10 @@ class GeneticAlgorithmSimulation:
         # Set current generation to continue from
         self.current_generation = max_gen
         
-        # Add all loaded individuals to evaluated_individuals
-        self.evaluated_individuals = [
-            Individual(
-                chromosome=ind_data.get('chromosome') if isinstance(ind_data.get('chromosome'), list) 
-                          else list(ind_data.get('chromosome', [])),
-                fitness=ind_data.get('fitness'),
-                distance=ind_data.get('distance'),
-                time_taken=ind_data.get('time_taken'),
-                parents=ind_data.get('parents', []),
-                generation=ind_data.get('generation', 0),
-                name=ind_data.get('name')
-            )
-            for ind_data in all_individuals_list
-        ]
-        
+        print(f"Individual ID counter will continue from: {Individual._next_id}")
         print(f"Ready to continue from generation {self.current_generation + 1}")
         print("="*80)
+
 
     def get_current_population_ids(self):
         return [ind.id for ind in self.population]
