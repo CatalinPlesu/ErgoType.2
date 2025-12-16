@@ -129,7 +129,9 @@ class GeneticAlgorithmSimulation:
                  max_concurrent_processes=None,
                  use_rabbitmq=True,
                  is_worker=False,
-                 population_phases=None):
+                 population_phases=None,
+                 skip_heuristics=False,
+                 continue_from_run=None):
         """
         Initialize GA with C# fitness calculator.
         
@@ -139,9 +141,13 @@ class GeneticAlgorithmSimulation:
             population_phases: Optional list of tuples (iterations, max_population) for dynamic phases.
                              If provided, replaces population_size and max_iterations parameters.
                              Example: [(30, 50), (1, 1000), (10, 50)]
+            skip_heuristics: If True, skip loading heuristic layouts and only use random individuals
+            continue_from_run: Path to a previous GA run directory to continue from
         """
         self.is_worker = is_worker
         self.population_phases = population_phases
+        self.skip_heuristics = skip_heuristics
+        self.continue_from_run = continue_from_run
         
         if is_worker:
             print("="*80)
@@ -190,10 +196,18 @@ class GeneticAlgorithmSimulation:
             self.individual_names = {}
             self.all_individuals = {}
             self.population_size = population_size
-            self.population_initialization(self.population_size)
+            self.evaluated_individuals = []
+            
+            # Handle different initialization modes
+            if continue_from_run:
+                # Load population from previous run
+                self._load_from_previous_run(continue_from_run)
+            else:
+                # Standard initialization
+                self.population_initialization(self.population_size, skip_heuristics=skip_heuristics)
+                
             self.previous_population_ids = self.get_current_population_ids()
             self.previous_population_iteration = 0
-            self.evaluated_individuals = []
 
     def _run_worker(self):
         """Worker mode: continuously process jobs from queue"""
@@ -323,35 +337,150 @@ class GeneticAlgorithmSimulation:
                     traceback.print_exc()
                     time.sleep(1)
 
-    def population_initialization(self, size=50):
+    def population_initialization(self, size=50, skip_heuristics=False):
         """Initialize population (master only)"""
         if self.is_worker:
             return
             
         self.population = []
 
-        for layout_name, genotype in LAYOUT_DATA.items():
-            individual = Individual(chromosome=list(genotype), generation=0, name=layout_name)
-            self.population.append(individual)
-            self.individual_names[individual.id] = individual.name
-            print(f"Added heuristic layout: {layout_name}")
+        # Add heuristic layouts unless skipped
+        if not skip_heuristics:
+            for layout_name, genotype in LAYOUT_DATA.items():
+                individual = Individual(chromosome=list(genotype), generation=0, name=layout_name)
+                self.population.append(individual)
+                self.individual_names[individual.id] = individual.name
+                print(f"Added heuristic layout: {layout_name}")
 
-        print(f"Population initialized with {len(self.population)} heuristic individuals")
+            print(f"Population initialized with {len(self.population)} heuristic individuals")
+        else:
+            print("Skipping heuristic layouts (random-only mode)")
 
         if size > len(self.population):
             if self.population:
                 template_genotype = self.population[0].chromosome
-                needed = size - len(self.population)
-                print(f"Adding {needed} random individuals")
+            else:
+                # If no heuristics, use QWERTY as template
+                template_genotype = list(LAYOUT_DATA.get("qwerty", "qwertyuiopasdfghjkl;zxcvbnm,./"))
+                
+            needed = size - len(self.population)
+            print(f"Adding {needed} random individuals")
 
-                for _ in range(needed):
-                    shuffled_clone = template_genotype.copy()
-                    random.shuffle(shuffled_clone)
-                    individual = Individual(chromosome=shuffled_clone, generation=0)
-                    self.population.append(individual)
-                    self.individual_names[individual.id] = individual.name
+            for _ in range(needed):
+                shuffled_clone = template_genotype.copy()
+                random.shuffle(shuffled_clone)
+                individual = Individual(chromosome=shuffled_clone, generation=0)
+                self.population.append(individual)
+                self.individual_names[individual.id] = individual.name
 
         print(f"Total population size: {len(self.population)}")
+
+    def _load_from_previous_run(self, run_dir):
+        """Load population and state from a previous GA run"""
+        from pathlib import Path
+        import json
+        
+        run_path = Path(run_dir)
+        if not run_path.exists():
+            raise FileNotFoundError(f"Run directory not found: {run_dir}")
+        
+        print("="*80)
+        print(f"LOADING FROM PREVIOUS RUN: {run_path.name}")
+        print("="*80)
+        
+        # Load metadata
+        metadata_path = run_path / "ga_run_metadata.json"
+        if not metadata_path.exists():
+            raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
+        
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        
+        print(f"Original run timestamp: {metadata.get('timestamp')}")
+        print(f"Original best fitness: {metadata.get('best_fitness')}")
+        
+        # Load all individuals
+        individuals_path = run_path / "ga_all_individuals.json"
+        if not individuals_path.exists():
+            raise FileNotFoundError(f"Individuals file not found: {individuals_path}")
+        
+        with open(individuals_path, 'r', encoding='utf-8') as f:
+            individuals_data = json.load(f)
+        
+        all_individuals_list = individuals_data.get('all_individuals', [])
+        
+        # Find the last generation
+        max_gen = max((ind.get('generation', 0) for ind in all_individuals_list), default=0)
+        print(f"Last generation in loaded run: {max_gen}")
+        
+        # Recreate all individuals to maintain history
+        self.population = []
+        self.all_individuals = {}
+        
+        # First, determine the highest existing individual ID to continue from
+        max_id = max((ind.get('id', 0) for ind in all_individuals_list), default=0)
+        Individual._next_id = max_id + 1
+        print(f"Continuing individual IDs from: {Individual._next_id}")
+        
+        # Recreate all individuals from history
+        for ind_data in all_individuals_list:
+            # Manually create Individual with the original ID
+            chromosome = ind_data.get('chromosome')
+            if isinstance(chromosome, str):
+                chromosome = list(chromosome)
+            
+            # Create individual with explicit ID to preserve history
+            individual = Individual(
+                chromosome=chromosome,
+                fitness=ind_data.get('fitness'),
+                distance=ind_data.get('distance'),
+                time_taken=ind_data.get('time_taken'),
+                parents=ind_data.get('parents', []),
+                generation=ind_data.get('generation', 0),
+                name=ind_data.get('name')
+            )
+            # Override the auto-assigned ID with the original ID
+            individual.id = ind_data.get('id')
+            
+            self.all_individuals[individual.id] = {
+                'id': individual.id,
+                'name': individual.name,
+                'chromosome': individual.chromosome,
+                'fitness': individual.fitness,
+                'distance': individual.distance,
+                'time_taken': individual.time_taken,
+                'parents': individual.parents,
+                'generation': individual.generation
+            }
+            self.individual_names[individual.id] = individual.name
+            
+            # Add last generation individuals to current population
+            if individual.generation == max_gen:
+                self.population.append(individual)
+        
+        print(f"Loaded {len(all_individuals_list)} individuals from history")
+        print(f"Current population size (from last generation): {len(self.population)}")
+        
+        # Set current generation to continue from
+        self.current_generation = max_gen
+        
+        # Add all loaded individuals to evaluated_individuals
+        self.evaluated_individuals = [
+            Individual(
+                chromosome=ind_data.get('chromosome') if isinstance(ind_data.get('chromosome'), list) 
+                          else list(ind_data.get('chromosome', [])),
+                fitness=ind_data.get('fitness'),
+                distance=ind_data.get('distance'),
+                time_taken=ind_data.get('time_taken'),
+                parents=ind_data.get('parents', []),
+                generation=ind_data.get('generation', 0),
+                name=ind_data.get('name')
+            )
+            for ind_data in all_individuals_list
+        ]
+        
+        print(f"Ready to continue from generation {self.current_generation + 1}")
+        print("="*80)
 
     def get_current_population_ids(self):
         return [ind.id for ind in self.population]

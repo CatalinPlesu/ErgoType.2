@@ -102,14 +102,81 @@ def item_run_genetic():
     console.print()
 
     # Get GA parameters
-    console.print("[bold]Step 3: Configure GA Mode[/bold]\n")
+    console.print("[bold]Step 3: Select Run Mode[/bold]\n")
     saved_params = prefs.get_ga_params()
     
     # Import the new function
     from ui.rich_menu import get_parameter_group
     from rich.prompt import Prompt, Confirm
     
+    # Choose run mode
+    console.print("[bold cyan]Select GA Run Mode:[/bold cyan]")
+    console.print("  [1] Run as Normal - With heuristic layouts (QWERTY, Dvorak, etc.)")
+    console.print("  [2] Random Only - Skip heuristic layouts, use only random individuals")
+    console.print("  [3] Continue from Previous Run - Load and continue a previous GA run")
+    console.print()
+    
+    run_mode = Prompt.ask("Choose run mode", choices=["1", "2", "3"], default="1")
+    
+    skip_heuristics = (run_mode == "2")
+    continue_from_run = None
+    
+    # If mode 3, let user select a previous run
+    if run_mode == "3":
+        from analysis.ga_run_loader import GARunLoader
+        from pathlib import Path
+        
+        console.print("\n[bold]Loading Previous Runs...[/bold]\n")
+        
+        run_dirs = GARunLoader.find_ga_runs()
+        
+        if not run_dirs:
+            print_error("No previous GA runs found in output/ga_results/")
+            return
+        
+        # Display runs with their stats
+        console.print("[bold]Available Previous Runs:[/bold]\n")
+        
+        run_options = []
+        for i, run_dir in enumerate(run_dirs[:20], 1):  # Limit to 20 most recent
+            try:
+                loader = GARunLoader(run_dir)
+                summary = loader.get_run_summary()
+                
+                # Format the display
+                run_name = run_dir.name
+                timestamp = summary.get('timestamp', 'Unknown')
+                pop_size = summary.get('population_size', 'N/A')
+                total_individuals = summary.get('total_individuals', 'N/A')
+                best_fitness = summary.get('best_fitness', 'N/A')
+                
+                if isinstance(best_fitness, (int, float)):
+                    fitness_str = f"{best_fitness:.6f}"
+                else:
+                    fitness_str = str(best_fitness)
+                
+                display_text = f"{run_name} | Pop: {pop_size} | Total Ind: {total_individuals} | Best Fitness: {fitness_str}"
+                run_options.append((display_text, str(run_dir)))
+                
+            except Exception as e:
+                print_warning(f"Could not load {run_dir.name}: {e}")
+                continue
+        
+        if not run_options:
+            print_error("No valid runs found to continue from")
+            return
+        
+        result = select_from_list("Select Run to Continue", run_options)
+        if result is None:
+            print_warning("Cancelled")
+            return
+        
+        _, continue_from_run = result
+        print_success(f"Selected: {Path(continue_from_run).name}")
+        console.print()
+    
     # Choose between standard and population phases mode
+    console.print("\n[bold]Step 4: Configure GA Execution Mode[/bold]\n")
     console.print("[bold cyan]Select GA Execution Mode:[/bold cyan]")
     console.print("  [1] Standard Mode - Fixed population and iterations")
     console.print("  [2] Population Phases Mode - Dynamic population with multiple phases")
@@ -127,7 +194,7 @@ def item_run_genetic():
     
     if use_population_phases:
         # Population Phases Mode
-        console.print("\n[bold]Step 4: Define Population Phases[/bold]\n")
+        console.print("\n[bold]Step 5: Define Population Phases[/bold]\n")
         console.print("[dim]Define phases as (iterations, max_population) tuples.[/dim]")
         console.print("[dim]Example: Phase 1: 30 iterations with 50 max population[/dim]\n")
         
@@ -180,7 +247,7 @@ def item_run_genetic():
     
     if not use_population_phases:
         # Standard Mode - Group 1: Main GA Parameters
-        console.print("\n[bold]Step 4: Configure GA Parameters[/bold]\n")
+        console.print("\n[bold]Step 5: Configure GA Parameters[/bold]\n")
         ga_params = get_parameter_group(
             "Main GA Parameters",
             [
@@ -198,7 +265,7 @@ def item_run_genetic():
         max_processes = ga_params['Max parallel processes']
     else:
         # For phases mode, only get stagnation limit and processes
-        console.print("\n[bold]Step 5: Configure Additional Parameters[/bold]\n")
+        console.print("\n[bold]Step 6: Configure Additional Parameters[/bold]\n")
         ga_params = get_parameter_group(
             "GA Control Parameters",
             [
@@ -212,7 +279,7 @@ def item_run_genetic():
         max_processes = ga_params['Max parallel processes']
     
     # Group 2: Fitts's Law Parameters (same for both modes)
-    step_num = 5 if not use_population_phases else 6
+    step_num = 6 if not use_population_phases else 7
     console.print(f"\n[bold]Step {step_num}: Configure Fitts's Law Parameters[/bold]\n")
     fitts_params = get_parameter_group(
         "Fitts's Law Parameters",
@@ -227,7 +294,7 @@ def item_run_genetic():
     fitts_b = fitts_params["Fitts's Law constant 'b'"]
     
     # Group 3 & 4: Finger Coefficients (same for both modes)
-    step_num = 6 if not use_population_phases else 7
+    step_num = 7 if not use_population_phases else 8
     console.print(f"\n[bold]Step {step_num}: Configure Finger Coefficients[/bold]\n")
     
     # Default finger coefficients for 10 fingers
@@ -288,7 +355,9 @@ def item_run_genetic():
         'fitts_a': fitts_a,
         'fitts_b': fitts_b,
         'finger_coefficients': finger_coefficients,
-        'use_rabbitmq': use_rabbitmq
+        'use_rabbitmq': use_rabbitmq,
+        'skip_heuristics': skip_heuristics,
+        'continue_from_run': continue_from_run
     }
     
     # Add mode-specific parameters
