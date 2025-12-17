@@ -468,27 +468,43 @@ class GeneticAlgorithmSimulation:
         # If text file changed, we need to re-evaluate and scale
         if text_file_changed:
             print(f"\n{'='*80}")
-            print(f"RE-EVALUATING POPULATION WITH NEW TEXT FILE")
+            print(f"RE-EVALUATING POPULATION WITH NEW TEXT FILE (OPTIMIZED)")
             print(f"{'='*80}")
             
-            # Store old distance/time for scaling calculation
-            old_distances = []
-            old_times = []
+            # Sort individuals by old fitness (best first)
+            # Filter out individuals without fitness
+            individuals_with_fitness = [ind for ind in all_individuals_list if ind.get('fitness') is not None]
+            individuals_without_fitness = [ind for ind in all_individuals_list if ind.get('fitness') is None]
             
-            # Recreate all individuals from history
-            for ind_data in all_individuals_list:
+            # Sort by fitness (lower is better)
+            individuals_with_fitness.sort(key=lambda x: x.get('fitness', float('inf')))
+            
+            # Determine how many to actually re-evaluate
+            num_to_evaluate = min(self.population_size, len(individuals_with_fitness))
+            best_individuals_data = individuals_with_fitness[:num_to_evaluate]
+            remaining_individuals_data = individuals_with_fitness[num_to_evaluate:] + individuals_without_fitness
+            
+            print(f"📊 Optimization strategy:")
+            print(f"   - Total individuals loaded: {len(all_individuals_list)}")
+            print(f"   - Will RE-EVALUATE best {num_to_evaluate} individuals with new text file")
+            print(f"   - Will SCALE remaining {len(remaining_individuals_data)} individuals using coefficient")
+            
+            # Store mapping of old data for coefficient calculation
+            old_data_map = {}
+            for ind_data in best_individuals_data:
+                old_data_map[ind_data.get('id')] = {
+                    'distance': ind_data.get('distance'),
+                    'time_taken': ind_data.get('time_taken'),
+                    'fitness': ind_data.get('fitness')
+                }
+            
+            # Recreate best individuals for re-evaluation
+            for ind_data in best_individuals_data:
                 chromosome = ind_data.get('chromosome')
                 if isinstance(chromosome, str):
                     chromosome = list(chromosome)
                 
-                # Store old metrics for scaling calculation
-                old_dist = ind_data.get('distance')
-                old_time = ind_data.get('time_taken')
-                if old_dist is not None and old_time is not None:
-                    old_distances.append(old_dist)
-                    old_times.append(old_time)
-                
-                # Create individual - will re-evaluate with new text file
+                # Mark for re-evaluation with new text file
                 individual = Individual(
                     chromosome=chromosome,
                     fitness=None,  # Will be recalculated
@@ -516,10 +532,47 @@ class GeneticAlgorithmSimulation:
                 if individual.generation == max_gen:
                     self.population.append(individual)
             
-            print(f"Loaded {len(all_individuals_list)} individuals from history")
-            print(f"Current population size (from last generation): {len(self.population)}")
-            print(f"⚠️  All individuals will be re-evaluated with new text file")
-            print(f"   Old metrics range: distance=[{min(old_distances) if old_distances else 0:.0f}, {max(old_distances) if old_distances else 0:.0f}], time=[{min(old_times) if old_times else 0:.0f}, {max(old_times) if old_times else 0:.0f}]")
+            # Recreate remaining individuals with old metrics (will be scaled later)
+            for ind_data in remaining_individuals_data:
+                chromosome = ind_data.get('chromosome')
+                if isinstance(chromosome, str):
+                    chromosome = list(chromosome)
+                
+                # Keep old metrics for now (will apply coefficient scaling later)
+                individual = Individual(
+                    chromosome=chromosome,
+                    fitness=None,  # Will be recalculated after scaling
+                    distance=ind_data.get('distance'),  # Keep old value for now
+                    time_taken=ind_data.get('time_taken'),  # Keep old value for now
+                    parents=ind_data.get('parents', []),
+                    generation=ind_data.get('generation', 0),
+                    name=ind_data.get('name'),
+                    individual_id=ind_data.get('id')
+                )
+                
+                self.all_individuals[individual.id] = {
+                    'id': individual.id,
+                    'name': individual.name,
+                    'chromosome': individual.chromosome,
+                    'fitness': individual.fitness,
+                    'distance': individual.distance,
+                    'time_taken': individual.time_taken,
+                    'parents': individual.parents,
+                    'generation': individual.generation
+                }
+                self.individual_names[individual.id] = individual.name
+                self.evaluated_individuals.append(individual)
+                
+                if individual.generation == max_gen:
+                    self.population.append(individual)
+            
+            # Store old data for coefficient calculation after re-evaluation
+            self._text_change_old_data = old_data_map
+            self._text_change_needs_scaling = True
+            
+            print(f"✅ Loaded {len(all_individuals_list)} individuals from history")
+            print(f"✅ Current population size (from last generation): {len(self.population)}")
+            print(f"⚠️  Best {num_to_evaluate} individuals will be re-evaluated, others will be scaled")
             
         else:
             # Same text file - use cached distance/time values
@@ -572,6 +625,68 @@ class GeneticAlgorithmSimulation:
         print(f"Ready to continue from generation {self.current_generation + 1}")
         print("="*80)
 
+
+    def _apply_coefficient_scaling(self):
+        """
+        Apply coefficient-based scaling to individuals that were not re-evaluated.
+        Uses the first re-evaluated individual to calculate scaling coefficients.
+        """
+        if not hasattr(self, '_text_change_old_data'):
+            return
+        
+        print(f"\n{'='*80}")
+        print(f"📊 APPLYING COEFFICIENT SCALING TO NON-EVALUATED INDIVIDUALS")
+        print(f"{'='*80}")
+        
+        # Find the first re-evaluated individual with both old and new metrics
+        reference_ind = None
+        old_ref_data = None
+        
+        for ind in self.evaluated_individuals:
+            if ind.id in self._text_change_old_data and ind.distance is not None and ind.time_taken is not None:
+                old_data = self._text_change_old_data[ind.id]
+                if old_data['distance'] is not None and old_data['time_taken'] is not None:
+                    reference_ind = ind
+                    old_ref_data = old_data
+                    break
+        
+        if not reference_ind or not old_ref_data:
+            print("⚠️  No reference individual found for coefficient calculation")
+            print("   All individuals will use raw old metrics (no scaling)")
+            self._text_change_needs_scaling = False
+            return
+        
+        # Calculate scaling coefficients
+        distance_coef = reference_ind.distance / old_ref_data['distance'] if old_ref_data['distance'] > 0 else 1.0
+        time_coef = reference_ind.time_taken / old_ref_data['time_taken'] if old_ref_data['time_taken'] > 0 else 1.0
+        
+        print(f"📈 Reference individual: {reference_ind.name}")
+        print(f"   Old metrics: distance={old_ref_data['distance']:.2f}, time={old_ref_data['time_taken']:.2f}")
+        print(f"   New metrics: distance={reference_ind.distance:.2f}, time={reference_ind.time_taken:.2f}")
+        print(f"   Scaling coefficients: distance={distance_coef:.4f}, time={time_coef:.4f}")
+        
+        # Apply coefficients to non-evaluated individuals
+        scaled_count = 0
+        for ind in self.evaluated_individuals:
+            # Skip individuals that were re-evaluated (have None in old_data or new metrics)
+            if ind.id in self._text_change_old_data:
+                continue  # This was re-evaluated
+            
+            # Apply scaling if individual has old metrics
+            if ind.distance is not None and ind.time_taken is not None:
+                old_distance = ind.distance
+                old_time = ind.time_taken
+                
+                ind.distance = old_distance * distance_coef
+                ind.time_taken = old_time * time_coef
+                scaled_count += 1
+        
+        print(f"✅ Scaled {scaled_count} individuals using coefficient method")
+        print(f"{'='*80}\n")
+        
+        # Clean up temporary data
+        del self._text_change_old_data
+        self._text_change_needs_scaling = False
 
 
     def get_current_population_ids(self):
@@ -849,6 +964,10 @@ class GeneticAlgorithmSimulation:
 
         print(f"✅ Collection complete: {results_collected}/{expected_results} results")
         print(f"{'='*80}\n")
+        
+        # Apply coefficient scaling if text file changed
+        if hasattr(self, '_text_change_needs_scaling') and self._text_change_needs_scaling:
+            self._apply_coefficient_scaling()
         
         # Complete job batch tracking
         if hasattr(self, 'progress_tracker'):
