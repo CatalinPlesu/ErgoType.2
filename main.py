@@ -137,36 +137,57 @@ def item_run_genetic():
         # Display runs with their stats
         console.print("[bold]Available Previous Runs:[/bold]\n")
         
-        run_options = []
-        for i, run_dir in enumerate(run_dirs[:20], 1):  # Limit to 20 most recent
+        # First, collect all run summaries with their fitness for sorting
+        run_data = []
+        for run_dir in run_dirs:
             try:
                 loader = GARunLoader(run_dir)
                 summary = loader.get_run_summary()
                 
-                # Format the display
                 run_name = run_dir.name
-                timestamp = summary.get('timestamp', 'Unknown')
                 pop_size = summary.get('population_size', 'N/A')
                 total_individuals = summary.get('total_individuals', 'N/A')
                 best_fitness = summary.get('best_fitness', 'N/A')
                 
-                if isinstance(best_fitness, (int, float)):
-                    fitness_str = f"{best_fitness:.6f}"
-                else:
-                    fitness_str = str(best_fitness)
-                
-                # Format display with consistent spacing
-                display_text = (
-                    f"{run_name:<50} "
-                    f"Pop: {str(pop_size):>5}  "
-                    f"Individuals: {str(total_individuals):>6}  "
-                    f"Fitness: {fitness_str}"
-                )
-                run_options.append((display_text, str(run_dir)))
+                # Store for sorting
+                run_data.append({
+                    'run_dir': run_dir,
+                    'run_name': run_name,
+                    'pop_size': pop_size,
+                    'total_individuals': total_individuals,
+                    'best_fitness': best_fitness
+                })
                 
             except Exception as e:
                 print_warning(f"Could not load {run_dir.name}: {e}")
                 continue
+        
+        # Sort by best fitness (lower is better), with N/A runs at the end
+        def fitness_sort_key(item):
+            fitness = item['best_fitness']
+            if fitness == 'N/A' or fitness is None:
+                return float('inf')
+            return fitness
+        
+        run_data.sort(key=fitness_sort_key)
+        
+        # Now build the display options from sorted data (limit to 20)
+        run_options = []
+        for item in run_data[:20]:
+            best_fitness = item['best_fitness']
+            if isinstance(best_fitness, (int, float)):
+                fitness_str = f"{best_fitness:.6f}"
+            else:
+                fitness_str = str(best_fitness)
+            
+            # Format display with consistent spacing
+            display_text = (
+                f"{item['run_name']:<50} "
+                f"Pop: {str(item['pop_size']):>5}  "
+                f"Individuals: {str(item['total_individuals']):>6}  "
+                f"Fitness: {fitness_str}"
+            )
+            run_options.append((display_text, str(item['run_dir'])))
         
         if not run_options:
             print_error("No valid runs found to continue from")
