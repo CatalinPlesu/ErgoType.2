@@ -408,6 +408,40 @@ class GeneticAlgorithmSimulation:
         print(f"Original run timestamp: {metadata.get('timestamp')}")
         print(f"Original best fitness: {metadata.get('best_fitness')}")
         
+        # Validate keyboard and text file compatibility
+        original_keyboard = metadata.get('keyboard_file')
+        original_text = metadata.get('text_file')
+        
+        # Normalize paths for comparison (remove leading/trailing slashes, convert to relative)
+        def normalize_path(path):
+            if path:
+                return path.strip('/').replace('\\', '/')
+            return None
+        
+        current_keyboard_normalized = normalize_path(self._to_relative_path(self.keyboard_file))
+        current_text_normalized = normalize_path(self._to_relative_path(self.text_file))
+        original_keyboard_normalized = normalize_path(original_keyboard)
+        original_text_normalized = normalize_path(original_text)
+        
+        if current_keyboard_normalized != original_keyboard_normalized:
+            raise ValueError(
+                f"❌ INCOMPATIBLE KEYBOARD:\n"
+                f"   Original run used: {original_keyboard}\n"
+                f"   Current run uses:  {self._to_relative_path(self.keyboard_file)}\n"
+                f"   Cannot continue with different keyboard layout."
+            )
+        
+        if current_text_normalized != original_text_normalized:
+            raise ValueError(
+                f"❌ INCOMPATIBLE TEXT FILE:\n"
+                f"   Original run used: {original_text}\n"
+                f"   Current run uses:  {self._to_relative_path(self.text_file)}\n"
+                f"   Cannot continue with different text dataset."
+            )
+        
+        print(f"✅ Keyboard validated: {original_keyboard}")
+        print(f"✅ Text file validated: {original_text}")
+        
         # Load all individuals
         individuals_path = run_path / "ga_all_individuals.json"
         if not individuals_path.exists():
@@ -434,9 +468,11 @@ class GeneticAlgorithmSimulation:
                 chromosome = list(chromosome)
             
             # Create individual with explicit ID to preserve history
+            # IMPORTANT: Store raw distance/time_taken, set fitness to None
+            # This ensures all individuals will be re-normalized together
             individual = Individual(
                 chromosome=chromosome,
-                fitness=ind_data.get('fitness'),
+                fitness=None,  # Clear fitness - will be recalculated with all individuals
                 distance=ind_data.get('distance'),
                 time_taken=ind_data.get('time_taken'),
                 parents=ind_data.get('parents', []),
@@ -466,6 +502,7 @@ class GeneticAlgorithmSimulation:
         
         print(f"Loaded {len(all_individuals_list)} individuals from history")
         print(f"Current population size (from last generation): {len(self.population)}")
+        print(f"⚠️  All fitness values will be re-normalized with complete population")
         
         # Set current generation to continue from
         self.current_generation = max_gen
