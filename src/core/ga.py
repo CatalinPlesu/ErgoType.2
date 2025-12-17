@@ -1143,6 +1143,11 @@ class GeneticAlgorithmSimulation:
         
         total_renormalized = 0
         for ind_id, ind_dict in self.all_individuals.items():
+            # Skip individuals that haven't been evaluated yet (distance or time is None)
+            if ind_dict['distance'] is None or ind_dict['time_taken'] is None:
+                ind_dict['fitness'] = float('inf')
+                continue
+            
             if ind_dict['distance'] != float('inf') and ind_dict['time_taken'] != float('inf'):
                 normalized_distance = ind_dict['distance'] / max_distance
                 normalized_time = ind_dict['time_taken'] / max_time
