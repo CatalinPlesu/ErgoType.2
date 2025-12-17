@@ -408,7 +408,7 @@ class GeneticAlgorithmSimulation:
         print(f"Original run timestamp: {metadata.get('timestamp')}")
         print(f"Original best fitness: {metadata.get('best_fitness')}")
         
-        # Validate keyboard and text file compatibility
+        # Check keyboard and text file compatibility
         original_keyboard = metadata.get('keyboard_file')
         original_text = metadata.get('text_file')
         
@@ -423,24 +423,36 @@ class GeneticAlgorithmSimulation:
         original_keyboard_normalized = normalize_path(original_keyboard)
         original_text_normalized = normalize_path(original_text)
         
+        # If keyboard or text file differ, use the original ones from the loaded run
+        config_changed = False
+        
         if current_keyboard_normalized != original_keyboard_normalized:
-            raise ValueError(
-                f"❌ INCOMPATIBLE KEYBOARD:\n"
-                f"   Original run used: {original_keyboard}\n"
-                f"   Current run uses:  {self._to_relative_path(self.keyboard_file)}\n"
-                f"   Cannot continue with different keyboard layout."
-            )
+            print(f"⚠️  KEYBOARD MISMATCH:")
+            print(f"   Current selection: {self._to_relative_path(self.keyboard_file)}")
+            print(f"   Original run used: {original_keyboard}")
+            print(f"   → Using original keyboard to maintain compatibility")
+            self.keyboard_file = self._to_absolute_path(original_keyboard)
+            config_changed = True
         
         if current_text_normalized != original_text_normalized:
-            raise ValueError(
-                f"❌ INCOMPATIBLE TEXT FILE:\n"
-                f"   Original run used: {original_text}\n"
-                f"   Current run uses:  {self._to_relative_path(self.text_file)}\n"
-                f"   Cannot continue with different text dataset."
-            )
+            print(f"⚠️  TEXT FILE MISMATCH:")
+            print(f"   Current selection: {self._to_relative_path(self.text_file)}")
+            print(f"   Original run used: {original_text}")
+            print(f"   → Using original text file to maintain compatibility")
+            self.text_file = self._to_absolute_path(original_text)
+            config_changed = True
         
-        print(f"✅ Keyboard validated: {original_keyboard}")
-        print(f"✅ Text file validated: {original_text}")
+        if config_changed:
+            print(f"\n💡 Note: Keyboard and text file locked to original run configuration")
+            print(f"   Population size and iterations can still be customized")
+            
+            # Re-initialize evaluator with the correct keyboard
+            self.evaluator = Evaluator(debug=False)
+            self.evaluator.load_keyoard(self.keyboard_file)
+            self.evaluator.load_layout()
+        
+        print(f"✅ Using keyboard: {original_keyboard}")
+        print(f"✅ Using text file: {original_text}")
         
         # Load all individuals
         individuals_path = run_path / "ga_all_individuals.json"
