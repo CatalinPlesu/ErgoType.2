@@ -360,9 +360,9 @@ def run_genetic_algorithm(
     timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
     output_dir = Path("output/ga_results")
     
-    # If continuing from a run, create a rerun folder with simple naming
+    # If continuing from a run, create a continued folder with simple naming
     if continue_from_run:
-        run_dir = output_dir / f"ga_rerun_{timestamp}"
+        run_dir = output_dir / f"ga_run_continued-{timestamp}"
     else:
         run_dir = output_dir / f"ga_run_{timestamp}"
     

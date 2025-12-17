@@ -1242,8 +1242,8 @@ class GeneticAlgorithmSimulation:
                     phase_end_iteration = iteration + phase_iterations
                     
                     while self.previous_population_iteration < stagnant and iteration < phase_end_iteration:
-                        # Update progress tracker
-                        progress_tracker.start_iteration(iteration + 1, self.previous_population_iteration)
+                        # Update progress tracker (add starting_iteration for continued runs)
+                        progress_tracker.start_iteration(starting_iteration + iteration + 1, self.previous_population_iteration)
                         
                         print(f"\n{'='*80}")
                         print(f"ITERATION {iteration + 1} (Phase {phase_idx}, Local iter {iteration - phase_start_iteration + 1}/{phase_iterations})")
@@ -1278,8 +1278,8 @@ class GeneticAlgorithmSimulation:
             else:
                 # Single-phase execution (original behavior)
                 while self.previous_population_iteration < stagnant and iteration < max_iterations:
-                    # Update progress tracker
-                    progress_tracker.start_iteration(iteration + 1, self.previous_population_iteration)
+                    # Update progress tracker (add starting_iteration for continued runs)
+                    progress_tracker.start_iteration(starting_iteration + iteration + 1, self.previous_population_iteration)
                     
                     print(f"\n{'='*80}")
                     print(f"ITERATION {iteration + 1} (Generation {self.current_generation + 1})")
