@@ -94,13 +94,22 @@ def _evaluate_individual_worker(individual_data, keyboard_file, text_file, finge
 class Individual:
     _next_id = 0
 
-    def __init__(self, chromosome, fitness=None, distance=None, time_taken=None, parents=None, generation=0, name=None):
+    def __init__(self, chromosome, fitness=None, distance=None, time_taken=None, parents=None, generation=0, name=None, individual_id=None):
         self.chromosome = chromosome
         self.fitness = fitness
         self.distance = distance
         self.time_taken = time_taken
-        self.id = Individual._next_id
-        Individual._next_id += 1
+        
+        # Allow explicit ID for loading saved individuals
+        if individual_id is not None:
+            self.id = individual_id
+            # Update _next_id if this ID is higher to avoid collisions
+            if individual_id >= Individual._next_id:
+                Individual._next_id = individual_id + 1
+        else:
+            self.id = Individual._next_id
+            Individual._next_id += 1
+            
         self.parents = parents or []
         self.generation = generation
         if name is None:
@@ -129,7 +138,9 @@ class GeneticAlgorithmSimulation:
                  max_concurrent_processes=None,
                  use_rabbitmq=True,
                  is_worker=False,
-                 population_phases=None):
+                 population_phases=None,
+                 skip_heuristics=False,
+                 continue_from_run=None):
         """
         Initialize GA with C# fitness calculator.
         
@@ -139,9 +150,13 @@ class GeneticAlgorithmSimulation:
             population_phases: Optional list of tuples (iterations, max_population) for dynamic phases.
                              If provided, replaces population_size and max_iterations parameters.
                              Example: [(30, 50), (1, 1000), (10, 50)]
+            skip_heuristics: If True, skip loading heuristic layouts and only use random individuals
+            continue_from_run: Path to a previous GA run directory to continue from
         """
         self.is_worker = is_worker
         self.population_phases = population_phases
+        self.skip_heuristics = skip_heuristics
+        self.continue_from_run = continue_from_run
         
         if is_worker:
             print("="*80)
@@ -190,10 +205,18 @@ class GeneticAlgorithmSimulation:
             self.individual_names = {}
             self.all_individuals = {}
             self.population_size = population_size
-            self.population_initialization(self.population_size)
+            self.evaluated_individuals = []
+            
+            # Handle different initialization modes
+            if continue_from_run:
+                # Load population from previous run
+                self._load_from_previous_run(continue_from_run)
+            else:
+                # Standard initialization
+                self.population_initialization(self.population_size, skip_heuristics=skip_heuristics)
+                
             self.previous_population_ids = self.get_current_population_ids()
             self.previous_population_iteration = 0
-            self.evaluated_individuals = []
 
     def _run_worker(self):
         """Worker mode: continuously process jobs from queue"""
@@ -323,35 +346,355 @@ class GeneticAlgorithmSimulation:
                     traceback.print_exc()
                     time.sleep(1)
 
-    def population_initialization(self, size=50):
+    def population_initialization(self, size=50, skip_heuristics=False):
         """Initialize population (master only)"""
         if self.is_worker:
             return
             
         self.population = []
 
-        for layout_name, genotype in LAYOUT_DATA.items():
-            individual = Individual(chromosome=list(genotype), generation=0, name=layout_name)
-            self.population.append(individual)
-            self.individual_names[individual.id] = individual.name
-            print(f"Added heuristic layout: {layout_name}")
+        # Add heuristic layouts unless skipped
+        if not skip_heuristics:
+            for layout_name, genotype in LAYOUT_DATA.items():
+                individual = Individual(chromosome=list(genotype), generation=0, name=layout_name)
+                self.population.append(individual)
+                self.individual_names[individual.id] = individual.name
+                print(f"Added heuristic layout: {layout_name}")
 
-        print(f"Population initialized with {len(self.population)} heuristic individuals")
+            print(f"Population initialized with {len(self.population)} heuristic individuals")
+        else:
+            print("Skipping heuristic layouts (random-only mode)")
 
         if size > len(self.population):
             if self.population:
                 template_genotype = self.population[0].chromosome
-                needed = size - len(self.population)
-                print(f"Adding {needed} random individuals")
+            else:
+                # If no heuristics, use QWERTY as template
+                template_genotype = list(LAYOUT_DATA.get("qwerty", "qwertyuiopasdfghjkl;zxcvbnm,./"))
+                
+            needed = size - len(self.population)
+            print(f"Adding {needed} random individuals")
 
-                for _ in range(needed):
-                    shuffled_clone = template_genotype.copy()
-                    random.shuffle(shuffled_clone)
-                    individual = Individual(chromosome=shuffled_clone, generation=0)
-                    self.population.append(individual)
-                    self.individual_names[individual.id] = individual.name
+            for _ in range(needed):
+                shuffled_clone = template_genotype.copy()
+                random.shuffle(shuffled_clone)
+                individual = Individual(chromosome=shuffled_clone, generation=0)
+                self.population.append(individual)
+                self.individual_names[individual.id] = individual.name
 
         print(f"Total population size: {len(self.population)}")
+
+    def _load_from_previous_run(self, run_dir):
+        """Load population and state from a previous GA run"""
+        from pathlib import Path
+        import json
+        
+        run_path = Path(run_dir)
+        if not run_path.exists():
+            raise FileNotFoundError(f"Run directory not found: {run_dir}")
+        
+        print("="*80)
+        print(f"LOADING FROM PREVIOUS RUN: {run_path.name}")
+        print("="*80)
+        
+        # Load metadata
+        metadata_path = run_path / "ga_run_metadata.json"
+        if not metadata_path.exists():
+            raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
+        
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        
+        print(f"Original run timestamp: {metadata.get('timestamp')}")
+        print(f"Original best fitness: {metadata.get('best_fitness')}")
+        
+        # Check keyboard and text file compatibility
+        original_keyboard = metadata.get('keyboard_file')
+        original_text = metadata.get('text_file')
+        
+        # Normalize paths for comparison (remove leading/trailing slashes, convert to relative)
+        def normalize_path(path):
+            if path:
+                return path.strip('/').replace('\\', '/')
+            return None
+        
+        current_keyboard_normalized = normalize_path(self._to_relative_path(self.keyboard_file))
+        current_text_normalized = normalize_path(self._to_relative_path(self.text_file))
+        original_keyboard_normalized = normalize_path(original_keyboard)
+        original_text_normalized = normalize_path(original_text)
+        
+        # KEYBOARD: Must match - cannot continue with different keyboard
+        if current_keyboard_normalized != original_keyboard_normalized:
+            raise ValueError(
+                f"❌ INCOMPATIBLE KEYBOARD:\n"
+                f"   Original run used: {original_keyboard}\n"
+                f"   Current run uses:  {self._to_relative_path(self.keyboard_file)}\n"
+                f"   Cannot continue with different keyboard layout.\n"
+                f"   Please select the original keyboard to continue this run."
+            )
+        
+        print(f"✅ Keyboard validated: {original_keyboard}")
+        
+        # TEXT FILE: Can differ - will re-evaluate and scale if needed
+        text_file_changed = False
+        if current_text_normalized != original_text_normalized:
+            text_file_changed = True
+            print(f"\n⚠️  TEXT FILE CHANGED:")
+            print(f"   Original run used: {original_text}")
+            print(f"   New run will use:  {self._to_relative_path(self.text_file)}")
+            print(f"   → Will re-evaluate population and scale fitness values")
+        else:
+            print(f"✅ Text file validated: {original_text}")
+        
+        # Load all individuals
+        individuals_path = run_path / "ga_all_individuals.json"
+        if not individuals_path.exists():
+            raise FileNotFoundError(f"Individuals file not found: {individuals_path}")
+        
+        with open(individuals_path, 'r', encoding='utf-8') as f:
+            individuals_data = json.load(f)
+        
+        all_individuals_list = individuals_data.get('all_individuals', [])
+        
+        # Find the last generation
+        max_gen = max((ind.get('generation', 0) for ind in all_individuals_list), default=0)
+        print(f"Last generation in loaded run: {max_gen}")
+        
+        # Recreate all individuals to maintain history
+        self.population = []
+        self.all_individuals = {}
+        self.evaluated_individuals = []
+        
+        # If text file changed, we need to re-evaluate and scale
+        if text_file_changed:
+            print(f"\n{'='*80}")
+            print(f"RE-EVALUATING POPULATION WITH NEW TEXT FILE (OPTIMIZED)")
+            print(f"{'='*80}")
+            
+            # Sort individuals by old fitness (best first)
+            # Filter out individuals without fitness
+            individuals_with_fitness = [ind for ind in all_individuals_list if ind.get('fitness') is not None]
+            individuals_without_fitness = [ind for ind in all_individuals_list if ind.get('fitness') is None]
+            
+            # Sort by fitness (lower is better)
+            individuals_with_fitness.sort(key=lambda x: x.get('fitness', float('inf')))
+            
+            # Determine how many to actually re-evaluate
+            num_to_evaluate = min(self.population_size, len(individuals_with_fitness))
+            best_individuals_data = individuals_with_fitness[:num_to_evaluate]
+            remaining_individuals_data = individuals_with_fitness[num_to_evaluate:] + individuals_without_fitness
+            
+            print(f"📊 Optimization strategy:")
+            print(f"   - Total individuals loaded: {len(all_individuals_list)}")
+            print(f"   - Will RE-EVALUATE best {num_to_evaluate} individuals with new text file")
+            print(f"   - Will SCALE remaining {len(remaining_individuals_data)} individuals using coefficient")
+            
+            # Store mapping of old data for coefficient calculation
+            old_data_map = {}
+            for ind_data in best_individuals_data:
+                old_data_map[ind_data.get('id')] = {
+                    'distance': ind_data.get('distance'),
+                    'time_taken': ind_data.get('time_taken'),
+                    'fitness': ind_data.get('fitness')
+                }
+            
+            # Recreate best individuals for re-evaluation
+            for ind_data in best_individuals_data:
+                chromosome = ind_data.get('chromosome')
+                if isinstance(chromosome, str):
+                    chromosome = list(chromosome)
+                
+                # Mark for re-evaluation with new text file
+                individual = Individual(
+                    chromosome=chromosome,
+                    fitness=None,  # Will be recalculated
+                    distance=None,  # Will be re-evaluated with new text
+                    time_taken=None,  # Will be re-evaluated with new text
+                    parents=ind_data.get('parents', []),
+                    generation=ind_data.get('generation', 0),
+                    name=ind_data.get('name'),
+                    individual_id=ind_data.get('id')
+                )
+                
+                self.all_individuals[individual.id] = {
+                    'id': individual.id,
+                    'name': individual.name,
+                    'chromosome': individual.chromosome,
+                    'fitness': individual.fitness,
+                    'distance': individual.distance,
+                    'time_taken': individual.time_taken,
+                    'parents': individual.parents,
+                    'generation': individual.generation
+                }
+                self.individual_names[individual.id] = individual.name
+                self.evaluated_individuals.append(individual)
+                
+                if individual.generation == max_gen:
+                    self.population.append(individual)
+            
+            # Recreate remaining individuals with old metrics (will be scaled later)
+            for ind_data in remaining_individuals_data:
+                chromosome = ind_data.get('chromosome')
+                if isinstance(chromosome, str):
+                    chromosome = list(chromosome)
+                
+                # Keep old metrics for now (will apply coefficient scaling later)
+                individual = Individual(
+                    chromosome=chromosome,
+                    fitness=None,  # Will be recalculated after scaling
+                    distance=ind_data.get('distance'),  # Keep old value for now
+                    time_taken=ind_data.get('time_taken'),  # Keep old value for now
+                    parents=ind_data.get('parents', []),
+                    generation=ind_data.get('generation', 0),
+                    name=ind_data.get('name'),
+                    individual_id=ind_data.get('id')
+                )
+                
+                self.all_individuals[individual.id] = {
+                    'id': individual.id,
+                    'name': individual.name,
+                    'chromosome': individual.chromosome,
+                    'fitness': individual.fitness,
+                    'distance': individual.distance,
+                    'time_taken': individual.time_taken,
+                    'parents': individual.parents,
+                    'generation': individual.generation
+                }
+                self.individual_names[individual.id] = individual.name
+                self.evaluated_individuals.append(individual)
+                
+                if individual.generation == max_gen:
+                    self.population.append(individual)
+            
+            # Store old data for coefficient calculation after re-evaluation
+            self._text_change_old_data = old_data_map
+            self._text_change_needs_scaling = True
+            
+            print(f"✅ Loaded {len(all_individuals_list)} individuals from history")
+            print(f"✅ Current population size (from last generation): {len(self.population)}")
+            print(f"⚠️  Best {num_to_evaluate} individuals will be re-evaluated, others will be scaled")
+            
+        else:
+            # Same text file - use cached distance/time values
+            for ind_data in all_individuals_list:
+                chromosome = ind_data.get('chromosome')
+                if isinstance(chromosome, str):
+                    chromosome = list(chromosome)
+                
+                # Create individual with explicit ID to preserve history
+                # IMPORTANT: Store raw distance/time_taken, set fitness to None
+                # This ensures all individuals will be re-normalized together
+                individual = Individual(
+                    chromosome=chromosome,
+                    fitness=None,  # Clear fitness - will be recalculated with all individuals
+                    distance=ind_data.get('distance'),
+                    time_taken=ind_data.get('time_taken'),
+                    parents=ind_data.get('parents', []),
+                    generation=ind_data.get('generation', 0),
+                    name=ind_data.get('name'),
+                    individual_id=ind_data.get('id')  # Preserve original ID
+                )
+                
+                self.all_individuals[individual.id] = {
+                    'id': individual.id,
+                    'name': individual.name,
+                    'chromosome': individual.chromosome,
+                    'fitness': individual.fitness,
+                    'distance': individual.distance,
+                    'time_taken': individual.time_taken,
+                    'parents': individual.parents,
+                    'generation': individual.generation
+                }
+                self.individual_names[individual.id] = individual.name
+                
+                # Add to evaluated_individuals (reuse same Individual objects to avoid duplication)
+                self.evaluated_individuals.append(individual)
+                
+                # Add last generation individuals to current population
+                if individual.generation == max_gen:
+                    self.population.append(individual)
+            
+            print(f"Loaded {len(all_individuals_list)} individuals from history")
+            print(f"Current population size (from last generation): {len(self.population)}")
+            print(f"⚠️  All fitness values will be re-normalized with complete population")
+        
+        # Set current generation to continue from
+        self.current_generation = max_gen
+        
+        print(f"Individual ID counter will continue from: {Individual._next_id}")
+        print(f"Ready to continue from generation {self.current_generation + 1}")
+        print("="*80)
+
+
+    def _apply_coefficient_scaling(self):
+        """
+        Apply coefficient-based scaling to individuals that were not re-evaluated.
+        Uses the first re-evaluated individual to calculate scaling coefficients.
+        """
+        if not hasattr(self, '_text_change_old_data'):
+            return
+        
+        print(f"\n{'='*80}")
+        print(f"📊 APPLYING COEFFICIENT SCALING TO NON-EVALUATED INDIVIDUALS")
+        print(f"{'='*80}")
+        
+        # Find the first re-evaluated individual with both old and new metrics
+        reference_ind = None
+        old_ref_data = None
+        
+        for ind in self.evaluated_individuals:
+            if ind.id in self._text_change_old_data and ind.distance is not None and ind.time_taken is not None:
+                old_data = self._text_change_old_data[ind.id]
+                if old_data['distance'] is not None and old_data['time_taken'] is not None:
+                    reference_ind = ind
+                    old_ref_data = old_data
+                    break
+        
+        if not reference_ind or not old_ref_data:
+            print("⚠️  No reference individual found for coefficient calculation")
+            print("   All individuals will use raw old metrics (no scaling)")
+            self._text_change_needs_scaling = False
+            return
+        
+        # Calculate scaling coefficients
+        distance_coef = reference_ind.distance / old_ref_data['distance'] if old_ref_data['distance'] > 0 else 1.0
+        time_coef = reference_ind.time_taken / old_ref_data['time_taken'] if old_ref_data['time_taken'] > 0 else 1.0
+        
+        print(f"📈 Reference individual: {reference_ind.name}")
+        print(f"   Old metrics: distance={old_ref_data['distance']:.2f}, time={old_ref_data['time_taken']:.2f}")
+        print(f"   New metrics: distance={reference_ind.distance:.2f}, time={reference_ind.time_taken:.2f}")
+        print(f"   Scaling coefficients: distance={distance_coef:.4f}, time={time_coef:.4f}")
+        
+        # Apply coefficients to non-evaluated individuals
+        scaled_count = 0
+        for ind in self.evaluated_individuals:
+            # Skip individuals that were re-evaluated (have None in old_data or new metrics)
+            if ind.id in self._text_change_old_data:
+                continue  # This was re-evaluated
+            
+            # Apply scaling if individual has old metrics
+            if ind.distance is not None and ind.time_taken is not None:
+                old_distance = ind.distance
+                old_time = ind.time_taken
+                
+                ind.distance = old_distance * distance_coef
+                ind.time_taken = old_time * time_coef
+                scaled_count += 1
+                
+                # IMPORTANT: Update all_individuals dictionary with scaled values
+                # This ensures plots and saved files use the scaled metrics
+                if ind.id in self.all_individuals:
+                    self.all_individuals[ind.id]['distance'] = ind.distance
+                    self.all_individuals[ind.id]['time_taken'] = ind.time_taken
+                    # fitness will be recalculated during normalization
+        
+        print(f"✅ Scaled {scaled_count} individuals using coefficient method")
+        print(f"{'='*80}\n")
+        
+        # Clean up temporary data
+        del self._text_change_old_data
+        self._text_change_needs_scaling = False
+
 
     def get_current_population_ids(self):
         return [ind.id for ind in self.population]
@@ -438,6 +781,14 @@ class GeneticAlgorithmSimulation:
 
         if hasattr(self, 'children'):
             individuals_to_evaluate.extend([child for child in self.children if child.distance is None])
+        
+        # IMPORTANT: When continuing with text file change, also evaluate loaded individuals from history
+        # These are in evaluated_individuals but not in current population
+        if hasattr(self, 'evaluated_individuals'):
+            for ind in self.evaluated_individuals:
+                # Only add if not already in the list and needs evaluation
+                if ind.distance is None and ind not in individuals_to_evaluate:
+                    individuals_to_evaluate.append(ind)
 
         if not individuals_to_evaluate:
             self.normalize_and_calculate_fitness()
@@ -620,6 +971,10 @@ class GeneticAlgorithmSimulation:
 
         print(f"✅ Collection complete: {results_collected}/{expected_results} results")
         print(f"{'='*80}\n")
+        
+        # Apply coefficient scaling if text file changed
+        if hasattr(self, '_text_change_needs_scaling') and self._text_change_needs_scaling:
+            self._apply_coefficient_scaling()
         
         # Complete job batch tracking
         if hasattr(self, 'progress_tracker'):
@@ -877,17 +1232,17 @@ class GeneticAlgorithmSimulation:
         sorted_combined = sorted(combined, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
         
         for ind in sorted_combined:
-            if ind.id not in self.all_individuals:
-                self.all_individuals[ind.id] = {
-                    'id': ind.id,
-                    'name': ind.name,
-                    'generation': ind.generation,
-                    'chromosome': ''.join(ind.chromosome),
-                    'distance': ind.distance,
-                    'time_taken': ind.time_taken,
-                    'fitness': ind.fitness,
-                    'parents': ind.parents
-                }
+            # Always update to ensure re-evaluated individuals (from text file change) get new metrics
+            self.all_individuals[ind.id] = {
+                'id': ind.id,
+                'name': ind.name,
+                'generation': ind.generation,
+                'chromosome': ''.join(ind.chromosome),
+                'distance': ind.distance,
+                'time_taken': ind.time_taken,
+                'fitness': ind.fitness,
+                'parents': ind.parents
+            }
         
         self.population = sorted_combined[:len(self.population)]
         
@@ -922,6 +1277,11 @@ class GeneticAlgorithmSimulation:
         
         total_renormalized = 0
         for ind_id, ind_dict in self.all_individuals.items():
+            # Skip individuals that haven't been evaluated yet (distance or time is None)
+            if ind_dict['distance'] is None or ind_dict['time_taken'] is None:
+                ind_dict['fitness'] = float('inf')
+                continue
+            
             if ind_dict['distance'] != float('inf') and ind_dict['time_taken'] != float('inf'):
                 normalized_distance = ind_dict['distance'] / max_distance
                 normalized_time = ind_dict['time_taken'] / max_time
@@ -955,28 +1315,48 @@ class GeneticAlgorithmSimulation:
         self.job_queue.purge_all()
         
         # Calculate total max iterations for progress tracker
+        # When continuing from a previous run, we need to add the current generation
+        starting_iteration = self.current_generation if hasattr(self, 'current_generation') else 0
+        
         if population_phases:
-            total_max_iterations = sum(phase[0] for phase in population_phases)
+            total_max_iterations = starting_iteration + sum(phase[0] for phase in population_phases)
             print(f"\n📋 POPULATION PHASES MODE:")
             print(f"   Total phases: {len(population_phases)}")
             for i, (iters, pop) in enumerate(population_phases, 1):
                 print(f"   Phase {i}: {iters} iterations with max population {pop}")
             print(f"   Total max iterations: {total_max_iterations}")
+            if starting_iteration > 0:
+                print(f"   Starting from generation: {starting_iteration}")
         else:
-            total_max_iterations = max_iterations
+            total_max_iterations = starting_iteration + max_iterations
+            if starting_iteration > 0:
+                print(f"\n📋 Continuing from generation {starting_iteration}")
+                print(f"   Will run {max_iterations} more iterations")
+                print(f"   Total max iterations: {total_max_iterations}")
         
         # Initialize progress tracker
         from ui.progress_tracker import GAProgressTracker
         progress_tracker = GAProgressTracker(
             max_iterations=total_max_iterations,
             stagnation_limit=stagnant,
-            population_phases=population_phases  # Pass phases for accurate ETA
+            population_phases=population_phases,  # Pass phases for accurate ETA
+            starting_iteration=starting_iteration  # Pass starting iteration for continued runs
         )
         progress_tracker.start()
         self.progress_tracker = progress_tracker  # Store for use in fitness calculation
         
         iteration = 0
         print("Starting genetic algorithm...")
+        
+        # Adjust population size if needed when continuing from a previous run
+        # or when starting a new run with different size than loaded
+        if not population_phases:  # In standard mode
+            # Check if we need to adjust population size
+            current_pop_size = len(self.population)
+            if current_pop_size != self.population_size:
+                print(f"\n📊 Adjusting population size from {current_pop_size} to {self.population_size}")
+                self._adjust_population_size(self.population_size)
+        
         self.fitness_function_calculation()
         self.order_fitness_values(limited=True)
 
@@ -996,8 +1376,8 @@ class GeneticAlgorithmSimulation:
                     phase_end_iteration = iteration + phase_iterations
                     
                     while self.previous_population_iteration < stagnant and iteration < phase_end_iteration:
-                        # Update progress tracker
-                        progress_tracker.start_iteration(iteration + 1, self.previous_population_iteration)
+                        # Update progress tracker (add starting_iteration for continued runs)
+                        progress_tracker.start_iteration(starting_iteration + iteration + 1, self.previous_population_iteration)
                         
                         print(f"\n{'='*80}")
                         print(f"ITERATION {iteration + 1} (Phase {phase_idx}, Local iter {iteration - phase_start_iteration + 1}/{phase_iterations})")
@@ -1032,8 +1412,8 @@ class GeneticAlgorithmSimulation:
             else:
                 # Single-phase execution (original behavior)
                 while self.previous_population_iteration < stagnant and iteration < max_iterations:
-                    # Update progress tracker
-                    progress_tracker.start_iteration(iteration + 1, self.previous_population_iteration)
+                    # Update progress tracker (add starting_iteration for continued runs)
+                    progress_tracker.start_iteration(starting_iteration + iteration + 1, self.previous_population_iteration)
                     
                     print(f"\n{'='*80}")
                     print(f"ITERATION {iteration + 1} (Generation {self.current_generation + 1})")

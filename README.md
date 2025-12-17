@@ -6,6 +6,18 @@ read_physical_keyborad (with qwerty on it)
 |> create a symbol - key that need pressed map
 |> evaluate fintness functin basd on input data.
 
+## GA Run Modes
+
+The Genetic Algorithm now supports three different initialization and continuation modes:
+
+1. **Run as Normal** - Initialize with heuristic layouts (QWERTY, Dvorak, etc.) plus random individuals
+2. **Random Only** - Skip heuristics and use only random individuals for pure evolutionary exploration
+3. **Continue from Previous Run** - Load and continue evolution from a previously saved GA run
+
+Each mode is designed for specific use cases, from standard optimization to experimental comparisons and progressive refinement.
+
+See [docs/GA_RUN_MODES.md](docs/GA_RUN_MODES.md) for detailed documentation, examples, and use cases.
+
 ## GA Runs Queue
 
 The project now supports executing multiple GA runs sequentially with different parameters. This is useful for:

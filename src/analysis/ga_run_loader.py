@@ -160,3 +160,31 @@ class GARunLoader:
                          reverse=True)  # Most recent first
         
         return run_dirs
+    
+    @staticmethod
+    def get_all_runs_summary(base_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
+        """
+        Get summaries of all GA runs.
+        
+        Args:
+            base_dir: Base directory to search (default: output/ga_results)
+        
+        Returns:
+            List of dictionaries with run summary information
+        """
+        run_dirs = GARunLoader.find_ga_runs(base_dir)
+        summaries = []
+        
+        for run_dir in run_dirs:
+            try:
+                loader = GARunLoader(run_dir)
+                summary = loader.get_run_summary()
+                summaries.append(summary)
+            except Exception as e:
+                # If we can't load a run, skip it but add minimal info
+                summaries.append({
+                    'run_dir': str(run_dir),
+                    'error': str(e)
+                })
+        
+        return summaries

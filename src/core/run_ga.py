@@ -251,7 +251,9 @@ def run_genetic_algorithm(
     max_concurrent_processes=4,
     use_rabbitmq=True,
     save_heuristics=True,
-    population_phases=None
+    population_phases=None,
+    skip_heuristics=False,
+    continue_from_run=None
 ):
     """
     Run the genetic algorithm with C# simulation and distributed processing
@@ -260,6 +262,8 @@ def run_genetic_algorithm(
         population_phases: Optional list of tuples (iterations, max_population) for dynamic phases.
                          If provided, replaces population_size and max_iterations parameters.
                          Example: [(30, 50), (1, 1000), (10, 50)]
+        skip_heuristics: If True, skip loading heuristic layouts and only use random individuals
+        continue_from_run: Path to a previous GA run directory to continue from
     """
     try:
         from rich.console import Console
@@ -343,17 +347,25 @@ def run_genetic_algorithm(
         max_concurrent_processes=max_concurrent_processes,
         use_rabbitmq=use_rabbitmq,
         is_worker=False,  # Master mode
-        population_phases=population_phases
+        population_phases=population_phases,
+        skip_heuristics=skip_heuristics,
+        continue_from_run=continue_from_run
     )
 
-    # Adjust population size if needed
-    if len(ga.population) < initial_pop_size:
-        ga.population_initialization(size=initial_pop_size)
+    # Adjust population size if needed (only if not continuing from a run)
+    if not continue_from_run and len(ga.population) < initial_pop_size:
+        ga.population_initialization(size=initial_pop_size, skip_heuristics=skip_heuristics)
 
     # Create output directory
     timestamp = datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
     output_dir = Path("output/ga_results")
-    run_dir = output_dir / f"ga_run_{timestamp}"
+    
+    # If continuing from a run, create a continued folder with simple naming
+    if continue_from_run:
+        run_dir = output_dir / f"ga_run_continued-{timestamp}"
+    else:
+        run_dir = output_dir / f"ga_run_{timestamp}"
+    
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Save heuristic layouts BEFORE running GA
@@ -419,7 +431,9 @@ def run_genetic_algorithm(
         "best_layout_name": best_individual.name,
         "best_layout": ''.join(best_individual.chromosome),
         "total_individuals_evaluated": len(ga.evaluated_individuals),
-        "total_unique_individuals": len(ga.all_individuals)
+        "total_unique_individuals": len(ga.all_individuals),
+        "skip_heuristics": skip_heuristics,
+        "continued_from_run": str(continue_from_run) if continue_from_run else None
     }
     
     # Add population configuration (standard or phases mode)
