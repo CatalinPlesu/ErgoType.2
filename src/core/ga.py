@@ -423,36 +423,28 @@ class GeneticAlgorithmSimulation:
         original_keyboard_normalized = normalize_path(original_keyboard)
         original_text_normalized = normalize_path(original_text)
         
-        # If keyboard or text file differ, use the original ones from the loaded run
-        config_changed = False
-        
+        # KEYBOARD: Must match - cannot continue with different keyboard
         if current_keyboard_normalized != original_keyboard_normalized:
-            print(f"⚠️  KEYBOARD MISMATCH:")
-            print(f"   Current selection: {self._to_relative_path(self.keyboard_file)}")
-            print(f"   Original run used: {original_keyboard}")
-            print(f"   → Using original keyboard to maintain compatibility")
-            self.keyboard_file = self._to_absolute_path(original_keyboard)
-            config_changed = True
+            raise ValueError(
+                f"❌ INCOMPATIBLE KEYBOARD:\n"
+                f"   Original run used: {original_keyboard}\n"
+                f"   Current run uses:  {self._to_relative_path(self.keyboard_file)}\n"
+                f"   Cannot continue with different keyboard layout.\n"
+                f"   Please select the original keyboard to continue this run."
+            )
         
+        print(f"✅ Keyboard validated: {original_keyboard}")
+        
+        # TEXT FILE: Can differ - will re-evaluate and scale if needed
+        text_file_changed = False
         if current_text_normalized != original_text_normalized:
-            print(f"⚠️  TEXT FILE MISMATCH:")
-            print(f"   Current selection: {self._to_relative_path(self.text_file)}")
+            text_file_changed = True
+            print(f"\n⚠️  TEXT FILE CHANGED:")
             print(f"   Original run used: {original_text}")
-            print(f"   → Using original text file to maintain compatibility")
-            self.text_file = self._to_absolute_path(original_text)
-            config_changed = True
-        
-        if config_changed:
-            print(f"\n💡 Note: Keyboard and text file locked to original run configuration")
-            print(f"   Population size and iterations can still be customized")
-            
-            # Re-initialize evaluator with the correct keyboard
-            self.evaluator = Evaluator(debug=False)
-            self.evaluator.load_keyoard(self.keyboard_file)
-            self.evaluator.load_layout()
-        
-        print(f"✅ Using keyboard: {original_keyboard}")
-        print(f"✅ Using text file: {original_text}")
+            print(f"   New run will use:  {self._to_relative_path(self.text_file)}")
+            print(f"   → Will re-evaluate population and scale fitness values")
+        else:
+            print(f"✅ Text file validated: {original_text}")
         
         # Load all individuals
         individuals_path = run_path / "ga_all_individuals.json"
@@ -473,48 +465,105 @@ class GeneticAlgorithmSimulation:
         self.all_individuals = {}
         self.evaluated_individuals = []
         
-        # Recreate all individuals from history using explicit IDs
-        for ind_data in all_individuals_list:
-            chromosome = ind_data.get('chromosome')
-            if isinstance(chromosome, str):
-                chromosome = list(chromosome)
+        # If text file changed, we need to re-evaluate and scale
+        if text_file_changed:
+            print(f"\n{'='*80}")
+            print(f"RE-EVALUATING POPULATION WITH NEW TEXT FILE")
+            print(f"{'='*80}")
             
-            # Create individual with explicit ID to preserve history
-            # IMPORTANT: Store raw distance/time_taken, set fitness to None
-            # This ensures all individuals will be re-normalized together
-            individual = Individual(
-                chromosome=chromosome,
-                fitness=None,  # Clear fitness - will be recalculated with all individuals
-                distance=ind_data.get('distance'),
-                time_taken=ind_data.get('time_taken'),
-                parents=ind_data.get('parents', []),
-                generation=ind_data.get('generation', 0),
-                name=ind_data.get('name'),
-                individual_id=ind_data.get('id')  # Preserve original ID
-            )
+            # Store old distance/time for scaling calculation
+            old_distances = []
+            old_times = []
             
-            self.all_individuals[individual.id] = {
-                'id': individual.id,
-                'name': individual.name,
-                'chromosome': individual.chromosome,
-                'fitness': individual.fitness,
-                'distance': individual.distance,
-                'time_taken': individual.time_taken,
-                'parents': individual.parents,
-                'generation': individual.generation
-            }
-            self.individual_names[individual.id] = individual.name
+            # Recreate all individuals from history
+            for ind_data in all_individuals_list:
+                chromosome = ind_data.get('chromosome')
+                if isinstance(chromosome, str):
+                    chromosome = list(chromosome)
+                
+                # Store old metrics for scaling calculation
+                old_dist = ind_data.get('distance')
+                old_time = ind_data.get('time_taken')
+                if old_dist is not None and old_time is not None:
+                    old_distances.append(old_dist)
+                    old_times.append(old_time)
+                
+                # Create individual - will re-evaluate with new text file
+                individual = Individual(
+                    chromosome=chromosome,
+                    fitness=None,  # Will be recalculated
+                    distance=None,  # Will be re-evaluated with new text
+                    time_taken=None,  # Will be re-evaluated with new text
+                    parents=ind_data.get('parents', []),
+                    generation=ind_data.get('generation', 0),
+                    name=ind_data.get('name'),
+                    individual_id=ind_data.get('id')
+                )
+                
+                self.all_individuals[individual.id] = {
+                    'id': individual.id,
+                    'name': individual.name,
+                    'chromosome': individual.chromosome,
+                    'fitness': individual.fitness,
+                    'distance': individual.distance,
+                    'time_taken': individual.time_taken,
+                    'parents': individual.parents,
+                    'generation': individual.generation
+                }
+                self.individual_names[individual.id] = individual.name
+                self.evaluated_individuals.append(individual)
+                
+                if individual.generation == max_gen:
+                    self.population.append(individual)
             
-            # Add to evaluated_individuals (reuse same Individual objects to avoid duplication)
-            self.evaluated_individuals.append(individual)
+            print(f"Loaded {len(all_individuals_list)} individuals from history")
+            print(f"Current population size (from last generation): {len(self.population)}")
+            print(f"⚠️  All individuals will be re-evaluated with new text file")
+            print(f"   Old metrics range: distance=[{min(old_distances) if old_distances else 0:.0f}, {max(old_distances) if old_distances else 0:.0f}], time=[{min(old_times) if old_times else 0:.0f}, {max(old_times) if old_times else 0:.0f}]")
             
-            # Add last generation individuals to current population
-            if individual.generation == max_gen:
-                self.population.append(individual)
-        
-        print(f"Loaded {len(all_individuals_list)} individuals from history")
-        print(f"Current population size (from last generation): {len(self.population)}")
-        print(f"⚠️  All fitness values will be re-normalized with complete population")
+        else:
+            # Same text file - use cached distance/time values
+            for ind_data in all_individuals_list:
+                chromosome = ind_data.get('chromosome')
+                if isinstance(chromosome, str):
+                    chromosome = list(chromosome)
+                
+                # Create individual with explicit ID to preserve history
+                # IMPORTANT: Store raw distance/time_taken, set fitness to None
+                # This ensures all individuals will be re-normalized together
+                individual = Individual(
+                    chromosome=chromosome,
+                    fitness=None,  # Clear fitness - will be recalculated with all individuals
+                    distance=ind_data.get('distance'),
+                    time_taken=ind_data.get('time_taken'),
+                    parents=ind_data.get('parents', []),
+                    generation=ind_data.get('generation', 0),
+                    name=ind_data.get('name'),
+                    individual_id=ind_data.get('id')  # Preserve original ID
+                )
+                
+                self.all_individuals[individual.id] = {
+                    'id': individual.id,
+                    'name': individual.name,
+                    'chromosome': individual.chromosome,
+                    'fitness': individual.fitness,
+                    'distance': individual.distance,
+                    'time_taken': individual.time_taken,
+                    'parents': individual.parents,
+                    'generation': individual.generation
+                }
+                self.individual_names[individual.id] = individual.name
+                
+                # Add to evaluated_individuals (reuse same Individual objects to avoid duplication)
+                self.evaluated_individuals.append(individual)
+                
+                # Add last generation individuals to current population
+                if individual.generation == max_gen:
+                    self.population.append(individual)
+            
+            print(f"Loaded {len(all_individuals_list)} individuals from history")
+            print(f"Current population size (from last generation): {len(self.population)}")
+            print(f"⚠️  All fitness values will be re-normalized with complete population")
         
         # Set current generation to continue from
         self.current_generation = max_gen
@@ -522,6 +571,7 @@ class GeneticAlgorithmSimulation:
         print(f"Individual ID counter will continue from: {Individual._next_id}")
         print(f"Ready to continue from generation {self.current_generation + 1}")
         print("="*80)
+
 
 
     def get_current_population_ids(self):
