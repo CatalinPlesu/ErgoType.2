@@ -1098,17 +1098,17 @@ class GeneticAlgorithmSimulation:
         sorted_combined = sorted(combined, key=lambda x: x.fitness if x.fitness is not None else float('inf'))
         
         for ind in sorted_combined:
-            if ind.id not in self.all_individuals:
-                self.all_individuals[ind.id] = {
-                    'id': ind.id,
-                    'name': ind.name,
-                    'generation': ind.generation,
-                    'chromosome': ''.join(ind.chromosome),
-                    'distance': ind.distance,
-                    'time_taken': ind.time_taken,
-                    'fitness': ind.fitness,
-                    'parents': ind.parents
-                }
+            # Always update to ensure re-evaluated individuals (from text file change) get new metrics
+            self.all_individuals[ind.id] = {
+                'id': ind.id,
+                'name': ind.name,
+                'generation': ind.generation,
+                'chromosome': ''.join(ind.chromosome),
+                'distance': ind.distance,
+                'time_taken': ind.time_taken,
+                'fitness': ind.fitness,
+                'parents': ind.parents
+            }
         
         self.population = sorted_combined[:len(self.population)]
         
