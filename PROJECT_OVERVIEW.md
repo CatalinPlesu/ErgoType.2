@@ -704,7 +704,7 @@ This project represents a **Master's dissertation thesis** on:
 - **[README.md](README.md)** - Quick reference and getting started
 - **[docs/GA_RUN_MODES.md](docs/GA_RUN_MODES.md)** - Detailed run mode documentation
 - **[docs/GA_RUNS_QUEUE.md](docs/GA_RUNS_QUEUE.md)** - Queue system guide
-- **[docs/POPULATION_PHASES.md](POPULATION_PHASES.md)** - Population phases explanation
+- **[POPULATION_PHASES.md](POPULATION_PHASES.md)** - Population phases explanation
 - **[docs/PARAMETER_EXPLORATION.md](docs/PARAMETER_EXPLORATION.md)** - Parameter study guide
 - **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
 
