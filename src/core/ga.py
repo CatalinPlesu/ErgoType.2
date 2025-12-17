@@ -659,6 +659,14 @@ class GeneticAlgorithmSimulation:
 
         if hasattr(self, 'children'):
             individuals_to_evaluate.extend([child for child in self.children if child.distance is None])
+        
+        # IMPORTANT: When continuing with text file change, also evaluate loaded individuals from history
+        # These are in evaluated_individuals but not in current population
+        if hasattr(self, 'evaluated_individuals'):
+            for ind in self.evaluated_individuals:
+                # Only add if not already in the list and needs evaluation
+                if ind.distance is None and ind not in individuals_to_evaluate:
+                    individuals_to_evaluate.append(ind)
 
         if not individuals_to_evaluate:
             self.normalize_and_calculate_fitness()
