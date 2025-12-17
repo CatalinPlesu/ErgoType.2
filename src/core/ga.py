@@ -680,6 +680,13 @@ class GeneticAlgorithmSimulation:
                 ind.distance = old_distance * distance_coef
                 ind.time_taken = old_time * time_coef
                 scaled_count += 1
+                
+                # IMPORTANT: Update all_individuals dictionary with scaled values
+                # This ensures plots and saved files use the scaled metrics
+                if ind.id in self.all_individuals:
+                    self.all_individuals[ind.id]['distance'] = ind.distance
+                    self.all_individuals[ind.id]['time_taken'] = ind.time_taken
+                    # fitness will be recalculated during normalization
         
         print(f"✅ Scaled {scaled_count} individuals using coefficient method")
         print(f"{'='*80}\n")
